@@ -1,0 +1,15 @@
+{
+  "league_config": "league_colors.json",
+  "division_colors": {
+    "Pro": "#FF8C00",
+    "ProAm": "#9370DB",
+    "Am": "#45B3E0",
+    "Rookie": "#FF2000",
+    "Default": "#FFFFFF"
+  },
+  "x": 871,
+  "y": 321,
+  "height": 410,
+  "width": 375,
+  "opacity": 0.8
+}
