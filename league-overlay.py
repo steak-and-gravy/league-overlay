@@ -29,6 +29,7 @@ class leagueOverlay:
         self.height = 410
         self.x = (self.root.winfo_screenwidth() // 2) - (self.width // 2)
         self.y = (self.root.winfo_screenheight() // 2) - (self.height // 2)
+        self.allow_resize = False
 
         # Color coding data
         self.color_config_file = "league_divisions.json"
@@ -66,7 +67,7 @@ class leagueOverlay:
         
     def setup_window(self):
         """Configure the main window"""
-        self.root.title("Burns League Overlay")
+        self.root.title("BB's League Overlay")
         self.root.geometry(f"{self.width}x{self.height}+{self.x}+{self.y}")
             
         # Make window transparent and always on top
@@ -74,8 +75,15 @@ class leagueOverlay:
         self.root.attributes('-topmost', True)
         self.root.configure(bg='black')
         
-        # Remove window decorations for overlay effect
-        self.root.overrideredirect(True)
+        if self.allow_resize:
+            # Enable resizing
+            self.root.resizable(True, True)
+        else:
+            # Remove window decorations for overlay effect
+            self.root.overrideredirect(True)
+
+        # Set minimum window size
+        self.root.minsize(300, 220)
         
         # Save position when window is moved
         self.root.bind('<Configure>', self.on_window_configure)
@@ -92,7 +100,7 @@ class leagueOverlay:
         self.title_bar.pack_propagate(False)
         
         # Title label
-        self.title_label = tk.Label(self.title_bar, text="Burns League Overlay", 
+        self.title_label = tk.Label(self.title_bar, text="BB's League Overlay", 
                                    fg='white', bg='#333333', font=('Arial', 10, 'bold'))
         self.title_label.pack(side=tk.LEFT, padx=5, pady=5)
         
@@ -254,6 +262,8 @@ class leagueOverlay:
                         self.height = data.get('height')
                     if data.get('width'):
                         self.width = data.get('width')
+                    if data.get('allow_resize'):
+                        self.allow_resize = data.get('allow_resize')
             except:
                 pass
         return None
@@ -283,7 +293,8 @@ class leagueOverlay:
                 'y': self.root.winfo_y(),
                 'height': self.root.winfo_height(),
                 'width': self.root.winfo_width(),
-                'opacity': self.opacity
+                'opacity': self.opacity,
+                'allow_resize': self.allow_resize
             }
             with open(self.settings_file, 'w') as f:
                 json.dump(settings, f, indent=2)
@@ -450,7 +461,7 @@ class leagueOverlay:
             car_idx_best_lap_time = live_data['CarIdxBestLapTime']
             car_idx_lap_dist_pct = live_data['CarIdxLapDistPct']
         
-            if not car_idx_class_position:
+            if not car_idx_class_position or not car_idx_lap or not car_idx_est_time or not car_idx_best_lap_time or not car_idx_lap_dist_pct:
                 return
             
             # Pre-calculate positions for all drivers
@@ -466,6 +477,9 @@ class leagueOverlay:
                         temp_driver_info = temp_driver
                         break
                 
+                if temp_driver_info is None:
+                    return
+                
                 if player_car_class_id is not None:
                     # only show drivers in same class as player
                     if temp_driver_info.get('CarClassID') != player_car_class_id:
@@ -477,8 +491,9 @@ class leagueOverlay:
                         'car_idx': temp_car_idx,
                         'overall_position': car_idx_class_position[temp_car_idx],
                         'color': temp_driver_color,
-                        'lap_dist': car_idx_lap_dist_pct[temp_car_idx] if car_idx_lap_dist_pct else 0
-                    })
+                        'lap_dist': car_idx_lap_dist_pct[temp_car_idx] if car_idx_lap_dist_pct else 0,
+                        'best_lap_time': self.get_best_lap_from_session_info(current_session, temp_car_idx)
+                    })  
 
             # Calculate division positions for each color
             division_positions = {}
@@ -529,34 +544,31 @@ class leagueOverlay:
                             current_lap = car_idx_lap[car_idx]
                             ahead_lap = car_idx_lap[car_ahead_idx]
             
+                            time_gap = 0.0
                             if current_est_time > 0 and ahead_est_time > 0:
                                 # Calculate base time difference
                                 time_gap = ahead_est_time - current_est_time
-                
-                                # Adjust for lap differences
-                                lap_difference = ahead_lap - current_lap
-                
-                                if lap_difference > 0:
-                                    # Car ahead is on a later lap - add full lap time(s)
-                                    if car_idx_best_lap_time and car_idx_best_lap_time[car_ahead_idx] > 0:
-                                        lap_time_adjustment = lap_difference * car_idx_best_lap_time[car_ahead_idx]
-                                        time_gap += lap_time_adjustment
-                                    else:
-                                        # Fallback to lap-based gap if no lap time available
-                                        gap = f"+{lap_difference}L"
-                                        continue
-                                if lap_difference > 1:
-                                    gap = f"+{lap_difference}L"
-                                else:
-                                    # Format the gap
-                                    if time_gap < 60:
-                                        gap = f"{time_gap:.1f}"
-                                    else:
-                                        minutes = int(time_gap // 60)
-                                        seconds = time_gap % 60
-                                        gap = f"{minutes}:{seconds:04.1f}"
                             else:
-                                gap = ""
+                                # possibly in replay, fallback to distance calculation
+                                time_gap = (car_idx_lap_dist_pct[car_ahead_idx] - car_idx_lap_dist_pct[car_idx]) * 90
+                
+                            # Adjust for lap differences
+                            lap_difference = ahead_lap - current_lap
+            
+                            if lap_difference > 0:
+                                # Car ahead is on a later lap - add full lap time(s)
+                                lap_time_adjustment = lap_difference * self.get_best_lap_from_session_info(current_session, car_ahead_idx)
+                                time_gap += lap_time_adjustment
+                            if lap_difference > 1:
+                                gap = f"+{lap_difference}L"
+                            else:
+                                # Format the gap
+                                if time_gap < 60:
+                                    gap = f"{time_gap:.1f}"
+                                else:
+                                    minutes = int(time_gap // 60)
+                                    seconds = time_gap % 60
+                                    gap = f"{minutes}:{seconds:04.1f}"
                         else:
                             # No timing data available
                             gap = ""
@@ -564,12 +576,11 @@ class leagueOverlay:
                         gap = ""
                 else: # Practice or Qualifying
                     same_color_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
-                    same_color_drivers.sort(key=lambda x: x['overall_position'])
+                    same_color_drivers.sort(key=lambda x: x['overall_position']) # if this keeps giving wrong info switch to best lap time and manually calculate position
 
                     if len(same_color_drivers) >= current_color_position - 1:
                         car_ahead_idx = same_color_drivers[current_color_position - 2]['car_idx']
-                        car_idx_best_lap_time = live_data['CarIdxBestLapTime']
-                        time_gap = car_idx_best_lap_time[car_idx] - car_idx_best_lap_time[car_ahead_idx]
+                        time_gap = self.get_best_lap_from_session_info(current_session, car_idx) - self.get_best_lap_from_session_info(current_session, car_ahead_idx)
                         gap = f"{time_gap:.3f}"
             
                 # Mark if this is the player
@@ -590,6 +601,16 @@ class leagueOverlay:
         
         except Exception as e:
             print(f"Processing error: {e}")
+
+    def get_best_lap_from_session_info(self, current_session, car_idx):
+        try:
+            if 'ResultsPositions' in current_session:
+                for driver in current_session['ResultsPositions']:
+                    if driver.get('CarIdx') == car_idx and 'FastestTime' in driver:
+                        return driver['FastestTime']
+        except (KeyError, TypeError, IndexError):
+            pass
+        return 0
             
     def update_gui(self):
         """Update GUI with race data"""
@@ -754,26 +775,26 @@ class leagueOverlay:
         # Highlight player row
         if data['is_player']:
             row_frame.configure(bg='#1a1a1a')
-            
+
         # Create labels
         pos_label = tk.Label(row_frame, text=str(data['position']), 
-                           fg=color, bg=row_frame['bg'], font=('Arial', 9, 'bold' if data['is_player'] else 'normal'), width=5)
+                           fg=color, bg=row_frame['bg'], font=('Arial', 9, 'bold' if data['is_player'] else 'normal'), width=round(self.root.winfo_width()*.013))
         pos_label.pack(side=tk.LEFT, padx=2)
 
         division_pos_label = tk.Label(row_frame, text=str(data['division_position']), 
-                           fg=color, bg=row_frame['bg'], font=('Arial', 9, 'bold' if data['is_player'] else 'normal'), width=5)
+                           fg=color, bg=row_frame['bg'], font=('Arial', 9, 'bold' if data['is_player'] else 'normal'), width=round(self.root.winfo_width()*.013))
         division_pos_label.pack(side=tk.LEFT, padx=2)
         
         car_label = tk.Label(row_frame, text=data['car_number'], 
-                           fg=color, bg=row_frame['bg'], font=('Arial', 9, 'bold' if data['is_player'] else 'normal'), width=6)
+                           fg=color, bg=row_frame['bg'], font=('Arial', 9, 'bold' if data['is_player'] else 'normal'), width=round(self.root.winfo_width()*.016))
         car_label.pack(side=tk.LEFT, padx=2)
         
         name_label = tk.Label(row_frame, text=data['driver_name'][:20], 
-                            fg=color, bg=row_frame['bg'], font=('Arial', 9, 'bold' if data['is_player'] else 'normal'), width=20)
+                            fg=color, bg=row_frame['bg'], font=('Arial', 9, 'bold' if data['is_player'] else 'normal'), width=round(self.root.winfo_width()*.053))
         name_label.pack(side=tk.LEFT, padx=2)
         
         gap_label = tk.Label(row_frame, text=data['gap'], 
-                           fg='white', bg=row_frame['bg'], font=('Arial', 9, 'bold' if data['is_player'] else 'normal'), width=8)
+                           fg='white', bg=row_frame['bg'], font=('Arial', 9, 'bold' if data['is_player'] else 'normal'), width=round(self.root.winfo_width()*.0213))
         gap_label.pack(side=tk.LEFT, padx=2)
         
         # Bind right-click to row frame and all labels for context menu
