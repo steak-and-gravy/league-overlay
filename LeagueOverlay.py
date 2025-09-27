@@ -29,9 +29,9 @@ class leagueOverlay:
         self.height = 320
         self.x = (self.root.winfo_screenwidth() // 2) - (self.width // 2)
         self.y = (self.root.winfo_screenheight() // 2) - (self.height // 2)
-        self.allow_resize = False
         self.hide_headers = False
         self.center_drivers = False
+        self.bold_drivers = False
         self.hide_timer = None
         self.show_timer = None
         self.top_elements_visible = True
@@ -43,7 +43,6 @@ class leagueOverlay:
         self.settings_file = "BB_League_Overlay.config"
         self.driver_colors = self.load_color_config()
         self.load_settings()
-        self.setup_window()
         
         # Division colors
         self.default_colors = {
@@ -58,6 +57,7 @@ class leagueOverlay:
         self.setup_gui()
         self.setup_drag_functionality()
         self.setup_scroll_functionality()
+        self.setup_window()
         
         # Start telemetry thread
         self.telemetry_thread = threading.Thread(target=self.telemetry_loop, daemon=True)
@@ -76,42 +76,146 @@ class leagueOverlay:
         """Configure the main window"""
         self.root.title("BB's League Overlay")
         self.root.geometry(f"{self.width}x{self.height}+{self.x}+{self.y}")
-            
+        
+        # Remove window decorations but keep it resizable
+        self.root.overrideredirect(True)
+        
         # Make window transparent and always on top
         self.root.attributes('-alpha', self.opacity)
         self.root.attributes('-topmost', True)
         self.root.configure(bg='black')
         
-        if self.allow_resize:
-            # Enable resizing
-            self.root.resizable(True, True)
+        # Add custom resize functionality
+        self.setup_custom_resize()
 
-            # Enable resizing but disable maximize
-            self.root.resizable(True, True)
-            self.root.attributes('-toolwindow', True)  # This removes maximize button on Windows
-
-            # For cross-platform compatibility, you can also use:
-            # On Windows, this will disable maximize:
-            try:
-                self.root.wm_attributes('-toolwindow', True)
-            except:
-                pass  # Ignore if not supported on this platform
-
-            # Override maximize behavior
-            def disable_maximize(event=None):
-                return "break"
-
-            self.root.bind("<Double-Button-1>", disable_maximize)  # Disable double-click maximize
-            self.root.bind("<F11>", disable_maximize)  # Disable F11 fullscreen
-        else:
-            # Remove window decorations for overlay effect
-            self.root.overrideredirect(True)
-
-        # Set minimum window size
-        self.root.minsize(320, 220)
+    def setup_custom_resize(self):
+        """Add custom resize handles"""
+        self.resize_border = 10  # Pixel width of resize area
+        self.resizing = False
+        self.resize_direction = None
         
-        # Save position when window is moved
-        self.root.bind('<Configure>', self.on_window_configure)
+        # Bind to root and all main frames
+        widgets_to_bind = [self.root, self.main_frame, self.canvas_frame, self.canvas]
+        
+        for widget in widgets_to_bind:
+            widget.bind('<Button-1>', self.start_resize)
+            widget.bind('<B1-Motion>', self.do_resize)
+            widget.bind('<ButtonRelease-1>', self.stop_resize)
+            widget.bind('<Motion>', self.check_resize_cursor)
+
+    def check_resize_cursor(self, event):
+        """Change cursor when near window edges"""
+        if self.resizing:
+            return
+        
+        # Get mouse position relative to root window
+        root_x = self.root.winfo_pointerx() - self.root.winfo_rootx()
+        root_y = self.root.winfo_pointery() - self.root.winfo_rooty()
+        
+        # Get actual window dimensions
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        
+        # Check if mouse is within window bounds
+        if root_x < 0 or root_x > width or root_y < 0 or root_y > height:
+            self.root.configure(cursor="")
+            self.resize_direction = None
+            return
+        
+        # Check which edge we're near using root-relative coordinates
+        near_right = width - root_x <= self.resize_border
+        near_left = root_x <= self.resize_border
+        near_bottom = height - root_y <= self.resize_border
+        near_top = root_y <= self.resize_border
+        
+        if near_right and near_bottom:
+            self.root.configure(cursor="size_nw_se")
+            self.resize_direction = "se"
+        elif near_left and near_bottom:
+            self.root.configure(cursor="size_ne_sw")
+            self.resize_direction = "sw"
+        elif near_right and near_top:
+            self.root.configure(cursor="size_ne_sw")
+            self.resize_direction = "ne"
+        elif near_left and near_top:
+            self.root.configure(cursor="size_nw_se")
+            self.resize_direction = "nw"
+        elif near_right:
+            self.root.configure(cursor="size_we")
+            self.resize_direction = "e"
+        elif near_left:
+            self.root.configure(cursor="size_we")
+            self.resize_direction = "w"
+        elif near_bottom:
+            self.root.configure(cursor="size_ns")
+            self.resize_direction = "s"
+        elif near_top:
+            self.root.configure(cursor="size_ns")
+            self.resize_direction = "n"
+        else:
+            self.root.configure(cursor="")
+            self.resize_direction = None
+
+    def start_resize(self, event):
+        """Start resizing if near edge, otherwise start dragging"""
+        if self.resize_direction:
+            self.resizing = True
+            self.resize_start_x = self.root.winfo_pointerx()
+            self.resize_start_y = self.root.winfo_pointery()
+            self.resize_start_width = self.root.winfo_width()
+            self.resize_start_height = self.root.winfo_height()
+            self.resize_start_window_x = self.root.winfo_x()
+            self.resize_start_window_y = self.root.winfo_y()
+        else:
+            # Only allow dragging from title bar
+            if hasattr(event.widget, 'master') and event.widget.master == self.title_bar:
+                self.start_drag(event)
+            elif event.widget == self.title_bar or event.widget == self.title_label:
+                self.start_drag(event)
+
+    def do_resize(self, event):
+        """Handle resizing"""
+        if not self.resizing:
+            if hasattr(event.widget, 'master') and event.widget.master == self.title_bar:
+                self.drag_window(event)
+            elif event.widget == self.title_bar or event.widget == self.title_label:
+                self.drag_window(event)
+            return
+            
+        dx = self.root.winfo_pointerx() - self.resize_start_x
+        dy = self.root.winfo_pointery() - self.resize_start_y
+        
+        new_width = self.resize_start_width
+        new_height = self.resize_start_height
+        new_x = self.resize_start_window_x
+        new_y = self.resize_start_window_y
+        
+        # Calculate new dimensions based on resize direction
+        if 'e' in self.resize_direction:
+            new_width = max(320, self.resize_start_width + dx)
+        if 'w' in self.resize_direction:
+            new_width = max(320, self.resize_start_width - dx)
+            new_x = self.resize_start_window_x + dx
+            
+        if 's' in self.resize_direction:
+            new_height = max(220, self.resize_start_height + dy)
+        if 'n' in self.resize_direction:
+            new_height = max(220, self.resize_start_height - dy)
+            new_y = self.resize_start_window_y + dy
+        
+        # Apply new size and position
+        self.root.geometry(f"{new_width}x{new_height}+{new_x}+{new_y}")
+
+    def stop_resize(self, event):
+        """Stop resizing"""
+        if self.resizing:
+            self.resizing = False
+            self.resize_direction = None
+            self.root.configure(cursor="")
+            # Update stored dimensions
+            self.width = self.root.winfo_width()
+            self.height = self.root.winfo_height()
+            self.save_settings()
         
     def setup_gui(self):
         """Setup the GUI elements"""
@@ -125,9 +229,7 @@ class leagueOverlay:
         self.title_bar.pack_propagate(False)
         
         # Title label
-        title_text = ""
-        if not self.allow_resize:
-            title_text = "BB's League Overlay"
+        title_text = "BB's League Overlay"
         self.title_label = tk.Label(self.title_bar, text=title_text, 
                                    fg='white', bg='#333333', font=('Arial', 10, 'bold'))
         self.title_label.pack(side=tk.LEFT, padx=5, pady=5)
@@ -135,22 +237,18 @@ class leagueOverlay:
         # Control buttons
         self.button_frame = tk.Frame(self.title_bar, bg='#333333')
         self.button_frame.pack(side=tk.RIGHT, padx=5, pady=2)
+
         self.division_filter_btn = tk.Button(self.button_frame, text="All Divisons", command=self.toggle_division_filter,
                                  bg='#555555', fg='white', font=('Arial', 8))
         self.division_filter_btn.pack(side=tk.LEFT, padx=2)
         
-        self.load_config_btn = tk.Button(self.button_frame, text="Load", command=self.load_different_config,
-                                       bg='#555555', fg='white', font=('Arial', 8))
-        self.load_config_btn.pack(side=tk.LEFT, padx=2)
+        self.settings_btn = tk.Button(self.button_frame, text="Settings", command=self.open_settings,
+                             bg='#555555', fg='white', font=('Arial', 8))
+        self.settings_btn.pack(side=tk.LEFT, padx=2)
 
-        self.new_config_btn = tk.Button(self.button_frame, text="New", command=self.create_new_config,
-                                       bg='#555555', fg='white', font=('Arial', 8))
-        self.new_config_btn.pack(side=tk.LEFT, padx=2)
-        
         self.close_btn = tk.Button(self.button_frame, text="×", command=self.close_application,
                                   bg='#cc0000', fg='white', font=('Arial', 8), width=3)
-        if not self.allow_resize:
-            self.close_btn.pack(side=tk.LEFT, padx=2)
+        self.close_btn.pack(side=tk.LEFT, padx=2)
         
         # Status label
         self.status_label = tk.Label(self.main_frame, text="Connecting to iRacing...", 
@@ -166,7 +264,12 @@ class leagueOverlay:
         self.canvas_frame.pack(fill=tk.BOTH, expand=True)
         
         self.canvas = tk.Canvas(self.canvas_frame, bg='black', highlightthickness=0)
-        self.scrollbar = ttk.Scrollbar(self.canvas_frame, orient="vertical", command=self.on_scrollbar)
+        # Configure scrollbar style for thin appearance
+        self.scrollbar = tk.Scrollbar(self.canvas_frame, orient="vertical", command=self.on_scrollbar,
+                              width=6, 
+                              bg='#333333',
+                              troughcolor='#222222',
+                              activebackground='#555555')
         self.scrollable_frame = tk.Frame(self.canvas, bg='black')
         
         self.scrollable_frame.bind(
@@ -377,9 +480,6 @@ class leagueOverlay:
             self.title_bar.pack(fill=tk.X, before=self.header_frame)
             if not self.is_connected or not hasattr(self, 'status_hide_timer') or not self.status_hide_timer:
                 self.status_label.pack(pady=5, before=self.header_frame)
-            if self.allow_resize:
-                # Enable resizing
-                self.root.overrideredirect(False)
             self.top_elements_visible = True
         
         
@@ -429,6 +529,10 @@ class leagueOverlay:
                 self.driver_colors = empty_config
                 self.color_config_file = file_path
                 self.save_settings()  # Save the new config file path
+                
+                # Refresh the display colors immediately (will show default colors)
+                self.refresh_driver_colors()
+                
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to create config file: {e}")
         self.focus_bindings(True)
@@ -454,19 +558,19 @@ class leagueOverlay:
                         self.height = data.get('height')
                     if data.get('width'):
                         self.width = data.get('width')
-                    if data.get('allow_resize'):
-                        try: 
-                            self.allow_resize = data.get('allow_resize')
-                        except:
-                            pass
-                    if data.get('hide'):
+                    if data.get('hide_headers'):
                         try:
-                            self.hide_headers = data.get('hide')
+                            self.hide_headers = data.get('hide_headers')
                         except:
                             pass
                     if data.get('center_drivers'):
                         try:
                             self.center_drivers = data.get('center_drivers')
+                        except:
+                            pass
+                    if data.get('bold_drivers'):
+                        try:
+                            self.bold_drivers = data.get('bold_drivers')
                         except:
                             pass
             except:
@@ -499,9 +603,9 @@ class leagueOverlay:
                 'height': self.root.winfo_height(),
                 'width': self.root.winfo_width(),
                 'opacity': self.opacity,
-                'allow_resize': self.allow_resize,
-                'hide': self.hide_headers,
-                'center_drivers': self.center_drivers
+                'hide_headers': self.hide_headers,
+                'center_drivers': self.center_drivers,
+                'bold_drivers': self.bold_drivers
             }
             with open(self.settings_file, 'w') as f:
                 json.dump(settings, f, indent=2)
@@ -572,10 +676,6 @@ class leagueOverlay:
                     # Get the new color
                     new_color = self.get_driver_color(driver_name)
                     
-                    # Update all color-dependent widgets in the row
-                    bg_color = '#1a1a1a' if driver_data['is_player'] else 'black'
-                    font_weight = 'bold' if driver_data['is_player'] else 'normal'
-                    
                     widgets['position'].config(fg=new_color)
                     widgets['division_position'].config(fg=new_color)
                     widgets['car_number'].config(fg=new_color)
@@ -604,19 +704,23 @@ class leagueOverlay:
         """Load a different color configuration file"""
         self.focus_bindings(False)
         from tkinter import filedialog
-    
+        
         file_path = filedialog.askopenfilename(
             title="Select Divison Color Config File",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             initialdir="."
         )
-    
+        
         if file_path:
             try:
                 with open(file_path, 'r') as f:
                     self.driver_colors = json.load(f)
                 self.color_config_file = file_path
                 self.save_settings()  # Save the new config file path
+                
+                # Refresh the display colors immediately
+                self.refresh_driver_colors()
+                
                 # Show brief confirmation
                 original_text = self.load_config_btn['text']
                 self.load_config_btn.config(text="✓", bg='#4CAF50')
@@ -1187,17 +1291,17 @@ class leagueOverlay:
         # Create labels using grid instead of pack
         pos_label = tk.Label(row_frame, text=str(data['position']), 
                         fg=color, bg=row_frame['bg'], 
-                        font=('Arial', 9, 'bold' if data['is_player'] else 'normal'))
+                        font=('Arial', 9, 'bold' if data['is_player'] or self.bold_drivers else 'normal'))
         pos_label.grid(row=0, column=0, sticky='ew', padx=2)
 
         division_pos_label = tk.Label(row_frame, text=str(data['division_position']), 
                         fg=color, bg=row_frame['bg'], 
-                        font=('Arial', 9, 'bold' if data['is_player'] else 'normal'))
+                        font=('Arial', 9, 'bold' if data['is_player'] or self.bold_drivers else 'normal'))
         division_pos_label.grid(row=0, column=1, sticky='ew', padx=2)
     
         car_label = tk.Label(row_frame, text=data['car_number'], 
                         fg=color, bg=row_frame['bg'], 
-                        font=('Arial', 9, 'bold' if data['is_player'] else 'normal'))
+                        font=('Arial', 9, 'bold' if data['is_player'] or self.bold_drivers else 'normal'))
         car_label.grid(row=0, column=2, sticky='ew', padx=2)
 
         name_anchor = "w" # Left align name
@@ -1205,13 +1309,13 @@ class leagueOverlay:
             name_anchor = "center" # Center name
         name_label = tk.Label(row_frame, text=data['driver_name'], 
                     fg=color, bg=row_frame['bg'], 
-                    font=('Arial', 9, 'bold' if data['is_player'] else 'normal'),
+                    font=('Arial', 9, 'bold' if data['is_player'] or self.bold_drivers else 'normal'),
                     anchor=name_anchor, width=sizes['driver'])  
         name_label.grid(row=0, column=3, sticky='ew', padx=2)
     
         gap_label = tk.Label(row_frame, text=data['gap'], 
                         fg='white', bg=row_frame['bg'], 
-                        font=('Arial', 9, 'bold' if data['is_player'] else 'normal'), 
+                        font=('Arial', 9, 'bold' if data['is_player'] or self.bold_drivers else 'normal'), 
                         anchor="w")
         gap_label.grid(row=0, column=4, sticky='', padx=2)
         
@@ -1248,7 +1352,7 @@ class leagueOverlay:
                 widgets['frame'].configure(bg=bg_color)
                 
                 # Update font weight for player
-                font_weight = 'bold' if driver_data['is_player'] else 'normal'
+                font_weight = 'bold' if driver_data['is_player'] or self.bold_drivers else 'normal'
                 
                 # Update only if values changed
                 if widgets['position']['text'] != str(driver_data['position']):
@@ -1314,7 +1418,24 @@ class leagueOverlay:
                 widgets['name'].config(text=driver_data['driver_name'], fg=color, bg=bg_color,
                                     font=('Arial', 9, font_weight))
                 widgets['gap'].config(text=driver_data['gap'], fg='white', bg=bg_color,
-                                    font=('Arial', 9, font_weight))                 
+                                    font=('Arial', 9, font_weight))   
+
+    def open_settings(self):
+        """Open the settings window"""
+        self.focus_bindings(False)
+        try:
+            settings_window = SettingsWindow(self)
+            # Wait for settings window to close before re-enabling focus bindings
+            self.root.wait_window(settings_window.window)
+        finally:
+            self.focus_bindings(True)
+
+    def refresh_driver_colors(self):
+        """Refresh all driver colors in the current display"""
+        self.driver_colors = self.load_color_config()
+        if hasattr(self, 'displayed_data') and self.displayed_data:
+            for driver_data in self.displayed_data:
+                self.update_driver_row_color(driver_data['driver_name'])           
                             
     def run(self):
         """Run the application"""
@@ -1326,6 +1447,362 @@ class leagueOverlay:
             self.running = False
             if self.is_connected:
                 self.ir.shutdown()
+
+import tkinter as tk
+from tkinter import ttk, colorchooser, messagebox, filedialog
+import json
+import os
+
+class SettingsWindow:
+    def __init__(self, parent_app):
+        self.parent_app = parent_app
+        self.window = tk.Toplevel(parent_app.root)
+        self.window.title("BB's League Overlay - Settings")
+        self.window.geometry("290x545")
+        self.window.configure(bg='#2b2b2b')
+        self.window.resizable(True, True)
+        
+        # Make window modal
+        self.window.transient(parent_app.root)
+        self.window.grab_set()
+        
+        # Center the window
+        self.center_window()
+        
+        # Store original values for cancel functionality
+        self.original_settings = self.get_current_settings()
+        
+        # Create the settings interface
+        self.setup_ui()
+        
+        # Handle window closing
+        self.window.protocol("WM_DELETE_WINDOW", self.on_cancel)
+        
+    def center_window(self):
+        """Center the settings window on the parent window"""
+        self.window.update_idletasks()
+        parent_x = self.parent_app.root.winfo_x()
+        parent_y = self.parent_app.root.winfo_y()
+        parent_width = self.parent_app.root.winfo_width()
+        parent_height = self.parent_app.root.winfo_height()
+        
+        settings_width = self.window.winfo_width()
+        settings_height = self.window.winfo_height()
+        
+        x = parent_x + (parent_width - settings_width) // 2
+        y = parent_y + (parent_height - settings_height) // 2
+        
+        self.window.geometry(f"+{x}+{y}")
+        
+    def get_current_settings(self):
+        """Get current settings from the parent application"""
+        return {
+            'opacity': self.parent_app.opacity,
+            'width': self.parent_app.width,
+            'height': self.parent_app.height,
+            'hide_headers': self.parent_app.hide_headers,
+            'center_drivers': self.parent_app.center_drivers,
+            'bold_drivers': self.parent_app.bold_drivers,
+            'league_config': self.parent_app.color_config_file,
+            'division_colors': self.parent_app.available_colors.copy()
+        }
+        
+    def setup_ui(self):
+        """Create the settings user interface"""
+        # Create main container without scrollbar
+        main_frame = tk.Frame(self.window, bg='#2b2b2b')
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Use main_frame directly as scrollable_frame
+        scrollable_frame = main_frame
+
+        # === DRIVER COLOR CONFIG SECTION ===
+        config_frame = tk.LabelFrame(scrollable_frame, text="Driver Color Configuration", 
+                                   bg='#2b2b2b', fg='white', font=('Arial', 10, 'bold'))
+        config_frame.pack(fill=tk.X, pady=5)
+        
+        # Current config file
+        current_config_frame = tk.Frame(config_frame, bg='#2b2b2b')
+        current_config_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        tk.Label(current_config_frame, text="Current config file:", bg='#2b2b2b', fg='white', 
+               font=('Arial', 9)).pack(side=tk.LEFT)
+        self.config_file_var = tk.StringVar(value=os.path.basename(self.parent_app.color_config_file))
+        config_label = tk.Label(current_config_frame, textvariable=self.config_file_var, 
+                              bg='#404040', fg='white', font=('Arial', 9), relief='sunken')
+        config_label.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
+        
+        # Config file buttons
+        config_buttons_frame = tk.Frame(config_frame, bg='#2b2b2b')
+        config_buttons_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.new_btn = tk.Button(config_buttons_frame, text="Create New Config", 
+                          command=self.create_new_config, bg='#404040', fg='white',
+                          font=('Arial', 9))
+        self.new_btn.pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.load_btn = tk.Button(config_buttons_frame, text="Load Different Config", 
+                           command=self.load_config_file, bg='#404040', fg='white',
+                           font=('Arial', 9))
+        self.load_btn.pack(side=tk.LEFT)
+        
+        # === WINDOW SETTINGS SECTION ===
+        window_frame = tk.LabelFrame(scrollable_frame, text="Window Settings", 
+                                   bg='#2b2b2b', fg='white', font=('Arial', 10, 'bold'))
+        window_frame.pack(fill=tk.X, pady=5)
+        
+        # Opacity setting
+        opacity_frame = tk.Frame(window_frame, bg='#2b2b2b')
+        opacity_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        tk.Label(opacity_frame, text="Opacity:", bg='#2b2b2b', fg='white', font=('Arial', 9), anchor='sw').pack(side=tk.LEFT, anchor='sw')
+        self.opacity_var = tk.DoubleVar(value=self.parent_app.opacity)
+        self.opacity_scale = tk.Scale(opacity_frame, from_=0.1, to=1.0, resolution=0.05, 
+                                    orient=tk.HORIZONTAL, variable=self.opacity_var,
+                                    bg='#2b2b2b', fg='white', highlightthickness=0,
+                                    command=self.on_opacity_change)
+        self.opacity_scale.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
+        
+        # Window behavior settings
+        behavior_frame = tk.Frame(window_frame, bg='#2b2b2b')
+        behavior_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        self.hide_headers_var = tk.BooleanVar(value=self.parent_app.hide_headers)
+        hide_check = tk.Checkbutton(behavior_frame, text="Auto-hide headers when not focused", 
+                                  variable=self.hide_headers_var, bg='#2b2b2b', fg='white',
+                                  selectcolor='#404040', font=('Arial', 9))
+        hide_check.pack(anchor='w')
+        
+        self.center_drivers_var = tk.BooleanVar(value=self.parent_app.center_drivers)
+        center_check = tk.Checkbutton(behavior_frame, text="Center driver names", 
+                                    variable=self.center_drivers_var, bg='#2b2b2b', fg='white',
+                                    selectcolor='#404040', font=('Arial', 9))
+        center_check.pack(anchor='w')
+        
+        self.bold_drivers_var = tk.BooleanVar(value=self.parent_app.bold_drivers)
+        center_check = tk.Checkbutton(behavior_frame, text="Bold all driver rows", 
+                                    variable=self.bold_drivers_var, bg='#2b2b2b', fg='white',
+                                    selectcolor='#404040', font=('Arial', 9))
+        center_check.pack(anchor='w')
+        
+        # === DIVISION COLORS SECTION ===
+        colors_frame = tk.LabelFrame(scrollable_frame, text="Division Colors", 
+                                   bg='#2b2b2b', fg='white', font=('Arial', 10, 'bold'))
+        colors_frame.pack(fill=tk.X, pady=5)
+        
+        # Create color selection widgets
+        self.color_vars = {}
+        self.color_buttons = {}
+        
+        for i, (division, color) in enumerate(self.parent_app.available_colors.items()):
+            if division == "Default":
+                continue  # Skip default color in settings
+                
+            color_row = tk.Frame(colors_frame, bg='#2b2b2b')
+            color_row.pack(fill=tk.X, padx=10, pady=3)
+            
+            # Division name label
+            tk.Label(color_row, text=f"{division}:", bg='#2b2b2b', fg='white', 
+                   font=('Arial', 9), width=12, anchor='w').pack(side=tk.LEFT)
+            
+            # Color display button
+            self.color_vars[division] = tk.StringVar(value=color)
+            color_btn = tk.Button(color_row, text="     ", 
+                                command=lambda d=division: self.choose_color(d),
+                                bg=color, width=8, relief='raised', borderwidth=2)
+            color_btn.pack(side=tk.LEFT, padx=5)
+            self.color_buttons[division] = color_btn
+            
+            # Color value label
+            color_value_label = tk.Label(color_row, textvariable=self.color_vars[division], 
+                                       bg='#404040', fg='white', font=('Arial', 8), 
+                                       width=10, relief='sunken')
+            color_value_label.pack(side=tk.LEFT, padx=(5, 0))
+        
+        # === BUTTONS SECTION ===
+        button_frame = tk.Frame(scrollable_frame, bg='#2b2b2b')
+        button_frame.pack(fill=tk.X, pady=20)
+        
+        # Top row with Cancel and Apply
+        top_button_frame = tk.Frame(button_frame, bg='#2b2b2b')
+        top_button_frame.pack(fill=tk.X)
+        
+        # Cancel button on upper left
+        cancel_btn = tk.Button(top_button_frame, text="Cancel", command=self.on_cancel,
+                             bg='#f44336', fg='white', font=('Arial', 10, 'bold'),
+                             width=15)
+        cancel_btn.pack(side=tk.LEFT)
+        
+        # Apply button on upper right
+        apply_btn = tk.Button(top_button_frame, text="Apply Settings", command=self.apply_settings,
+                            bg='#4CAF50', fg='white', font=('Arial', 10, 'bold'),
+                            width=15)
+        apply_btn.pack(side=tk.RIGHT)
+        
+        # Reset button centered below
+        reset_btn = tk.Button(button_frame, text="Reset to Defaults", command=self.reset_to_defaults,
+                            bg='#FF9800', fg='white', font=('Arial', 10),
+                            width=15)
+        reset_btn.pack(pady=(10, 0))
+        
+    def on_opacity_change(self, value):
+        """Handle opacity slider change - apply immediately for preview"""
+        try:
+            opacity = float(value)
+            self.parent_app.root.attributes('-alpha', opacity)
+        except:
+            pass
+            
+    def choose_color(self, division):
+        """Open color chooser for division color"""
+        current_color = self.color_vars[division].get()
+        color = colorchooser.askcolor(color=current_color, title=f"Choose {division} Color")
+        
+        if color[1]:  # If user didn't cancel
+            new_color = color[1]
+            self.color_vars[division].set(new_color)
+            self.color_buttons[division].config(bg=new_color)
+            
+    def load_config_file(self):
+        """Load a different league configuration file"""
+        file_path = filedialog.askopenfilename(
+            title="Select Division Color Config File",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            initialdir="."
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'r') as f:
+                    config_data = json.load(f)
+                    
+                # Update the config file path
+                self.parent_app.color_config_file = file_path
+                self.config_file_var.set(os.path.basename(file_path))
+                
+                # Update color variables and buttons (keep existing divisions that aren't in config)
+                for division in self.color_vars.keys():
+                    if division in config_data:
+                        # Find the color from division name
+                        for driver_name, div_name in config_data.items():
+                            if div_name == division:
+                                color = self.parent_app.available_colors.get(division, "#FFFFFF")
+                                self.color_vars[division].set(color)
+                                self.color_buttons[division].config(bg=color)
+                                break
+                            
+                self.parent_app.refresh_driver_colors()
+                # Show brief confirmation
+                original_text = self.load_btn['text']
+                self.load_btn.config(text="Config Loaded ✓", bg='#4CAF50')
+                self.window.after(1000, lambda: self.load_btn.config(text=original_text, bg='#555555'))
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load config file: {e}")
+                
+    def create_new_config(self):
+        """Create a new empty league configuration file"""
+        file_path = filedialog.asksaveasfilename(
+            title="Create New League Config File",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            initialdir=".",
+            defaultextension=".json"
+        )
+        
+        if file_path:
+            try:
+                # Create empty config file
+                empty_config = {}
+                with open(file_path, 'w') as f:
+                    json.dump(empty_config, f, indent=2)
+                
+                # Update the config file path
+                self.parent_app.color_config_file = file_path
+                self.config_file_var.set(os.path.basename(file_path))
+                
+                self.parent_app.refresh_driver_colors()
+                # Show brief confirmation
+                original_text = self.new_btn['text']
+                self.new_btn.config(text="Config Created ✓", bg='#4CAF50')
+                self.window.after(1000, lambda: self.new_btn.config(text=original_text, bg='#555555'))
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to create config file: {e}")
+                
+    def reset_to_defaults(self):
+        """Reset all settings to default values"""
+        result = messagebox.askyesno("Reset to Defaults", 
+                                   "Are you sure you want to reset all settings to their default values?")
+        
+        if result:
+            # Reset window settings
+            self.opacity_var.set(0.8)
+            self.hide_headers_var.set(False)
+            self.center_drivers_var.set(False)
+            self.bold_drivers_var.set(False)
+            
+            # Reset division colors to defaults
+            default_colors = {
+                "Pro": "#FF8C00",
+                "ProAm": "#9370DB", 
+                "Am": "#45B3E0",
+                "Rookie": "#FF2000"
+            }
+            
+            for division, default_color in default_colors.items():
+                if division in self.color_vars:
+                    self.color_vars[division].set(default_color)
+                    self.color_buttons[division].config(bg=default_color)
+                    
+            # Apply opacity immediately for preview
+            self.parent_app.root.attributes('-alpha', 0.8)
+            self.apply_settings(False)
+            
+    def apply_settings(self, isDestroyWindow = True):
+        """Apply all settings and save to config"""
+        try:
+            # Update parent application settings
+            self.parent_app.opacity = self.opacity_var.get()
+            self.parent_app.hide_headers = self.hide_headers_var.get()
+            self.parent_app.center_drivers = self.center_drivers_var.get()
+            self.parent_app.bold_drivers = self.bold_drivers_var.get()
+            
+            # Update division colors
+            for division, color_var in self.color_vars.items():
+                self.parent_app.available_colors[division] = color_var.get()
+            
+            # Apply window changes
+            self.parent_app.root.attributes('-alpha', self.parent_app.opacity)
+            self.parent_app.root.geometry(f"{self.parent_app.width}x{self.parent_app.height}")
+            
+            # Handle header hiding change
+            if self.parent_app.hide_headers:
+                self.parent_app.focus_bindings(True)
+                if not self.parent_app.top_elements_visible:
+                    self.parent_app.hide_top_elements()
+            else:
+                self.parent_app.focus_bindings(False)
+                if not self.parent_app.top_elements_visible:
+                    self.parent_app.show_top_elements()
+            
+            # Force layout refresh
+            self.parent_app.refresh_layout()
+            
+            # Save settings
+            self.parent_app.save_settings()
+            
+            if isDestroyWindow:
+                # Close settings window
+                self.window.destroy()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to apply settings: {e}")
+            
+    def on_cancel(self):
+        """Handle cancel - restore original opacity and close"""
+        # Restore original opacity
+        self.parent_app.root.attributes('-alpha', self.original_settings['opacity'])
+        self.window.destroy()
 
 if __name__ == "__main__":
     try:
