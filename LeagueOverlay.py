@@ -31,6 +31,7 @@ class leagueOverlay:
         self.y = (self.root.winfo_screenheight() // 2) - (self.height // 2)
         self.allow_resize = False
         self.hide_headers = False
+        self.center_drivers = False
         self.hide_timer = None
         self.show_timer = None
         self.top_elements_visible = True
@@ -39,7 +40,7 @@ class leagueOverlay:
 
         # Color coding data
         self.color_config_file = "league_divisions.json"
-        self.settings_file = "settings.json"
+        self.settings_file = "BB_League_Overlay.config"
         self.driver_colors = self.load_color_config()
         self.load_settings()
         self.setup_window()
@@ -159,7 +160,6 @@ class leagueOverlay:
         # Fixed header frame
         self.header_frame = tk.Frame(self.main_frame, bg='#333333')
         self.header_frame.pack(fill=tk.X, pady=2)
-        self.create_headers()
         
         # Scrollable frame for race data
         self.canvas_frame = tk.Frame(self.main_frame, bg='black')
@@ -189,27 +189,20 @@ class leagueOverlay:
         self.canvas.pack(side="left", fill="both", expand=True)
         self.scrollbar.pack(side="right", fill="y")
 
-        # Bind mouse events to all major frames for proper tracking
-        def bind_mouse_events(widget):
-            """Recursively bind mouse events to widget and children"""
-            widget.bind("<Enter>", self.on_mouse_enter, add="+")
-            widget.bind("<Leave>", self.on_mouse_leave, add="+")
-            for child in widget.winfo_children():
-                bind_mouse_events(child)
-
-        # Apply mouse tracking to the entire window
-        self.root.after(100, lambda: bind_mouse_events(self.root))
-
-        # Add mouse tracking for hide/show functionality
-        self.root.bind("<Enter>", self.on_mouse_enter)
-        self.root.bind("<Leave>", self.on_mouse_leave)
-
-        # Also bind to main frame to catch mouse events properly
-        self.main_frame.bind("<Enter>", self.on_mouse_enter)  
-        self.main_frame.bind("<Leave>", self.on_mouse_leave)
-
         if self.hide_headers:
             self.hide_top_elements()
+            self.focus_bindings(True)
+            
+
+    def focus_bindings(self, isEnable=True):
+        """Add or Remove focus event bindings for hide/show functionality"""
+        if self.hide_headers:
+            if isEnable:
+                self.root.bind("<FocusIn>", self.on_focus_in)
+                self.root.bind("<FocusOut>", self.on_focus_out)
+            else:
+                self.root.unbind("<FocusIn>")
+                self.root.unbind("<FocusOut>")
         
     def create_headers(self):
         """Create column headers in the fixed header frame using grid"""
@@ -221,11 +214,11 @@ class leagueOverlay:
         sizes = self.get_dynamic_column_sizes(is_header=True)
         
         # Configure grid with dynamic sizes and uniform groups
-        self.header_frame.grid_columnconfigure(0, weight=11, minsize=sizes['pos'], uniform="col0")
-        self.header_frame.grid_columnconfigure(1, weight=11, minsize=sizes['class_pos'], uniform="col1")
-        self.header_frame.grid_columnconfigure(2, weight=13, minsize=sizes['car_num'], uniform="col2")
-        self.header_frame.grid_columnconfigure(3, weight=47, minsize=sizes['driver'], uniform="col3")
-        self.header_frame.grid_columnconfigure(4, weight=18, minsize=sizes['gap'], uniform="col4")
+        self.header_frame.grid_columnconfigure(0, weight=sizes['gap'], minsize=sizes['pos'], uniform="col0")
+        self.header_frame.grid_columnconfigure(1, weight=sizes['class_pos'], minsize=sizes['class_pos'], uniform="col1")
+        self.header_frame.grid_columnconfigure(2, weight=sizes['car_num'], minsize=sizes['car_num'], uniform="col2")
+        self.header_frame.grid_columnconfigure(3, weight=sizes['driver'], minsize=sizes['driver'], uniform="col3")
+        self.header_frame.grid_columnconfigure(4, weight=sizes['gap'], minsize=sizes['gap'], uniform="col4")
         
         headers = ["Pos", "C-Pos", "Car#", "Driver", "Div Gap"]
         
@@ -347,9 +340,9 @@ class leagueOverlay:
         y = self.root.winfo_y() + event.y - self.drag_data["y"]
         self.root.geometry(f"+{x}+{y}")
 
-    def on_mouse_enter(self, event):
+    def on_focus_in(self, event):
+        """Handle window gaining focus"""
         if self.hide_headers:
-            """Handle mouse entering the window"""
             # Cancel hide timer if active
             if self.hide_timer:
                 self.root.after_cancel(self.hide_timer)
@@ -359,36 +352,15 @@ class leagueOverlay:
             if not self.top_elements_visible:
                 self.show_top_elements()
 
-    def on_mouse_leave(self, event):
+    def on_focus_out(self, event):
+        """Handle window losing focus"""
         if self.hide_headers:
-            """Handle mouse leaving the window"""
-            # Use a more conservative approach - only check if mouse is well outside window
-            x, y = event.x_root, event.y_root
-            window_x = self.root.winfo_rootx()
-            window_y = self.root.winfo_rooty()
-            window_width = self.root.winfo_width()
-            window_height = self.root.winfo_height()
-            
-            # Add buffer zone to include title bar and window controls (about 30px above window)
-            buffer_top = 30
-            buffer_sides = 10
-            
-            # Expanded bounds to include window decorations
-            expanded_x1 = window_x - buffer_sides
-            expanded_y1 = window_y - buffer_top
-            expanded_x2 = window_x + window_width + buffer_sides
-            expanded_y2 = window_y + window_height + buffer_sides
-            
-            # If mouse is still within expanded bounds (including title bar), don't hide
-            if (expanded_x1 <= x <= expanded_x2 and expanded_y1 <= y <= expanded_y2):
-                return
-            
             # Cancel any existing hide timer
             if self.hide_timer:
                 self.root.after_cancel(self.hide_timer)
             
-            # Start hide timer with 500ms delay
-            self.hide_timer = self.root.after(500, self.hide_top_elements)
+        # Start hide timer with 500ms delay
+        self.hide_timer = self.root.after(500, self.hide_top_elements)
 
     def hide_top_elements(self):
         """Hide the title bar and status label"""
@@ -435,6 +407,7 @@ class leagueOverlay:
     
     def create_new_config(self):
         """Create a new color configuration file"""
+        self.focus_bindings(False)
         from tkinter import filedialog, messagebox
         
         # Ask user where to save the new config file
@@ -458,6 +431,7 @@ class leagueOverlay:
                 self.save_settings()  # Save the new config file path
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to create config file: {e}")
+        self.focus_bindings(True)
     
     def load_settings(self):
         """Load window position and last config file and everything else from settings"""
@@ -488,6 +462,11 @@ class leagueOverlay:
                     if data.get('hide'):
                         try:
                             self.hide_headers = data.get('hide')
+                        except:
+                            pass
+                    if data.get('center_drivers'):
+                        try:
+                            self.center_drivers = data.get('center_drivers')
                         except:
                             pass
             except:
@@ -521,7 +500,8 @@ class leagueOverlay:
                 'width': self.root.winfo_width(),
                 'opacity': self.opacity,
                 'allow_resize': self.allow_resize,
-                'hide': self.hide_headers
+                'hide': self.hide_headers,
+                'center_drivers': self.center_drivers
             }
             with open(self.settings_file, 'w') as f:
                 json.dump(settings, f, indent=2)
@@ -622,6 +602,7 @@ class leagueOverlay:
         
     def load_different_config(self):
         """Load a different color configuration file"""
+        self.focus_bindings(False)
         from tkinter import filedialog
     
         file_path = filedialog.askopenfilename(
@@ -642,6 +623,7 @@ class leagueOverlay:
                 self.root.after(1000, lambda: self.load_config_btn.config(text=original_text, bg='#555555'))
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to load config file: {e}")
+        self.focus_bindings(True)
         
     def telemetry_loop(self):
         """Main telemetry loop"""
@@ -664,8 +646,106 @@ class leagueOverlay:
                 print(f"Telemetry error: {e}")
                 time.sleep(1)
                 
+    def calculate_real_time_positions(self, drivers, live_data, player_car_class_id):
+        """Calculate real-time positions based on track position and lap count"""
+        car_idx_lap = live_data['CarIdxLap']
+        car_idx_lap_dist_pct = live_data['CarIdxLapDistPct']
+        car_idx_class_position = live_data['CarIdxClassPosition']
+    
+        if not car_idx_lap or not car_idx_lap_dist_pct or not car_idx_class_position:
+            return []
+    
+        # Collect all active drivers with their track position data
+        active_drivers = []
+    
+        for car_idx in range(len(car_idx_class_position)):
+            if car_idx_class_position[car_idx] == 0:  # Not in race
+                continue
+            
+            # Find driver info
+            driver_info = None
+            for driver in drivers:
+                if driver.get('CarIdx') == car_idx:
+                    driver_info = driver
+                    break
+                
+            if not driver_info:
+                continue
+            
+            # Filter by class if player is on track
+            if player_car_class_id is not None:
+                if driver_info.get('CarClassID') != player_car_class_id:
+                    continue
+        
+            # Calculate total track position (lap + percentage through current lap)
+            current_lap = car_idx_lap[car_idx]
+            lap_pct = car_idx_lap_dist_pct[car_idx]
+        
+            # Handle invalid lap percentage data
+            if lap_pct < 0 or lap_pct > 1:
+                lap_pct = 0
+            
+            total_track_position = current_lap + lap_pct
+        
+            active_drivers.append({
+                'car_idx': car_idx,
+                'driver_info': driver_info,
+                'total_track_position': total_track_position,
+                'current_lap': current_lap,
+                'lap_pct': lap_pct,
+                'official_position': car_idx_class_position[car_idx]
+            })
+    
+        # Sort by total track position (descending - highest lap + percentage first)
+        active_drivers.sort(key=lambda x: x['total_track_position'], reverse=True)
+    
+        # Assign real-time positions
+        for i, driver in enumerate(active_drivers):
+            driver['real_time_position'] = i + 1
+    
+        return active_drivers
+
+    def get_official_positions(self, drivers, live_data, player_car_class_id):
+        """Get official positions for practice/qualifying sessions"""
+        car_idx_class_position = live_data['CarIdxClassPosition']
+    
+        if not car_idx_class_position:
+            return []
+    
+        active_drivers = []
+    
+        for car_idx in range(len(car_idx_class_position)):
+            if car_idx_class_position[car_idx] == 0:  # Not in race
+                continue
+            
+            # Find driver info
+            driver_info = None
+            for driver in drivers:
+                if driver.get('CarIdx') == car_idx:
+                    driver_info = driver
+                    break
+                
+            if not driver_info:
+                continue
+            
+            # Filter by class if player is on track
+            if player_car_class_id is not None:
+                if driver_info.get('CarClassID') != player_car_class_id:
+                    continue
+        
+            active_drivers.append({
+                'car_idx': car_idx,
+                'driver_info': driver_info,
+                'official_position': car_idx_class_position[car_idx]
+            })
+    
+        # Sort by official position
+        active_drivers.sort(key=lambda x: x['official_position'])
+    
+        return active_drivers
+
     def process_telemetry(self):
-        """Process telemetry data"""
+        """Process telemetry data with conditional real-time position calculations and simplified disconnect handling"""
         try:
             # Get driver info directly from telemetry
             try:
@@ -675,7 +755,7 @@ class leagueOverlay:
             except (KeyError, TypeError) as e:
                 print(f"Error getting driver info: {e}")
                 return
-                
+            
             # Get session type
             try:
                 session_info = self.ir['SessionInfo']
@@ -684,8 +764,8 @@ class leagueOverlay:
                 is_race = session_type.lower() == 'race'
             except (KeyError, TypeError, IndexError):
                 is_race = False
-            
-            # Get player car index
+        
+            # Get player car index and class
             try:
                 self.player_car_idx = self.ir['PlayerCarIdx']
             except (KeyError, TypeError):
@@ -700,143 +780,149 @@ class leagueOverlay:
                             break
                 except (KeyError, TypeError):
                     pass
-            
+        
             # Get live telemetry
             live_data = self.ir
             if not live_data:
                 return
-            
-            # Process race standings
-            self.race_data = []
         
-            # Get current class positions and timing data from telemetry
-            car_idx_class_position = live_data['CarIdxClassPosition']
-            car_idx_lap = live_data['CarIdxLap']
-            car_idx_est_time = live_data['CarIdxEstTime']
-            car_idx_best_lap_time = live_data['CarIdxBestLapTime']
-            car_idx_lap_dist_pct = live_data['CarIdxLapDistPct']
+            # Use different methods based on session type
+            if is_race:
+                # Use real-time positions for races
+                active_drivers = self.calculate_real_time_positions(drivers, live_data, player_car_class_id)
+                position_key = 'real_time_position'
+            else:
+                # Use official positions for practice/qualifying
+                active_drivers = self.get_official_positions(drivers, live_data, player_car_class_id)
+                position_key = 'official_position'
         
-            if not car_idx_class_position or not car_idx_lap or not car_idx_est_time or not car_idx_best_lap_time or not car_idx_lap_dist_pct:
+            if not active_drivers:
                 return
             
-            # Pre-calculate positions for all drivers
+            # Get timing data for gap calculations (always use official method)
+            car_idx_lap = live_data['CarIdxLap']
+            car_idx_est_time = live_data['CarIdxEstTime']
+            car_idx_lap_dist_pct = live_data['CarIdxLapDistPct']
+        
+            # Calculate division positions using the appropriate position type
             all_drivers_with_colors = []
-            for temp_car_idx in range(len(car_idx_class_position)):
-                if car_idx_class_position[temp_car_idx] == 0:  # Not in race
-                    continue
-            
-                # Find driver info for this car
-                temp_driver_info = None
-                for temp_driver in drivers:
-                    if temp_driver.get('CarIdx') == temp_car_idx:
-                        temp_driver_info = temp_driver
-                        break
-                
-                if temp_driver_info is None:
-                    return
-                
-                if player_car_class_id is not None:
-                    # only show drivers in same class as player
-                    if temp_driver_info.get('CarClassID') != player_car_class_id:
-                        continue
-            
-                if temp_driver_info:
-                    temp_driver_color = self.get_driver_color(temp_driver_info.get('UserName', ''))
-                    all_drivers_with_colors.append({
-                        'car_idx': temp_car_idx,
-                        'overall_position': car_idx_class_position[temp_car_idx],
-                        'color': temp_driver_color,
-                        'lap_dist': car_idx_lap_dist_pct[temp_car_idx] if car_idx_lap_dist_pct else 0,
-                        'best_lap_time': self.get_best_lap_from_session_info(current_session, temp_car_idx)
-                    })  
+            for driver in active_drivers:
+                driver_color = self.get_driver_color(driver['driver_info'].get('UserName', ''))
+                all_drivers_with_colors.append({
+                    'car_idx': driver['car_idx'],
+                    'position': driver[position_key],
+                    'color': driver_color,
+                    'official_position': driver.get('official_position', driver[position_key])
+                })
 
-            # Calculate division positions for each color
+            # Calculate division positions using display positions
             division_positions = {}
             for color in set(d['color'] for d in all_drivers_with_colors):
                 same_color = [d for d in all_drivers_with_colors if d['color'] == color]
-                same_color.sort(key=lambda x: x['overall_position'])
+                same_color.sort(key=lambda x: x['position'])
                 for i, driver in enumerate(same_color):
                     division_positions[driver['car_idx']] = i + 1
+        
+            # Process race standings
+            self.race_data = []
+        
+            for driver in active_drivers:
+                car_idx = driver['car_idx']
+                driver_info = driver['driver_info']
             
-            for car_idx in range(len(car_idx_class_position)):
-                if car_idx_class_position[car_idx] == 0:  # Not in race
-                    continue
-                
-                # Find driver info
-                driver_info = None
-                for driver in drivers:
-                    if driver.get('CarIdx') == car_idx:
-                        driver_info = driver
-                        break
-                    
-                if not driver_info:
-                    continue
-
-                if player_car_class_id is not None:
-                    if driver_info.get('CarClassID') != player_car_class_id:
-                        continue
-                
-                # Get position and gap data
-                position = car_idx_class_position[car_idx]
+                # Use the appropriate position for display
+                position = driver[position_key]
             
                 # Get current driver's color and division position
                 current_driver_color = self.get_driver_color(driver_info.get('UserName', ''))
                 current_color_position = division_positions.get(car_idx, position)
 
-                # Calculate gap to car ahead in same division
+                # Calculate gap - check for disconnected drivers
                 if current_color_position == 1:
                     gap = "Leader"
                 elif is_race:
+                    # Check if current driver is disconnected
+                    if not car_idx_est_time or car_idx >= len(car_idx_est_time) or car_idx_est_time[car_idx] <= 0:
+                        gap = "D/C"
+                    else:
+                        # Find division drivers using display positions
+                        same_color_drivers = []
+                        for temp_driver in active_drivers:
+                            temp_color = self.get_driver_color(temp_driver['driver_info'].get('UserName', ''))
+                            if temp_color == current_driver_color:
+                                same_color_drivers.append({
+                                    'car_idx': temp_driver['car_idx'],
+                                    'position': temp_driver[position_key]
+                                })
+                    
+                        same_color_drivers.sort(key=lambda x: x['position'])
+                    
+                        # Find current driver's position in the list
+                        current_pos_index = None
+                        for i, temp_driver in enumerate(same_color_drivers):
+                            if temp_driver['car_idx'] == car_idx:
+                                current_pos_index = i
+                                break
+                    
+                        if current_pos_index is not None and current_pos_index > 0:
+                            # Get car ahead in division
+                            car_ahead_idx = same_color_drivers[current_pos_index - 1]['car_idx']
+                        
+                            # Check if car ahead is disconnected
+                            if (not car_idx_est_time or car_ahead_idx >= len(car_idx_est_time) or 
+                                car_idx_est_time[car_ahead_idx] <= 0):
+                                # Car ahead is disconnected, leave gap blank
+                                gap = ""
+                            else:
+                                # Both cars connected, calculate gap normally
+                                current_est_time = car_idx_est_time[car_idx]
+                                ahead_est_time = car_idx_est_time[car_ahead_idx]
+                                current_lap = car_idx_lap[car_idx]
+                                ahead_lap = car_idx_lap[car_ahead_idx]
+            
+                                time_gap = 0.0
+                                if current_est_time > 0 and ahead_est_time > 0:
+                                    time_gap = ahead_est_time - current_est_time
+                                else:
+                                    # Fallback to distance calculation
+                                    time_gap = (car_idx_lap_dist_pct[car_ahead_idx] - car_idx_lap_dist_pct[car_idx]) * self.get_fastest_lap_time(current_session)
+                
+                                # Adjust for lap differences
+                                lap_difference = ahead_lap - current_lap
+                                
+                                # If less than 1 FULL lap down
+                                if lap_difference == 1 and car_idx_lap_dist_pct[car_ahead_idx] < car_idx_lap_dist_pct[car_idx]:
+                                    time_gap += self.get_fastest_lap_time(current_session)
+                                    lap_difference = 0
+
+                                if lap_difference > 0:
+                                    gap = f"{lap_difference}L"
+                                else:
+                                    if time_gap < 0:
+                                        time_gap *= -1 # just make it positive for now
+                                    if time_gap < 60:
+                                        gap = f"{time_gap:.1f}"
+                                    else:
+                                        minutes = int(time_gap // 60)
+                                        seconds = time_gap % 60
+                                        gap = f"{minutes}:{seconds:04.1f}"
+                        else:
+                            gap = ""
+                else:  # Practice or Qualifying
                     same_color_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
-                    same_color_drivers.sort(key=lambda x: x['overall_position'])
+                    same_color_drivers.sort(key=lambda x: x['position'])
 
                     if len(same_color_drivers) >= current_color_position - 1:
                         car_ahead_idx = same_color_drivers[current_color_position - 2]['car_idx']
-        
-                        if car_idx_est_time and car_idx_lap:
-                            current_est_time = car_idx_est_time[car_idx]
-                            ahead_est_time = car_idx_est_time[car_ahead_idx]
-                            current_lap = car_idx_lap[car_idx]
-                            ahead_lap = car_idx_lap[car_ahead_idx]
-            
-                            time_gap = 0.0
-                            if current_est_time > 0 and ahead_est_time > 0:
-                                # Calculate base time difference
-                                time_gap = ahead_est_time - current_est_time
-                            else:
-                                # possibly in replay, fallback to distance calculation
-                                time_gap = (car_idx_lap_dist_pct[car_ahead_idx] - car_idx_lap_dist_pct[car_idx]) * 90
-                
-                            # Adjust for lap differences
-                            lap_difference = ahead_lap - current_lap
-            
-                            if lap_difference > 0:
-                                # Car ahead is on a later lap - add full lap time(s)
-                                lap_time_adjustment = lap_difference * self.get_best_lap_from_session_info(current_session, car_ahead_idx)
-                                time_gap += lap_time_adjustment
-                            if lap_difference > 1:
-                                gap = f"+{lap_difference}L"
-                            else:
-                                # Format the gap
-                                if time_gap < 60:
-                                    gap = f"{time_gap:.1f}"
-                                else:
-                                    minutes = int(time_gap // 60)
-                                    seconds = time_gap % 60
-                                    gap = f"{minutes}:{seconds:04.1f}"
+                        current_best = self.get_best_lap_from_session_info(current_session, car_idx)
+                        ahead_best = self.get_best_lap_from_session_info(current_session, car_ahead_idx)
+                        if current_best > 0 and ahead_best > 0:
+                            time_gap = current_best - ahead_best
+                            gap = f"{time_gap:.3f}"
                         else:
-                            # No timing data available
                             gap = ""
                     else:
                         gap = ""
-                else: # Practice or Qualifying
-                    same_color_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
-                    same_color_drivers.sort(key=lambda x: x['overall_position']) # if this keeps giving wrong info switch to best lap time and manually calculate position
-
-                    if len(same_color_drivers) >= current_color_position - 1:
-                        car_ahead_idx = same_color_drivers[current_color_position - 2]['car_idx']
-                        time_gap = self.get_best_lap_from_session_info(current_session, car_idx) - self.get_best_lap_from_session_info(current_session, car_ahead_idx)
-                        gap = f"{time_gap:.3f}"
             
                 # Mark if this is the player
                 is_player = (car_idx == self.player_car_idx)
@@ -850,12 +936,20 @@ class leagueOverlay:
                     'car_idx': car_idx,
                     'is_player': is_player
                 })
-            
-            # Sort by position
-            self.race_data.sort(key=lambda x: x['position'])
         
+            # Sort by display position
+            self.race_data.sort(key=lambda x: x['position'])
+    
         except Exception as e:
             print(f"Processing error: {e}")
+
+    def get_fastest_lap_time(self, current_session):
+        fastest_time = float('inf')
+        for driver in current_session['ResultsPositions']:
+            best_lap = driver['FastestTime']
+            if 0 < best_lap < fastest_time:
+                fastest_time = best_lap
+        return fastest_time if fastest_time != float('inf') else 90
 
     def get_best_lap_from_session_info(self, current_session, car_idx):
         try:
@@ -865,7 +959,7 @@ class leagueOverlay:
                         return driver['FastestTime']
         except (KeyError, TypeError, IndexError):
             pass
-        return 0
+        return 90 # default to 90 if no best lap found
             
     def update_gui(self):
         """Update GUI with race data"""
@@ -900,17 +994,17 @@ class leagueOverlay:
     def get_dynamic_column_sizes(self, is_header=False):
         """Calculate column minimum sizes based on current window width"""
         # Account for scrollbar and padding
-        scrollbar_width = 20 if not is_header else 0
-        padding = 20  # Total padding from margins
+        scrollbar_width = 0 if not is_header else 4
+        padding = 2  # Total padding from margins
         available_width = self.root.winfo_width() - scrollbar_width - padding
         
-        # Define percentage allocations (should add up to 100)
+        # Define percentage allocations (should add up to 1.0)
         percentages = {
-            'pos': 0.11,        # 11%
-            'class_pos': 0.11,  # 11% 
-            'car_num': 0.13,    # 13%
-            'driver': 0.46,     # 46%
-            'gap': 0.19         # 19%
+            'pos': 0.11,
+            'class_pos': 0.11,
+            'car_num': 0.13,
+            'driver': 0.46,
+            'gap': 0.19
         }
         
         # Calculate actual pixel widths
@@ -1089,14 +1183,6 @@ class leagueOverlay:
         # Highlight player row
         if data['is_player']:
             row_frame.configure(bg='#1a1a1a')
-
-        char_width = 8
-        driver_column_width = int(sizes['driver'] / char_width)
-        max_name_chars = max(8, driver_column_width)
-
-        driver_name = data['driver_name']
-        if len(driver_name) > max_name_chars:
-            driver_name = driver_name[:max_name_chars] + "..."
     
         # Create labels using grid instead of pack
         pos_label = tk.Label(row_frame, text=str(data['position']), 
@@ -1113,11 +1199,15 @@ class leagueOverlay:
                         fg=color, bg=row_frame['bg'], 
                         font=('Arial', 9, 'bold' if data['is_player'] else 'normal'))
         car_label.grid(row=0, column=2, sticky='ew', padx=2)
-    
-        name_label = tk.Label(row_frame, text=driver_name, 
-                            fg=color, bg=row_frame['bg'], 
-                            font=('Arial', 9, 'bold' if data['is_player'] else 'normal'))
-        name_label.grid(row=0, column=3, sticky='w', padx=2)
+
+        name_anchor = "w" # Left align name
+        if self.center_drivers:
+            name_anchor = "center" # Center name
+        name_label = tk.Label(row_frame, text=data['driver_name'], 
+                    fg=color, bg=row_frame['bg'], 
+                    font=('Arial', 9, 'bold' if data['is_player'] else 'normal'),
+                    anchor=name_anchor, width=sizes['driver'])  
+        name_label.grid(row=0, column=3, sticky='ew', padx=2)
     
         gap_label = tk.Label(row_frame, text=data['gap'], 
                         fg='white', bg=row_frame['bg'], 
@@ -1132,11 +1222,6 @@ class leagueOverlay:
         car_label.bind("<Button-3>", lambda e: self.show_context_menu(e, data['driver_name']))
         name_label.bind("<Button-3>", lambda e: self.show_context_menu(e, data['driver_name']))
         gap_label.bind("<Button-3>", lambda e: self.show_context_menu(e, data['driver_name']))
-        
-        # Bind mouse events to new row elements
-        for widget in [row_frame, pos_label, division_pos_label, car_label, name_label, gap_label]:
-            widget.bind("<Enter>", self.on_mouse_enter, add="+")
-            widget.bind("<Leave>", self.on_mouse_leave, add="+")   
         
         # Store widget references
         self.data_widgets[data['car_idx']] = {
@@ -1168,31 +1253,23 @@ class leagueOverlay:
                 # Update only if values changed
                 if widgets['position']['text'] != str(driver_data['position']):
                     widgets['position'].config(text=str(driver_data['position']), fg=color, bg=bg_color,
-                                             font=('Arial', 9, font_weight))
+                                            font=('Arial', 9, font_weight))
 
                 if widgets['division_position']['text'] != str(driver_data['division_position']):
                     widgets['division_position'].config(text=str(driver_data['division_position']), fg=color, bg=bg_color,
-                                             font=('Arial', 9, font_weight))
+                                            font=('Arial', 9, font_weight))
                     
                 if widgets['car_number']['text'] != driver_data['car_number']:
                     widgets['car_number'].config(text=driver_data['car_number'], fg=color, bg=bg_color,
-                                               font=('Arial', 9, font_weight))
+                                            font=('Arial', 9, font_weight))
                 
-                char_width = 8
-                driver_column_width = int(self.get_dynamic_column_sizes()['driver'] / char_width)
-                max_name_chars = max(8, driver_column_width)
-
-                driver_name = driver_data['driver_name']
-                if len(driver_name) > max_name_chars:
-                    driver_name = driver_name[:max_name_chars] + "..."
-
-                if widgets['name']['text'] != driver_name:
-                    widgets['name'].config(text=driver_name, fg=color, bg=bg_color,
-                                         font=('Arial', 9, font_weight))
+                if widgets['name']['text'] != driver_data['driver_name']:
+                    widgets['name'].config(text=driver_data['driver_name'], fg=color, bg=bg_color,
+                                            font=('Arial', 9, font_weight))
                     
                 if widgets['gap']['text'] != driver_data['gap']:
                     widgets['gap'].config(text=driver_data['gap'], bg=bg_color,
-                                        font=('Arial', 9, font_weight))
+                                         font=('Arial', 9, font_weight))
                                                   
     def reorder_and_update_display(self, data):
         """Reorder existing widgets and update their data without rebuilding"""
@@ -1234,7 +1311,7 @@ class leagueOverlay:
                                     font=('Arial', 9, font_weight))
                 widgets['car_number'].config(text=driver_data['car_number'], fg=color, bg=bg_color,
                                     font=('Arial', 9, font_weight))
-                widgets['name'].config(text=driver_data['driver_name'][:20], fg=color, bg=bg_color,
+                widgets['name'].config(text=driver_data['driver_name'], fg=color, bg=bg_color,
                                     font=('Arial', 9, font_weight))
                 widgets['gap'].config(text=driver_data['gap'], fg='white', bg=bg_color,
                                     font=('Arial', 9, font_weight))                 
