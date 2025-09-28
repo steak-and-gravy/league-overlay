@@ -87,6 +87,7 @@ class leagueOverlay:
         
         # Add custom resize functionality
         self.setup_custom_resize()
+        self.refresh_layout()
 
     def setup_custom_resize(self):
         """Add custom resize handles"""
@@ -216,6 +217,10 @@ class leagueOverlay:
             self.width = self.root.winfo_width()
             self.height = self.root.winfo_height()
             self.save_settings()
+            self.root.after(100, self.refresh_layout)  # Small delay to avoid excessive calls
+            
+            # Save position after resize (existing functionality)
+            self.root.after(1000, self.save_settings)
         
     def setup_gui(self):
         """Setup the GUI elements"""
@@ -315,10 +320,10 @@ class leagueOverlay:
         
         # Get dynamic sizes
         sizes = self.get_dynamic_column_sizes(is_header=True)
-        
+
         # Configure grid with dynamic sizes and uniform groups
-        self.header_frame.grid_columnconfigure(0, weight=sizes['gap'], minsize=sizes['pos'], uniform="col0")
-        self.header_frame.grid_columnconfigure(1, weight=sizes['class_pos'], minsize=sizes['class_pos'], uniform="col1")
+        self.header_frame.grid_columnconfigure(0, weight=sizes['pos'], minsize=sizes['pos'], uniform="col0")
+        self.header_frame.grid_columnconfigure(1, weight=sizes['div_pos'], minsize=sizes['div_pos'], uniform="col1")
         self.header_frame.grid_columnconfigure(2, weight=sizes['car_num'], minsize=sizes['car_num'], uniform="col2")
         self.header_frame.grid_columnconfigure(3, weight=sizes['driver'], minsize=sizes['driver'], uniform="col3")
         self.header_frame.grid_columnconfigure(4, weight=sizes['gap'], minsize=sizes['gap'], uniform="col4")
@@ -611,14 +616,6 @@ class leagueOverlay:
                 json.dump(settings, f, indent=2)
         except Exception as e:
             print(f"Failed to save settings: {e}")
-    
-    def on_window_configure(self, event):
-        """Handle window configuration changes"""
-        if event.widget == self.root:
-            # Refresh layout when window is resized
-            self.root.after(100, self.refresh_layout)
-            # Save position after a short delay to avoid too many writes
-            self.root.after(1000, self.save_settings)
         
     def save_color_config(self):
         """Save color configuration to file"""
@@ -1090,12 +1087,12 @@ class leagueOverlay:
         # Account for scrollbar and padding
         scrollbar_width = 0 if not is_header else 4
         padding = 2  # Total padding from margins
-        available_width = self.root.winfo_width() - scrollbar_width - padding
-        
+        available_width = self.width - scrollbar_width - padding
+
         # Define percentage allocations (should add up to 1.0)
         percentages = {
             'pos': 0.11,
-            'class_pos': 0.11,
+            'div_pos': 0.11,
             'car_num': 0.13,
             'driver': 0.46,
             'gap': 0.19
@@ -1104,7 +1101,7 @@ class leagueOverlay:
         # Calculate actual pixel widths
         return {
             'pos': int(available_width * percentages['pos']),
-            'class_pos': int(available_width * percentages['class_pos']),
+            'div_pos': int(available_width * percentages['div_pos']),
             'car_num': int(available_width * percentages['car_num']),
             'driver': int(available_width * percentages['driver']),
             'gap': int(available_width * percentages['gap'])
@@ -1227,20 +1224,11 @@ class leagueOverlay:
         except Exception as e:
             print(f"Error centering on player: {e}")
 
-    def on_window_resize(self, event):
-        """Handle window resize events"""
-        if event.widget == self.root:
-            # Recreate headers with new widths
-            self.root.after(100, self.refresh_layout)  # Small delay to avoid excessive calls
-            
-            # Save position after resize (existing functionality)
-            self.root.after(1000, self.save_settings)
-
     def refresh_layout(self):
         """Refresh the layout after window resize"""
         # Recreate headers
         self.create_headers()
-    
+
         # Force a display refresh to update row widths
         if hasattr(self, 'displayed_data') and self.displayed_data:
             self.rebuild_display(self.displayed_data)
@@ -1263,10 +1251,10 @@ class leagueOverlay:
         row_frame.pack(fill=tk.X, expand=True, padx=5, pady=1)
     
         sizes = self.get_dynamic_column_sizes()
-
+        
         # Configure same grid with dynamic sizes and uniform groups
         row_frame.grid_columnconfigure(0, weight=sizes['pos'], minsize=sizes['pos'], uniform="col0")
-        row_frame.grid_columnconfigure(1, weight=sizes['class_pos'], minsize=sizes['class_pos'], uniform="col1")
+        row_frame.grid_columnconfigure(1, weight=sizes['div_pos'], minsize=sizes['div_pos'], uniform="col1")
         row_frame.grid_columnconfigure(2, weight=sizes['car_num'], minsize=sizes['car_num'], uniform="col2")
         row_frame.grid_columnconfigure(3, weight=sizes['driver'], minsize=sizes['driver'], uniform="col3")
         row_frame.grid_columnconfigure(4, weight=sizes['gap'], minsize=sizes['gap'], uniform="col4")
