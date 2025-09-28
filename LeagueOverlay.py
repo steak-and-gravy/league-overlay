@@ -40,7 +40,7 @@ class leagueOverlay:
 
         # Color coding data
         self.color_config_file = "league_divisions.json"
-        self.settings_file = "BB_League_Overlay.config"
+        self.settings_file = "LeagueOverlay.config"
         self.driver_colors = self.load_color_config()
         self.load_settings()
         
@@ -323,7 +323,7 @@ class leagueOverlay:
         self.header_frame.grid_columnconfigure(3, weight=sizes['driver'], minsize=sizes['driver'], uniform="col3")
         self.header_frame.grid_columnconfigure(4, weight=sizes['gap'], minsize=sizes['gap'], uniform="col4")
         
-        headers = ["Pos", "C-Pos", "Car#", "Driver", "Div Gap"]
+        headers = ["Pos", "D-Pos", "Car#", "Driver", "Div Gap"]
         
         for i, header in enumerate(headers):
             label = tk.Label(self.header_frame, text=header, fg='white', bg='#333333',
@@ -945,73 +945,63 @@ class leagueOverlay:
                 if current_color_position == 1:
                     gap = "Leader"
                 elif is_race:
-                    # Check if current driver is disconnected
-                    if not car_idx_est_time or car_idx >= len(car_idx_est_time) or car_idx_est_time[car_idx] <= 0:
-                        gap = "D/C"
-                    else:
-                        # Find division drivers using display positions
-                        same_color_drivers = []
-                        for temp_driver in active_drivers:
-                            temp_color = self.get_driver_color(temp_driver['driver_info'].get('UserName', ''))
-                            if temp_color == current_driver_color:
-                                same_color_drivers.append({
-                                    'car_idx': temp_driver['car_idx'],
-                                    'position': temp_driver[position_key]
-                                })
-                    
-                        same_color_drivers.sort(key=lambda x: x['position'])
-                    
-                        # Find current driver's position in the list
-                        current_pos_index = None
-                        for i, temp_driver in enumerate(same_color_drivers):
-                            if temp_driver['car_idx'] == car_idx:
-                                current_pos_index = i
-                                break
-                    
-                        if current_pos_index is not None and current_pos_index > 0:
-                            # Get car ahead in division
-                            car_ahead_idx = same_color_drivers[current_pos_index - 1]['car_idx']
-                        
-                            # Check if car ahead is disconnected
-                            if (not car_idx_est_time or car_ahead_idx >= len(car_idx_est_time) or 
-                                car_idx_est_time[car_ahead_idx] <= 0):
-                                # Car ahead is disconnected, leave gap blank
-                                gap = ""
-                            else:
-                                # Both cars connected, calculate gap normally
-                                current_est_time = car_idx_est_time[car_idx]
-                                ahead_est_time = car_idx_est_time[car_ahead_idx]
-                                current_lap = car_idx_lap[car_idx]
-                                ahead_lap = car_idx_lap[car_ahead_idx]
-            
-                                time_gap = 0.0
-                                if current_est_time > 0 and ahead_est_time > 0:
-                                    time_gap = ahead_est_time - current_est_time
-                                else:
-                                    # Fallback to distance calculation
-                                    time_gap = (car_idx_lap_dist_pct[car_ahead_idx] - car_idx_lap_dist_pct[car_idx]) * self.get_fastest_lap_time(current_session)
+                    # Find division drivers using display positions
+                    same_color_drivers = []
+                    for temp_driver in active_drivers:
+                        temp_color = self.get_driver_color(temp_driver['driver_info'].get('UserName', ''))
+                        if temp_color == current_driver_color:
+                            same_color_drivers.append({
+                                'car_idx': temp_driver['car_idx'],
+                                'position': temp_driver[position_key]
+                            })
                 
-                                # Adjust for lap differences
-                                lap_difference = ahead_lap - current_lap
-                                
-                                # If less than 1 FULL lap down
-                                if lap_difference == 1 and car_idx_lap_dist_pct[car_ahead_idx] < car_idx_lap_dist_pct[car_idx]:
-                                    time_gap += self.get_fastest_lap_time(current_session)
-                                    lap_difference = 0
-
-                                if lap_difference > 0:
-                                    gap = f"{lap_difference}L"
-                                else:
-                                    if time_gap < 0:
-                                        time_gap *= -1 # just make it positive for now
-                                    if time_gap < 60:
-                                        gap = f"{time_gap:.1f}"
-                                    else:
-                                        minutes = int(time_gap // 60)
-                                        seconds = time_gap % 60
-                                        gap = f"{minutes}:{seconds:04.1f}"
+                    same_color_drivers.sort(key=lambda x: x['position'])
+                
+                    # Find current driver's position in the list
+                    current_pos_index = None
+                    for i, temp_driver in enumerate(same_color_drivers):
+                        if temp_driver['car_idx'] == car_idx:
+                            current_pos_index = i
+                            break
+                
+                    if current_pos_index is not None and current_pos_index > 0:
+                        # Get car ahead in division
+                        car_ahead_idx = same_color_drivers[current_pos_index - 1]['car_idx']
+                    
+                        # Both cars connected, calculate gap normally
+                        current_est_time = car_idx_est_time[car_idx]
+                        ahead_est_time = car_idx_est_time[car_ahead_idx]
+                        current_lap = car_idx_lap[car_idx]
+                        ahead_lap = car_idx_lap[car_ahead_idx]
+    
+                        time_gap = 0.0
+                        if current_est_time > 0 and ahead_est_time > 0:
+                            time_gap = ahead_est_time - current_est_time
                         else:
-                            gap = ""
+                            # Fallback to distance calculation
+                            time_gap = (car_idx_lap_dist_pct[car_ahead_idx] - car_idx_lap_dist_pct[car_idx]) * self.get_fastest_lap_time(current_session)
+        
+                        # Adjust for lap differences
+                        lap_difference = ahead_lap - current_lap
+                        
+                        # If less than 1 FULL lap down
+                        if lap_difference == 1 and car_idx_lap_dist_pct[car_ahead_idx] < car_idx_lap_dist_pct[car_idx]:
+                            time_gap += self.get_fastest_lap_time(current_session)
+                            lap_difference = 0
+
+                        if lap_difference > 0:
+                            gap = f"{lap_difference}L"
+                        else:
+                            if time_gap < 0:
+                                time_gap *= -1 # just make it positive for now
+                            if time_gap < 60:
+                                gap = f"{time_gap:.1f}"
+                            else:
+                                minutes = int(time_gap // 60)
+                                seconds = time_gap % 60
+                                gap = f"{minutes}:{seconds:04.1f}"
+                    else:
+                        gap = ""
                 else:  # Practice or Qualifying
                     same_color_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
                     same_color_drivers.sort(key=lambda x: x['position'])
