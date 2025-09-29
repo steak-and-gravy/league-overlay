@@ -8,6 +8,8 @@ import os
 import yaml
 from datetime import datetime
 
+VERSION = "0.9.2"  # Easy to find and update
+
 class leagueOverlay:
     def __init__(self):
         self.root = tk.Tk()
@@ -22,9 +24,10 @@ class leagueOverlay:
         self.manual_scroll_timeout = 5  # seconds
         self.auto_center_enabled = True
         self.status_hide_timer = None
-        
+        self.refresh_rate = 2.0
+
         self.show_only_my_division = False
-        self.opacity = 0.8
+        self.opacity = 1.0
         self.width = 350
         self.height = 320
         self.x = (self.root.winfo_screenwidth() // 2) - (self.width // 2)
@@ -555,6 +558,11 @@ class leagueOverlay:
                         self.driver_colors = self.load_color_config()
                     if data.get('opacity'):
                         self.opacity = data.get('opacity')
+                    if data.get('refresh_rate'):
+                        try:
+                            self.refresh_rate = data.get('refresh_rate')
+                        except:
+                            pass
                     if data.get('x'):
                         self.x = data.get('x')
                     if data.get('y'):
@@ -608,6 +616,7 @@ class leagueOverlay:
                 'height': self.root.winfo_height(),
                 'width': self.root.winfo_width(),
                 'opacity': self.opacity,
+                'refresh_rate': self.refresh_rate,
                 'hide_headers': self.hide_headers,
                 'center_drivers': self.center_drivers,
                 'bold_drivers': self.bold_drivers
@@ -741,7 +750,7 @@ class leagueOverlay:
                         self.is_connected = False
                         self.ir.shutdown()
                         
-                time.sleep(0.1)  # Update every 100ms
+                time.sleep(self.refresh_rate)
                 
             except Exception as e:
                 print(f"Telemetry error: {e}")
@@ -1076,7 +1085,7 @@ class leagueOverlay:
                     self.root.after(0, lambda: self.status_label.pack(pady=5))
                     self.root.after(0, lambda: self.status_label.config(text="Connecting to iRacing...", fg='yellow'))
                     
-                time.sleep(0.1)  # Update GUI every 100ms
+                time.sleep(self.refresh_rate)
                 
             except Exception as e:
                 print(f"GUI update error: {e}")
@@ -1244,7 +1253,7 @@ class leagueOverlay:
         # Create new widgets
         for i, driver_data in enumerate(data):
             self.create_driver_row(i, driver_data)
-            
+
     def create_driver_row(self, index, data):
         """Create a new driver row using grid layout"""
         row_frame = tk.Frame(self.scrollable_frame, bg='black')
@@ -1433,10 +1442,12 @@ import os
 
 class SettingsWindow:
     def __init__(self, parent_app):
+        global VERSION  # Access the version variable
+        self.version = VERSION
         self.parent_app = parent_app
         self.window = tk.Toplevel(parent_app.root)
         self.window.title("BB's League Overlay - Settings")
-        self.window.geometry("290x545")
+        self.window.geometry("290x590")
         self.window.configure(bg='#2b2b2b')
         self.window.resizable(True, True)
         
@@ -1476,6 +1487,7 @@ class SettingsWindow:
         """Get current settings from the parent application"""
         return {
             'opacity': self.parent_app.opacity,
+            'refresh_rate': self.parent_app.refresh_rate,
             'width': self.parent_app.width,
             'height': self.parent_app.height,
             'hide_headers': self.parent_app.hide_headers,
@@ -1540,6 +1552,17 @@ class SettingsWindow:
                                     bg='#2b2b2b', fg='white', highlightthickness=0,
                                     command=self.on_opacity_change)
         self.opacity_scale.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
+
+        # Refresh Rate setting
+        refresh_frame = tk.Frame(window_frame, bg='#2b2b2b')
+        refresh_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        tk.Label(refresh_frame, text="Refresh Rate (sec):", bg='#2b2b2b', fg='white', font=('Arial', 9), anchor='sw').pack(side=tk.LEFT, anchor='sw')
+        self.refresh_rate_var = tk.DoubleVar(value=self.parent_app.refresh_rate)
+        self.refresh_scale = tk.Scale(refresh_frame, from_=0.5, to=5.0, resolution=0.5, 
+                                    orient=tk.HORIZONTAL, variable=self.refresh_rate_var,
+                                    bg='#2b2b2b', fg='white', highlightthickness=0)
+        self.refresh_scale.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
         
         # Window behavior settings
         behavior_frame = tk.Frame(window_frame, bg='#2b2b2b')
@@ -1622,6 +1645,15 @@ class SettingsWindow:
                             bg='#FF9800', fg='white', font=('Arial', 10),
                             width=15)
         reset_btn.pack(pady=(10, 0))
+
+        # Version number at the bottom
+        version_frame = tk.Frame(scrollable_frame, bg='#2b2b2b')
+        version_frame.pack(fill=tk.X, pady=(20, 0))
+
+        version_label = tk.Label(version_frame, text=f"Version {VERSION}", 
+                            bg='#2b2b2b', fg='#888888', font=('Arial', 8),
+                            anchor='center')
+        version_label.pack()
         
     def on_opacity_change(self, value):
         """Handle opacity slider change - apply immediately for preview"""
@@ -1714,7 +1746,8 @@ class SettingsWindow:
         
         if result:
             # Reset window settings
-            self.opacity_var.set(0.8)
+            self.opacity_var.set(1.0)
+            self.refresh_rate_var.set(2.0)
             self.hide_headers_var.set(False)
             self.center_drivers_var.set(False)
             self.bold_drivers_var.set(False)
@@ -1733,7 +1766,7 @@ class SettingsWindow:
                     self.color_buttons[division].config(bg=default_color)
                     
             # Apply opacity immediately for preview
-            self.parent_app.root.attributes('-alpha', 0.8)
+            self.parent_app.root.attributes('-alpha', 1.0)
             self.apply_settings(False)
             
     def apply_settings(self, isDestroyWindow = True):
@@ -1741,6 +1774,7 @@ class SettingsWindow:
         try:
             # Update parent application settings
             self.parent_app.opacity = self.opacity_var.get()
+            self.parent_app.refresh_rate = self.refresh_rate_var.get()
             self.parent_app.hide_headers = self.hide_headers_var.get()
             self.parent_app.center_drivers = self.center_drivers_var.get()
             self.parent_app.bold_drivers = self.bold_drivers_var.get()
