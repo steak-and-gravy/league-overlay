@@ -269,7 +269,7 @@ class leagueOverlay:
         
         # Status label
         self.status_label = tk.Label(self.main_frame, text="Connecting to iRacing...", 
-                                    fg='yellow', bg='black', font=('Arial', 9))
+                                    fg='orange', bg='black', font=('Arial', 9))
         self.status_label.pack(pady=5)
         
         # Fixed header frame
@@ -1096,7 +1096,7 @@ class leagueOverlay:
                         self.root.after_cancel(self.status_hide_timer)
                         self.status_hide_timer = None
                     self.root.after(0, lambda: self.status_label.pack(pady=5))
-                    self.root.after(0, lambda: self.status_label.config(text="Connecting to iRacing...", fg='yellow'))
+                    self.root.after(0, lambda: self.status_label.config(text="Connecting to iRacing...", fg='orange'))
                     
                 time.sleep(self.refresh_rate)
                 
