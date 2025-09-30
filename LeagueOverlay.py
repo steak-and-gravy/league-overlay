@@ -97,7 +97,7 @@ class leagueOverlay:
 
     def show_version_on_startup(self):
         """Show version number in status label for 3 seconds on startup"""
-        self.status_label.config(text=f"BB's League Overlay v{VERSION}", fg='cyan')
+        self.status_label.config(text=f"BB's League Overlay v{VERSION}", fg='orange')
         # After 2 seconds, let the normal update_gui handle the status
         self.root.after(2000, lambda: None)  # Timer to mark when we're past the 2 second window
 
