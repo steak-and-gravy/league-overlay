@@ -56,7 +56,8 @@ class leagueOverlay:
             "Default": "#FFFFFF"
         }
         self.available_colors = self.load_division_colors()
-        
+
+        self.startup_time = time.time()
         self.setup_gui()
         self.setup_drag_functionality()
         self.setup_scroll_functionality()
@@ -69,6 +70,8 @@ class leagueOverlay:
         # Start GUI update thread
         self.gui_thread = threading.Thread(target=self.update_gui, daemon=True)
         self.gui_thread.start()
+
+        self.show_version_on_startup()
         
         self.race_data = []
         self.displayed_data = []  # Track what's currently displayed
@@ -91,6 +94,12 @@ class leagueOverlay:
         # Add custom resize functionality
         self.setup_custom_resize()
         self.refresh_layout()
+
+    def show_version_on_startup(self):
+        """Show version number in status label for 3 seconds on startup"""
+        self.status_label.config(text=f"BB's League Overlay v{VERSION}", fg='cyan')
+        # After 2 seconds, let the normal update_gui handle the status
+        self.root.after(2000, lambda: None)  # Timer to mark when we're past the 2 second window
 
     def setup_custom_resize(self):
         """Add custom resize handles"""
@@ -246,7 +255,7 @@ class leagueOverlay:
         self.button_frame = tk.Frame(self.title_bar, bg='#333333')
         self.button_frame.pack(side=tk.RIGHT, padx=5, pady=2)
 
-        self.division_filter_btn = tk.Button(self.button_frame, text="All Divisons", command=self.toggle_division_filter,
+        self.division_filter_btn = tk.Button(self.button_frame, text="All Divisions", command=self.toggle_division_filter,
                                  bg='#555555', fg='white', font=('Arial', 8))
         self.division_filter_btn.pack(side=tk.LEFT, padx=2)
         
@@ -712,7 +721,7 @@ class leagueOverlay:
         from tkinter import filedialog
         
         file_path = filedialog.askopenfilename(
-            title="Select Divison Color Config File",
+            title="Select Division Color Config File",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
             initialdir="."
         )
@@ -1065,6 +1074,10 @@ class leagueOverlay:
         """Update GUI with race data"""
         while self.running:
             try:
+                # Wait 3 seconds after startup before updating status
+                if time.time() - self.startup_time < 3.0:
+                    time.sleep(0.1)
+                    continue
                 if self.is_connected:
                     # Get session type for status display
                     try:
