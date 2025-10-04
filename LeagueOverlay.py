@@ -7,8 +7,11 @@ import json
 import os
 import yaml
 from datetime import datetime
+import urllib.request
+import json
+from packaging import version
 
-VERSION = "0.9.2"  # Easy to find and update
+VERSION = "0.9.3"  # Easy to find and update
 
 class leagueOverlay:
     def __init__(self):
@@ -40,6 +43,8 @@ class leagueOverlay:
         self.top_elements_visible = True
         self.current_division_filter = None  # None means show all, otherwise division name
         self.division_cycle_order = ["Pro", "ProAm", "Am", "Rookie","All"]  # Order to cycle through
+        self.update_check_done = False
+        self.latest_version = None
 
         # Color coding data
         self.color_config_file = "league_divisions.json"
@@ -96,10 +101,11 @@ class leagueOverlay:
         self.refresh_layout()
 
     def show_version_on_startup(self):
-        """Show version number in status label for 3 seconds on startup"""
+        """Show version number in status label on startup"""
         self.status_label.config(text=f"BB's League Overlay v{VERSION}", fg='orange')
-        # After 2 seconds, let the normal update_gui handle the status
-        self.root.after(2000, lambda: None)  # Timer to mark when we're past the 2 second window
+        # Check for updates in background
+        threading.Thread(target=self.check_and_notify_updates, daemon=True).start()
+        #self.root.after(2000, lambda: None)  # Timer to mark when we're past the 2 second window
 
     def setup_custom_resize(self):
         """Add custom resize handles"""
@@ -743,6 +749,43 @@ class leagueOverlay:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to load config file: {e}")
         self.focus_bindings(True)
+
+    def check_for_updates(self):
+        """Check GitHub for newer version"""
+        try:
+            url = "https://api.github.com/repos/steak-and-gravy/league-overlay/releases/latest"
+            with urllib.request.urlopen(url, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                latest = data['tag_name'].lstrip('v')
+                current = VERSION
+                
+                return {
+                    'update_available': version.parse(latest) > version.parse(current),
+                    'latest_version': latest,
+                    'current_version': current,
+                    'download_url': data.get('html_url', '')
+                }
+        except Exception as e:
+            return {
+                'update_available': False,
+                'error': str(e)
+            }
+        
+    def check_and_notify_updates(self):
+        """Check for updates and show notification if available"""
+        if self.update_check_done:
+            return
+            
+        time.sleep(1)  # Wait for GUI to initialize
+        result = self.check_for_updates()
+        self.update_check_done = True
+        
+        if result.get('update_available'):
+            self.latest_version = result['latest_version']
+            msg = f"Update available: v{result['latest_version']}"
+            self.root.after(0, lambda: self.status_label.config(text=msg, fg='#00FF00'))
+            # Auto-hide after 5 seconds
+            self.root.after(5000, lambda: None)
         
     def telemetry_loop(self):
         """Main telemetry loop"""
