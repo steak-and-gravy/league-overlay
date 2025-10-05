@@ -11,7 +11,7 @@ import urllib.request
 import json
 from packaging import version
 
-VERSION = "0.9.3"  # Easy to find and update
+VERSION = "0.9.4"  # Easy to find and update
 
 class leagueOverlay:
     def __init__(self):
@@ -43,8 +43,15 @@ class leagueOverlay:
         self.top_elements_visible = True
         self.current_division_filter = None  # None means show all, otherwise division name
         self.division_cycle_order = ["Pro", "ProAm", "Am", "Rookie","All"]  # Order to cycle through
+        self.driver_snapshots = {}  # Persist driver data after disconnect
+        self.session_info = ""
         self.update_check_done = False
         self.latest_version = None
+        self.leader_finished = False
+        self.finished_drivers = set()
+        self.leader_car_idx = None
+        self.leader_last_lap = None
+        self.player_car_class_id = None
 
         # Color coding data
         self.color_config_file = "league_divisions.json"
@@ -105,7 +112,6 @@ class leagueOverlay:
         self.status_label.config(text=f"BB's League Overlay v{VERSION}", fg='orange')
         # Check for updates in background
         threading.Thread(target=self.check_and_notify_updates, daemon=True).start()
-        #self.root.after(2000, lambda: None)  # Timer to mark when we're past the 2 second window
 
     def setup_custom_resize(self):
         """Add custom resize handles"""
@@ -714,7 +720,6 @@ class leagueOverlay:
         
     def get_driver_color(self, driver_name):
         """Get color for a driver based on name"""
-        # Check by driver name first
         if driver_name in self.driver_colors:
             division_name = self.driver_colors[driver_name]
             return self.available_colors.get(division_name, self.available_colors["Default"])
@@ -786,7 +791,7 @@ class leagueOverlay:
             self.root.after(0, lambda: self.status_label.config(text=msg, fg='#00FF00'))
             # Auto-hide after 5 seconds
             self.root.after(5000, lambda: None)
-        
+
     def telemetry_loop(self):
         """Main telemetry loop"""
         while self.running:
@@ -808,7 +813,7 @@ class leagueOverlay:
                 print(f"Telemetry error: {e}")
                 time.sleep(1)
                 
-    def calculate_real_time_positions(self, drivers, live_data, player_car_class_id):
+    def calculate_real_time_positions(self, drivers, live_data):
         """Calculate real-time positions based on track position and lap count"""
         car_idx_lap = live_data['CarIdxLap']
         car_idx_lap_dist_pct = live_data['CarIdxLapDistPct']
@@ -835,15 +840,19 @@ class leagueOverlay:
                 continue
             
             # Filter by class if player is on track
-            if player_car_class_id is not None:
-                if driver_info.get('CarClassID') != player_car_class_id:
+            if self.player_car_class_id is not None:
+                if driver_info.get('CarClassID') != self.player_car_class_id:
                     continue
         
             # Calculate total track position (lap + percentage through current lap)
             current_lap = car_idx_lap[car_idx]
             lap_pct = car_idx_lap_dist_pct[car_idx]
+
+            # disconnected driver
+            if current_lap < 0:
+                continue
         
-            # Handle invalid lap percentage data
+            # Handle invalid lap percentage data - does this ever hit?
             if lap_pct < 0 or lap_pct > 1:
                 lap_pct = 0
             
@@ -867,7 +876,7 @@ class leagueOverlay:
     
         return active_drivers
 
-    def get_official_positions(self, drivers, live_data, player_car_class_id):
+    def get_official_positions(self, drivers, live_data):
         """Get official positions for practice/qualifying sessions"""
         car_idx_class_position = live_data['CarIdxClassPosition']
     
@@ -891,8 +900,8 @@ class leagueOverlay:
                 continue
             
             # Filter by class if player is on track
-            if player_car_class_id is not None:
-                if driver_info.get('CarClassID') != player_car_class_id:
+            if self.player_car_class_id is not None:
+                if driver_info.get('CarClassID') != self.player_car_class_id:
                     continue
         
             active_drivers.append({
@@ -905,6 +914,90 @@ class leagueOverlay:
         active_drivers.sort(key=lambda x: x['official_position'])
     
         return active_drivers
+    
+    def update_finish_status(self, live_data, current_session):
+        """Track which drivers have finished their race during checkered flag"""
+        if self.ir['SessionState'] < 5:
+            # Not in checkered state yet
+            return
+        
+        car_idx_lap = live_data['CarIdxLap']
+        
+        # Find the leader (P1 in player's class)
+        if self.leader_car_idx is None:
+            try:
+                for driver in current_session['ResultsPositions']:
+                    # Only consider drivers in player's class
+                    if self.player_car_class_id is not None:
+                        # Find this driver's class
+                        driver_class_id = None
+                        try:
+                            drivers = self.ir['DriverInfo']['Drivers']
+                            for d in drivers:
+                                if d.get('CarIdx') == driver.get('CarIdx'):
+                                    driver_class_id = d.get('CarClassID')
+                                    break
+                        except (KeyError, TypeError):
+                            continue
+                        
+                        if driver_class_id != self.player_car_class_id:
+                            continue
+                    
+                    # Found P1 in player's class
+                    if driver.get('ClassPosition') == 1:
+                        self.leader_car_idx = driver.get('CarIdx')
+                        self.leader_last_lap = car_idx_lap[self.leader_car_idx] if self.leader_car_idx < len(car_idx_lap) else 0
+                        break
+            except (KeyError, TypeError, IndexError):
+                pass
+        
+        # Check if leader has finished
+        if self.leader_car_idx is not None and not self.leader_finished:
+            if self.leader_car_idx < len(car_idx_lap):
+                current_leader_lap = car_idx_lap[self.leader_car_idx]
+                if current_leader_lap > self.leader_last_lap:
+                    self.leader_finished = True
+        
+        # Once leader finishes, track other drivers finishing (only in player's class)
+        if self.leader_finished:
+            for car_idx in range(len(car_idx_lap)):
+                if car_idx in self.finished_drivers:
+                    continue
+                
+                # Check if this driver is in player's class
+                if self.player_car_class_id is not None:
+                    try:
+                        drivers = self.ir['DriverInfo']['Drivers']
+                        driver_class_id = None
+                        for d in drivers:
+                            if d.get('CarIdx') == car_idx:
+                                driver_class_id = d.get('CarClassID')
+                                break
+                        
+                        if driver_class_id != self.player_car_class_id:
+                            continue
+                    except (KeyError, TypeError):
+                        continue
+                
+                # Check if this driver's lap count increased after leader finished
+                if car_idx not in self.driver_snapshots:
+                    continue
+                    
+                prev_lap = self.driver_snapshots[car_idx].get('current_lap', 0)
+                current_lap = car_idx_lap[car_idx]
+                
+                if current_lap > prev_lap:
+                    self.finished_drivers.add(car_idx)
+
+    def get_position_from_results(self, current_session, car_idx):
+        """Get official position from ResultsPositions"""
+        try:
+            for driver in current_session['ResultsPositions']:
+                if driver.get('CarIdx') == car_idx:
+                    return driver.get('ClassPosition', -2) + 1 # 0-based index
+        except (KeyError, TypeError):
+            pass
+        return -1
 
     def process_telemetry(self):
         """Process telemetry data with conditional real-time position calculations and simplified disconnect handling"""
@@ -926,19 +1019,31 @@ class leagueOverlay:
                 is_race = session_type.lower() == 'race'
             except (KeyError, TypeError, IndexError):
                 is_race = False
-        
-            # Get player car index and class
-            try:
-                self.player_car_idx = self.ir['PlayerCarIdx']
-            except (KeyError, TypeError):
-                self.player_car_idx = None
 
-            player_car_class_id = None
-            if self.player_car_idx is not None:
+            if self.session_info != f"{self.ir['SessionNum']}|{session_type}":
+                # session change, reset snapshots AND finish tracking
+                self.driver_snapshots = {}
+                self.leader_finished = False
+                self.finished_drivers = set()
+                self.leader_car_idx = None
+                self.leader_last_lap = None
+                self.session_info = f"{self.ir['SessionNum']}|{session_type}"
+                self.player_car_idx = None
+                self.player_car_class_id = None
+        
+            # Get player car index
+            if self.player_car_idx is None:
+                try:
+                    self.player_car_idx = self.ir['PlayerCarIdx']
+                except (KeyError, TypeError):
+                    self.player_car_idx = None
+
+            # Get player car class
+            if self.player_car_idx is not None and self.player_car_class_id is None:
                 try:
                     for driver in drivers:
                         if driver.get('CarIdx') == self.player_car_idx:
-                            player_car_class_id = driver.get('CarClassID')
+                            self.player_car_class_id = driver.get('CarClassID')
                             break
                 except (KeyError, TypeError):
                     pass
@@ -947,24 +1052,49 @@ class leagueOverlay:
             live_data = self.ir
             if not live_data:
                 return
+            
+            # Update finish status tracking (for races in checkered state)
+            if is_race:
+                self.update_finish_status(live_data, current_session)
         
             # Use different methods based on session type
             if is_race:
                 # Use real-time positions for races
-                active_drivers = self.calculate_real_time_positions(drivers, live_data, player_car_class_id)
-                position_key = 'real_time_position'
+                active_drivers = self.calculate_real_time_positions(drivers, live_data)
+                # if session state is checkered use official_position
+                position_key = 'real_time_position' if self.ir['SessionState'] < 5 else 'official_position'
+                if active_drivers:
+                    # Update snapshots for currently active drivers
+                    for driver_data in active_drivers:
+                        self.driver_snapshots[driver_data['car_idx']] = driver_data.copy()
+                        self.driver_snapshots[driver_data['car_idx']]['disconnected'] = False
+
+                    # Add disconnected drivers from snapshots
+                    active_car_indices = {d['car_idx'] for d in active_drivers}
+                    for car_idx, snapshot in self.driver_snapshots.items():
+                        if car_idx not in active_car_indices:
+                            if self.ir['SessionState'] < 5:
+                                # Ensure disconnected drivers official position is -1 if session state not checkered
+                                snapshot['official_position'] = -1
+                            # Add disconnected driver with their last known state
+                            disconnected_driver = snapshot.copy()
+                            disconnected_driver['disconnected'] = True
+                            if self.ir['SessionState'] < 5 or disconnected_driver['official_position'] >= 0: # only process disconnected drivers if not session not checkered but keep finishers in list
+                                active_drivers.append(disconnected_driver)
+
+                    # Sort by total track position (descending - highest lap + percentage first)
+                    active_drivers.sort(key=lambda x: x['total_track_position'], reverse=True)
+                
+                    # Assign real-time positions
+                    for i, driver in enumerate(active_drivers):
+                        driver['real_time_position'] = i + 1
             else:
                 # Use official positions for practice/qualifying
-                active_drivers = self.get_official_positions(drivers, live_data, player_car_class_id)
+                active_drivers = self.get_official_positions(drivers, live_data)
                 position_key = 'official_position'
-        
+
             if not active_drivers:
                 return
-            
-            # Get timing data for gap calculations (always use official method)
-            car_idx_lap = live_data['CarIdxLap']
-            car_idx_est_time = live_data['CarIdxEstTime']
-            car_idx_lap_dist_pct = live_data['CarIdxLapDistPct']
         
             # Calculate division positions using the appropriate position type
             all_drivers_with_colors = []
@@ -992,16 +1122,23 @@ class leagueOverlay:
                 car_idx = driver['car_idx']
                 driver_info = driver['driver_info']
             
-                # Use the appropriate position for display
-                position = driver[position_key]
+                # Check if this driver has finished - use ResultsPositions if so
+                if car_idx in self.finished_drivers:
+                    position = self.get_position_from_results(current_session, car_idx)
+                else:
+                    # Use the appropriate position for display
+                    position = driver[position_key]
             
                 # Get current driver's color and division position
                 current_driver_color = self.get_driver_color(driver_info.get('UserName', ''))
                 current_color_position = division_positions.get(car_idx, position)
 
-                # Calculate gap - check for disconnected drivers
+                # Calculate gap
                 if current_color_position == 1:
                     gap = "Leader"
+                elif car_idx in self.finished_drivers:
+                    # Driver has finished - no gap needed
+                    gap = ""
                 elif is_race:
                     # Find division drivers using display positions
                     same_color_drivers = []
@@ -1010,7 +1147,10 @@ class leagueOverlay:
                         if temp_color == current_driver_color:
                             same_color_drivers.append({
                                 'car_idx': temp_driver['car_idx'],
-                                'position': temp_driver[position_key]
+                                'position': temp_driver[position_key],
+                                'total_track_position': temp_driver['total_track_position'],
+                                'current_lap': temp_driver['current_lap'],
+                                'lap_pct': temp_driver['lap_pct']
                             })
                 
                     same_color_drivers.sort(key=lambda x: x['position'])
@@ -1025,39 +1165,39 @@ class leagueOverlay:
                     if current_pos_index is not None and current_pos_index > 0:
                         # Get car ahead in division
                         car_ahead_idx = same_color_drivers[current_pos_index - 1]['car_idx']
-                    
-                        # Both cars connected, calculate gap normally
-                        current_est_time = car_idx_est_time[car_idx]
-                        ahead_est_time = car_idx_est_time[car_ahead_idx]
-                        current_lap = car_idx_lap[car_idx]
-                        ahead_lap = car_idx_lap[car_ahead_idx]
-    
-                        time_gap = 0.0
-                        if current_est_time > 0 and ahead_est_time > 0:
-                            time_gap = ahead_est_time - current_est_time
-                        else:
-                            # Fallback to distance calculation
-                            time_gap = (car_idx_lap_dist_pct[car_ahead_idx] - car_idx_lap_dist_pct[car_idx]) * self.get_fastest_lap_time(current_session)
-        
-                        # Adjust for lap differences
-                        lap_difference = ahead_lap - current_lap
                         
-                        # If less than 1 FULL lap down
-                        if lap_difference == 1 and car_idx_lap_dist_pct[car_ahead_idx] < car_idx_lap_dist_pct[car_idx]:
-                            time_gap += self.get_fastest_lap_time(current_session)
-                            lap_difference = 0
-
-                        if lap_difference > 0:
-                            gap = f"{lap_difference}L"
+                        # Check if car ahead has finished
+                        if car_ahead_idx in self.finished_drivers:
+                            gap = ""
                         else:
-                            if time_gap < 0:
-                                time_gap *= -1 # just make it positive for now
-                            if time_gap < 60:
-                                gap = f"{time_gap:.1f}"
+                            # Get timing data for gap calculations
+                            car_idx_est_time = live_data['CarIdxEstTime']
+                            current_est_time = car_idx_est_time[car_idx]
+                            ahead_est_time = car_idx_est_time[car_ahead_idx]
+
+                            time_gap = 0.0
+                            if current_est_time > 0 and ahead_est_time > 0 and same_color_drivers[current_pos_index - 1]['current_lap'] == driver['current_lap']:
+                                time_gap = ahead_est_time - current_est_time
                             else:
-                                minutes = int(time_gap // 60)
-                                seconds = time_gap % 60
-                                gap = f"{minutes}:{seconds:04.1f}"
+                                # Fallback to distance calculation
+                                time_gap = (same_color_drivers[current_pos_index - 1]['total_track_position'] - driver['total_track_position']) * self.get_fastest_lap_time(current_session)
+
+                            # Adjust for lap differences
+                            lap_difference = same_color_drivers[current_pos_index - 1]['total_track_position'] - driver['total_track_position']
+                        
+                            if lap_difference > 1:
+                                gap = f"{int(lap_difference)}L"
+                            elif self.ir['SessionState'] < 5: # not checkered
+                                if time_gap < 0:
+                                    time_gap *= -1 # just make it positive for now
+                                if time_gap < 60:
+                                    gap = f"{time_gap:.1f}"
+                                else:
+                                    minutes = int(time_gap // 60)
+                                    seconds = time_gap % 60
+                                    gap = f"{minutes}:{seconds:04.1f}"
+                            else:
+                                gap = ""
                     else:
                         gap = ""
                 else:  # Practice or Qualifying
@@ -1084,14 +1224,14 @@ class leagueOverlay:
                     'division_position': current_color_position,
                     'car_number': driver_info.get('CarNumber', ''),
                     'driver_name': driver_info.get('UserName', ''),
-                    'gap': gap,
+                    'gap': gap if not driver.get('disconnected', False) or gap == "Leader" or gap == "" else "(DC)",
                     'car_idx': car_idx,
                     'is_player': is_player
                 })
-        
-            # Sort by display position
+
+            # Re-sort to maintain proper order
             self.race_data.sort(key=lambda x: x['position'])
-    
+
         except Exception as e:
             print(f"Processing error: {e}")
 
@@ -1141,7 +1281,7 @@ class leagueOverlay:
                     self.root.after(0, lambda: self.status_label.pack(pady=5))
                     self.root.after(0, lambda: self.status_label.config(text="Connecting to iRacing...", fg='orange'))
                     
-                time.sleep(self.refresh_rate)
+                time.sleep(0.25) # refresh UI quicker in case changing divisions via button
                 
             except Exception as e:
                 print(f"GUI update error: {e}")
@@ -1203,7 +1343,6 @@ class leagueOverlay:
         # Check if we need to rebuild the display
         need_rebuild = (len(current_data) != len(self.displayed_data) or
                        any(d1['car_idx'] != d2['car_idx'] for d1, d2 in zip(current_data, self.displayed_data)))
-        
         if need_rebuild:
             self.rebuild_display(current_data)
         else:
