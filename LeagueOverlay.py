@@ -1,49 +1,124 @@
-import tkinter as tk
-from tkinter import ttk, colorchooser, messagebox
-import irsdk
+import sys
 import threading
 import time
 import json
 import os
-import yaml
-from datetime import datetime
 import urllib.request
-import json
+from datetime import datetime
 from packaging import version
 
-VERSION = "0.9.4"  # Easy to find and update
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QPushButton, QScrollArea, QFrame, QGridLayout, QMenu,
+    QDialog, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog,
+    QSizeGrip, QSizePolicy
+)
+from PySide6.QtCore import Qt, QTimer, Signal, QObject, QPoint, QSize
+from PySide6.QtGui import QColor, QPalette, QFont, QCursor, QPainter, QMouseEvent
 
-class leagueOverlay:
+import irsdk
+
+VERSION = "0.9.6"  # Easy to find and update
+
+class DataUpdateSignal(QObject):
+    """Signal emitter for thread-safe GUI updates"""
+    update_data = Signal(list)
+    update_status = Signal(str, str)  # text, color
+    refresh_colors = Signal()
+
+class CustomSizeGrip(QSizeGrip):
+    """Custom size grip with conditional visibility and icon"""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent_window = None
+        # Make the widget background transparent
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+    def set_parent_window(self, window):
+        """Set reference to parent window for focus checking"""
+        self.parent_window = window
+
+    def paintEvent(self, event):
+        """Custom paint to show diagonal arrows when focused with transparent background"""
+        # Don't call super().paintEvent() to avoid default rendering
+        
+        if self.parent_window and self.parent_window.hasFocus():
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing)
+            
+            # Make background fully transparent
+            painter.setCompositionMode(QPainter.CompositionMode_Source)
+            painter.fillRect(self.rect(), Qt.transparent)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+            
+            # Draw diagonal arrows
+            painter.setPen(QColor("#888888"))
+            
+            # Draw diagonal double arrow pattern
+            size = self.width()
+            spacing = 4
+            
+            # Draw three diagonal lines to create arrow effect
+            for i in range(3):
+                offset = i * spacing
+                painter.drawLine(
+                    size - 3 - offset, offset + 3,
+                    offset + 3, size - 3 - offset
+                )
+        """Custom paint to show diagonal arrows when focused"""
+        super().paintEvent(event)
+
+        if self.parent_window and self.parent_window.hasFocus():
+            painter = QPainter(self)
+            painter.setPen(QColor("#888888"))
+
+            # Draw diagonal double arrow pattern
+            # Bottom-right pointing arrows
+            size = self.width()
+            spacing = 4
+
+            # Draw three diagonal lines to create arrow effect
+            for i in range(3):
+                offset = i * spacing
+                painter.drawLine(size - 3 - offset, offset + 3, offset + 3, size - 3 - offset)
+
+class LeagueOverlay(QMainWindow):
     def __init__(self):
-        self.root = tk.Tk()
+        super().__init__()
+        
         self.ir = irsdk.IRSDK()
         self.is_connected = False
         self.running = True
-        self.drag_data = {"x": 0, "y": 0}
+        
+        # Signals for thread-safe updates
+        self.signals = DataUpdateSignal()
+        self.signals.update_data.connect(self.display_race_data)
+        self.signals.update_status.connect(self.update_status_label)
+        self.signals.refresh_colors.connect(self.refresh_driver_colors)
         
         # Auto-centering variables
         self.player_car_idx = None
         self.last_manual_scroll = 0
-        self.manual_scroll_timeout = 5  # seconds
+        self.manual_scroll_timeout = 5
         self.auto_center_enabled = True
-        self.status_hide_timer = None
         self.refresh_rate = 2.0
-
+        
+        # Settings
         self.show_only_my_division = False
         self.opacity = 1.0
         self.width = 350
         self.height = 320
-        self.x = (self.root.winfo_screenwidth() // 2) - (self.width // 2)
-        self.y = (self.root.winfo_screenheight() // 2) - (self.height // 2)
+        self.x = 100
+        self.y = 100
         self.hide_headers = False
         self.center_drivers = False
         self.bold_drivers = False
-        self.hide_timer = None
-        self.show_timer = None
         self.top_elements_visible = True
-        self.current_division_filter = None  # None means show all, otherwise division name
-        self.division_cycle_order = ["Pro", "ProAm", "Am", "Rookie","All"]  # Order to cycle through
-        self.driver_snapshots = {}  # Persist driver data after disconnect
+        self.current_division_filter = None
+        self.division_cycle_order = ["Pro", "ProAm", "Am", "Rookie", "All"]
+        
+        # Data tracking
+        self.driver_snapshots = {}
         self.session_info = ""
         self.update_check_done = False
         self.latest_version = None
@@ -52,8 +127,9 @@ class leagueOverlay:
         self.leader_car_idx = None
         self.leader_last_lap = None
         self.player_car_class_id = None
-
-        # Color coding data
+        self.final_gaps = {}  # Store final gaps for finished drivers
+        
+        # Color configuration
         self.color_config_file = "league_divisions.json"
         self.settings_file = "LeagueOverlay.config"
         self.driver_colors = self.load_color_config()
@@ -62,701 +138,324 @@ class leagueOverlay:
         # Division colors
         self.default_colors = {
             "Pro": "#FF8C00",
-            "ProAm": "#9370DB", 
+            "ProAm": "#9370DB",
             "Am": "#45B3E0",
             "Rookie": "#FF2000",
             "Default": "#FFFFFF"
         }
         self.available_colors = self.load_division_colors()
-
+        
+        # Data
+        self.race_data = []
+        self.displayed_data = []
+        self.data_widgets = {}
+        
         self.startup_time = time.time()
-        self.setup_gui()
-        self.setup_drag_functionality()
-        self.setup_scroll_functionality()
-        self.setup_window()
+        
+        # Setup UI
+        self.setup_ui()
         
         # Start telemetry thread
         self.telemetry_thread = threading.Thread(target=self.telemetry_loop, daemon=True)
         self.telemetry_thread.start()
         
-        # Start GUI update thread
-        self.gui_thread = threading.Thread(target=self.update_gui, daemon=True)
-        self.gui_thread.start()
-
+        # Auto-update timer
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.update_gui)
+        self.update_timer.start(250)
+        
+        # Show version
         self.show_version_on_startup()
-        
-        self.race_data = []
-        self.displayed_data = []  # Track what's currently displayed
-        self.data_widgets = {}    # Store widget references
-        self.context_menu = None
-        
-    def setup_window(self):
-        """Configure the main window"""
-        self.root.title("BB's League Overlay")
-        self.root.geometry(f"{self.width}x{self.height}+{self.x}+{self.y}")
-        
-        # Remove window decorations but keep it resizable
-        self.root.overrideredirect(True)
-        
-        # Make window transparent and always on top
-        self.root.attributes('-alpha', self.opacity)
-        self.root.attributes('-topmost', True)
-        self.root.configure(bg='black')
-        
-        # Add custom resize functionality
-        self.setup_custom_resize()
-        self.refresh_layout()
 
-    def show_version_on_startup(self):
-        """Show version number in status label on startup"""
-        self.status_label.config(text=f"BB's League Overlay v{VERSION}", fg='orange')
-        # Check for updates in background
-        threading.Thread(target=self.check_and_notify_updates, daemon=True).start()
+        # Focus tracking for auto-hide
+        self.hide_timer = None
+        self.setMouseTracking(True)
+        
+        # Initial state for auto-hide
+        if self.hide_headers:
+            # Don't hide on startup, let user see the interface first
+            pass
 
-    def setup_custom_resize(self):
-        """Add custom resize handles"""
-        self.resize_border = 10  # Pixel width of resize area
-        self.resizing = False
-        self.resize_direction = None
-        
-        # Bind to root and all main frames
-        widgets_to_bind = [self.root, self.main_frame, self.canvas_frame, self.canvas]
-        
-        for widget in widgets_to_bind:
-            widget.bind('<Button-1>', self.start_resize)
-            widget.bind('<B1-Motion>', self.do_resize)
-            widget.bind('<ButtonRelease-1>', self.stop_resize)
-            widget.bind('<Motion>', self.check_resize_cursor)
+    def get_bg_color(self, base_color):
+        """Convert color to RGBA with current opacity"""
+        # Parse hex color
+        if base_color.startswith('#'):
+            r = int(base_color[1:3], 16)
+            g = int(base_color[3:5], 16)
+            b = int(base_color[5:7], 16)
+            return f"rgba({r}, {g}, {b}, {self.opacity})"
+        return base_color
 
-    def check_resize_cursor(self, event):
-        """Change cursor when near window edges"""
-        if self.resizing:
-            return
-        
-        # Get mouse position relative to root window
-        root_x = self.root.winfo_pointerx() - self.root.winfo_rootx()
-        root_y = self.root.winfo_pointery() - self.root.winfo_rooty()
-        
-        # Get actual window dimensions
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
-        
-        # Check if mouse is within window bounds
-        if root_x < 0 or root_x > width or root_y < 0 or root_y > height:
-            self.root.configure(cursor="")
-            self.resize_direction = None
-            return
-        
-        # Check which edge we're near using root-relative coordinates
-        near_right = width - root_x <= self.resize_border
-        near_left = root_x <= self.resize_border
-        near_bottom = height - root_y <= self.resize_border
-        near_top = root_y <= self.resize_border
-        
-        if near_right and near_bottom:
-            self.root.configure(cursor="size_nw_se")
-            self.resize_direction = "se"
-        elif near_left and near_bottom:
-            self.root.configure(cursor="size_ne_sw")
-            self.resize_direction = "sw"
-        elif near_right and near_top:
-            self.root.configure(cursor="size_ne_sw")
-            self.resize_direction = "ne"
-        elif near_left and near_top:
-            self.root.configure(cursor="size_nw_se")
-            self.resize_direction = "nw"
-        elif near_right:
-            self.root.configure(cursor="size_we")
-            self.resize_direction = "e"
-        elif near_left:
-            self.root.configure(cursor="size_we")
-            self.resize_direction = "w"
-        elif near_bottom:
-            self.root.configure(cursor="size_ns")
-            self.resize_direction = "s"
-        elif near_top:
-            self.root.configure(cursor="size_ns")
-            self.resize_direction = "n"
-        else:
-            self.root.configure(cursor="")
-            self.resize_direction = None
+    def update_all_backgrounds(self):
+        """Update all background colors with current opacity"""
+        if hasattr(self, 'main_widget'):
+            self.main_widget.setStyleSheet(f"background-color: {self.get_bg_color('#000000')};")
+        if hasattr(self, 'title_bar'):
+            self.title_bar.setStyleSheet(f"background-color: {self.get_bg_color('#333333')};")
+        if hasattr(self, 'header_frame'):
+            self.header_frame.setStyleSheet(f"background-color: {self.get_bg_color('#333333')};")
+        if hasattr(self, 'scroll_area'):
+            self.update_scroll_area_style()
+        if hasattr(self, 'scroll_content'):
+            self.scroll_content.setStyleSheet(f"background-color: {self.get_bg_color('#000000')};")
+        if hasattr(self, 'size_grip'):
+            self.size_grip.setStyleSheet(f"""
+                QSizeGrip {{
+                    background-color: {self.get_bg_color('#000000')};
+                    border: none;
+                    image: none;
+                }}
+            """)
+        # Recreate headers with new opacity
+        if hasattr(self, 'header_layout'):
+            self.create_headers()
+        # Refresh displayed data to update driver rows
+        if hasattr(self, 'displayed_data') and self.displayed_data:
+            self.display_race_data(self.displayed_data.copy())
 
-    def start_resize(self, event):
-        """Start resizing if near edge, otherwise start dragging"""
-        if self.resize_direction:
-            self.resizing = True
-            self.resize_start_x = self.root.winfo_pointerx()
-            self.resize_start_y = self.root.winfo_pointery()
-            self.resize_start_width = self.root.winfo_width()
-            self.resize_start_height = self.root.winfo_height()
-            self.resize_start_window_x = self.root.winfo_x()
-            self.resize_start_window_y = self.root.winfo_y()
-        else:
-            # Only allow dragging from title bar
-            if hasattr(event.widget, 'master') and event.widget.master == self.title_bar:
-                self.start_drag(event)
-            elif event.widget == self.title_bar or event.widget == self.title_label:
-                self.start_drag(event)
+    def setup_ui(self):
+        """Setup the main user interface"""
+        # Window setup
+        self.setWindowTitle("BB's League Overlay")
+        self.setGeometry(self.x, self.y, self.width, self.height)
 
-    def do_resize(self, event):
-        """Handle resizing"""
-        if not self.resizing:
-            if hasattr(event.widget, 'master') and event.widget.master == self.title_bar:
-                self.drag_window(event)
-            elif event.widget == self.title_bar or event.widget == self.title_label:
-                self.drag_window(event)
-            return
-            
-        dx = self.root.winfo_pointerx() - self.resize_start_x
-        dy = self.root.winfo_pointery() - self.resize_start_y
-        
-        new_width = self.resize_start_width
-        new_height = self.resize_start_height
-        new_x = self.resize_start_window_x
-        new_y = self.resize_start_window_y
-        
-        # Calculate new dimensions based on resize direction
-        if 'e' in self.resize_direction:
-            new_width = max(320, self.resize_start_width + dx)
-        if 'w' in self.resize_direction:
-            new_width = max(320, self.resize_start_width - dx)
-            new_x = self.resize_start_window_x + dx
-            
-        if 's' in self.resize_direction:
-            new_height = max(220, self.resize_start_height + dy)
-        if 'n' in self.resize_direction:
-            new_height = max(220, self.resize_start_height - dy)
-            new_y = self.resize_start_window_y + dy
-        
-        # Apply new size and position
-        self.root.geometry(f"{new_width}x{new_height}+{new_x}+{new_y}")
+        # Frameless but stay on top
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
 
-    def stop_resize(self, event):
-        """Stop resizing"""
-        if self.resizing:
-            self.resizing = False
-            self.resize_direction = None
-            self.root.configure(cursor="")
-            # Update stored dimensions
-            self.width = self.root.winfo_width()
-            self.height = self.root.winfo_height()
-            self.save_settings()
-            self.root.after(100, self.refresh_layout)  # Small delay to avoid excessive calls
-            
-            # Save position after resize (existing functionality)
-            self.root.after(1000, self.save_settings)
+        # Set minimum size for resizing
+        self.setMinimumSize(300, 200)
         
-    def setup_gui(self):
-        """Setup the GUI elements"""
-        # Main frame
-        self.main_frame = tk.Frame(self.root, bg='black')
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        # Main widget and layout
+        main_widget = QWidget()
+        main_widget.setStyleSheet(f"background-color: {self.get_bg_color('#000000')};")
+        self.setCentralWidget(main_widget)
+        self.main_widget = main_widget
         
-        # Title bar for dragging
-        self.title_bar = tk.Frame(self.main_frame, bg='#333333', height=30)
-        self.title_bar.pack(fill=tk.X)
-        self.title_bar.pack_propagate(False)
+        self.main_layout = QVBoxLayout(main_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
         
-        # Title label
-        title_text = "BB's League Overlay"
-        self.title_label = tk.Label(self.title_bar, text=title_text, 
-                                   fg='white', bg='#333333', font=('Arial', 10, 'bold'))
-        self.title_label.pack(side=tk.LEFT, padx=5, pady=5)
-        
-        # Control buttons
-        self.button_frame = tk.Frame(self.title_bar, bg='#333333')
-        self.button_frame.pack(side=tk.RIGHT, padx=5, pady=2)
-
-        self.division_filter_btn = tk.Button(self.button_frame, text="All Divisions", command=self.toggle_division_filter,
-                                 bg='#555555', fg='white', font=('Arial', 8))
-        self.division_filter_btn.pack(side=tk.LEFT, padx=2)
-        
-        self.settings_btn = tk.Button(self.button_frame, text="Settings", command=self.open_settings,
-                             bg='#555555', fg='white', font=('Arial', 8))
-        self.settings_btn.pack(side=tk.LEFT, padx=2)
-
-        self.close_btn = tk.Button(self.button_frame, text="×", command=self.close_application,
-                                  bg='#cc0000', fg='white', font=('Arial', 8), width=3)
-        self.close_btn.pack(side=tk.LEFT, padx=2)
+        # Title bar
+        self.create_title_bar()
         
         # Status label
-        self.status_label = tk.Label(self.main_frame, text="Connecting to iRacing...", 
-                                    fg='orange', bg='black', font=('Arial', 9))
-        self.status_label.pack(pady=5)
-        
-        # Fixed header frame
-        self.header_frame = tk.Frame(self.main_frame, bg='#333333')
-        self.header_frame.pack(fill=tk.X, pady=2)
-        
-        # Scrollable frame for race data
-        self.canvas_frame = tk.Frame(self.main_frame, bg='black')
-        self.canvas_frame.pack(fill=tk.BOTH, expand=True)
-        
-        self.canvas = tk.Canvas(self.canvas_frame, bg='black', highlightthickness=0)
-        # Configure scrollbar style for thin appearance
-        self.scrollbar = tk.Scrollbar(self.canvas_frame, orient="vertical", command=self.on_scrollbar,
-                              width=6, 
-                              bg='#333333',
-                              troughcolor='#222222',
-                              activebackground='#555555')
-        self.scrollable_frame = tk.Frame(self.canvas, bg='black')
-        
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        )
+        self.status_label = QLabel("Connecting to iRacing...")
+        self.update_status_style("orange")
+        self.status_label.setAlignment(Qt.AlignCenter)
+        self.main_layout.addWidget(self.status_label)
 
-        def configure_scroll_region(event=None):
-            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-            canvas_width = self.canvas.winfo_width()
-            if canvas_width > 1: # Ensure canvas is initialized
-                self.canvas.itemconfig(self.canvas.find_all()[0], width=canvas_width)
+        # Header frame
+        self.header_frame = QWidget()
+        self.header_frame.setStyleSheet(f"background-color: {self.get_bg_color('#333333')};")
+        self.header_layout = QGridLayout(self.header_frame)
+        self.create_headers()
+        self.main_layout.addWidget(self.header_frame)
         
-        self.scrollable_frame.bind('<Configure>', configure_scroll_region)
-        self.canvas.bind('<Configure>', configure_scroll_region)
+        # Scrollable area
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.update_scroll_area_style()
 
-        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        # Scrollable content
+        self.scroll_content = QWidget()
+        self.scroll_content.setStyleSheet(f"background-color: {self.get_bg_color('#000000')};")
+        self.scroll_layout = QVBoxLayout(self.scroll_content)
+        self.scroll_layout.setContentsMargins(5, 5, 5, 5)
+        self.scroll_layout.setSpacing(2)
+        self.scroll_layout.addStretch()
         
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
+        self.scroll_area.setWidget(self.scroll_content)
+        self.scroll_area.verticalScrollBar().valueChanged.connect(self.on_manual_scroll)
+        self.main_layout.addWidget(self.scroll_area)
 
-        if self.hide_headers:
-            self.hide_top_elements()
-            self.focus_bindings(True)
-            
+        # Add size grip for resizing
+        self.size_grip = CustomSizeGrip(main_widget)
+        self.size_grip.set_parent_window(self)
+        self.size_grip.setFixedSize(20, 20)
+        self.size_grip.setStyleSheet("""
+            QSizeGrip {
+                background-color: transparent;
+                border: none;
+                image: none;
+            }
+        """)
+        # Position it at bottom right
+        self.size_grip.raise_()
 
-    def focus_bindings(self, isEnable=True):
-        """Add or Remove focus event bindings for hide/show functionality"""
-        if self.hide_headers:
-            if isEnable:
-                self.root.bind("<FocusIn>", self.on_focus_in)
-                self.root.bind("<FocusOut>", self.on_focus_out)
-            else:
-                self.root.unbind("<FocusIn>")
-                self.root.unbind("<FocusOut>")
+        # Mouse tracking
+        self.setMouseTracking(True)
+        self.drag_position = QPoint()
+        
+    def update_scroll_area_style(self):
+        """Update scroll area style with current opacity"""
+        self.scroll_area.setStyleSheet(f"""
+            QScrollArea {{
+                border: none;
+                background-color: {self.get_bg_color('#000000')};
+            }}
+            QScrollBar:vertical {{
+                background: {self.get_bg_color('#222222')};
+                width: 6px;
+                margin: 0px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: #555555;
+                min-height: 20px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: #666666;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+        """)
+
+    def update_status_style(self, color):
+        """Update status label style with current opacity"""
+        self.status_label.setStyleSheet(f"""
+            QLabel {{
+                color: {color};
+                background-color: {self.get_bg_color('#000000')};
+                padding: 5px;
+                font-size: 9pt;
+            }}
+        """)
+
+    def create_title_bar(self):
+        """Create custom title bar"""
+        self.title_bar = QWidget()
+        self.title_bar.setFixedHeight(30)
+        self.title_bar.setStyleSheet(f"background-color: {self.get_bg_color('#333333')};")
+        
+        title_layout = QHBoxLayout(self.title_bar)
+        title_layout.setContentsMargins(5, 2, 5, 2)
+        
+        # Title label
+        self.title_label = QLabel("BB's League Overlay")
+        self.title_label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-weight: bold;
+                font-size: 10pt;
+            }
+        """)
+        title_layout.addWidget(self.title_label)
+        
+        title_layout.addStretch()
+        
+        # Division filter button
+        self.division_btn = QPushButton("All Divisions")
+        self.division_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #555555;
+                color: white;
+                border: none;
+                padding: 4px 6px;
+                font-size: 8.5pt;
+            }
+            QPushButton:hover {
+                background-color: #666666;
+            }
+        """)
+        self.division_btn.clicked.connect(self.toggle_division_filter)
+        title_layout.addWidget(self.division_btn)
+
+        # Settings button
+        self.settings_btn = QPushButton("Settings")
+        self.settings_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #555555;
+                color: white;
+                border: none;
+                padding: 4px 6px;
+                font-size: 8.5pt;
+            }
+            QPushButton:hover {
+                background-color: #666666;
+            }
+        """)
+        self.settings_btn.clicked.connect(self.open_settings)
+        title_layout.addWidget(self.settings_btn)
+
+        # Close button
+        close_btn = QPushButton("×")
+        close_btn.setFixedWidth(25)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #cc0000;
+                color: white;
+                border: none;
+                padding: 5px;
+                font-size: 12pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #ff0000;
+            }
+        """)
+        close_btn.clicked.connect(self.close_application)
+        title_layout.addWidget(close_btn)
+        
+        self.main_layout.addWidget(self.title_bar)
         
     def create_headers(self):
-        """Create column headers in the fixed header frame using grid"""
-        # Clear existing headers
-        for widget in self.header_frame.winfo_children():
-            widget.destroy()
-        
-        # Get dynamic sizes
-        sizes = self.get_dynamic_column_sizes(is_header=True)
+        """Create column headers"""
+        # Clear existing
+        while self.header_layout.count():
+            item = self.header_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
-        # Configure grid with dynamic sizes and uniform groups
-        self.header_frame.grid_columnconfigure(0, weight=sizes['pos'], minsize=sizes['pos'], uniform="col0")
-        self.header_frame.grid_columnconfigure(1, weight=sizes['div_pos'], minsize=sizes['div_pos'], uniform="col1")
-        self.header_frame.grid_columnconfigure(2, weight=sizes['car_num'], minsize=sizes['car_num'], uniform="col2")
-        self.header_frame.grid_columnconfigure(3, weight=sizes['driver'], minsize=sizes['driver'], uniform="col3")
-        self.header_frame.grid_columnconfigure(4, weight=sizes['gap'], minsize=sizes['gap'], uniform="col4")
+        # Add padding on right to account for scrollbar (6px scrollbar + 5px margin)
+        self.header_layout.setContentsMargins(5, 2, 11, 2)
+        self.header_layout.setSpacing(2)
+        
+        # Column proportions
+        self.header_layout.setColumnStretch(0, 11)
+        self.header_layout.setColumnStretch(1, 11)
+        self.header_layout.setColumnStretch(2, 13)
+        self.header_layout.setColumnStretch(3, 46)
+        self.header_layout.setColumnStretch(4, 19)
         
         headers = ["Pos", "D-Pos", "Car#", "Driver", "Div Gap"]
         
         for i, header in enumerate(headers):
-            label = tk.Label(self.header_frame, text=header, fg='white', bg='#333333',
-                            font=('Arial', 9, 'bold'))
-            label.grid(row=0, column=i, sticky='ew', padx=2)
-
-    def toggle_division_filter(self):
-        """Cycle through division filters or toggle My Division if player is on track"""
-        # Check if player is on track
-        player_on_track = self.player_car_idx is not None and any(
-            d['car_idx'] == self.player_car_idx for d in self.race_data
-        )
-        
-        if player_on_track:
-            # Original behavior - toggle My Division
-            self.show_only_my_division = not self.show_only_my_division
-            self.current_division_filter = None
-            button_text = "My Division" if self.show_only_my_division else "All Divisions"
-            button_color = "#0FC436" if self.show_only_my_division else '#555555'
-        else:
-            # Cycle through divisions
-            self.show_only_my_division = False
+            label = QLabel(header)
+            label.setStyleSheet(f"""
+                QLabel {{
+                    color: white;
+                    background-color: {self.get_bg_color('#333333')};
+                    font-weight: bold;
+                    font-size: 9pt;
+                }}
+            """)
+            label.setAlignment(Qt.AlignCenter)
+            self.header_layout.addWidget(label, 0, i)
             
-            # Get divisions that have drivers (excluding "All" and "Default")
-            divisions_with_drivers = set()
-            for driver_data in self.race_data:
-                driver_color = self.get_driver_color(driver_data['driver_name'])
-                for div_name, div_color in self.available_colors.items():
-                    if div_color == driver_color and div_name not in ["Default", "All"]:
-                        divisions_with_drivers.add(div_name)
+    def show_version_on_startup(self):
+        """Show version on startup"""
+        self.status_label.setText(f"BB's League Overlay v{VERSION}")
+        self.update_status_style("orange")
+        threading.Thread(target=self.check_and_notify_updates, daemon=True).start()
+        
+    def check_and_notify_updates(self):
+        """Check for updates"""
+        if self.update_check_done:
+            return
+        time.sleep(1)
+        result = self.check_for_updates()
+        self.update_check_done = True
+        
+        if result.get('update_available'):
+            self.latest_version = result['latest_version']
+            msg = f"Update available: v{result['latest_version']}"
+            self.signals.update_status.emit(msg, '#00FF00')
             
-            # Always include "All" as an option
-            available_options = [div for div in self.division_cycle_order 
-                            if div == "All" or div in divisions_with_drivers]
-            
-            # Find next option in cycle
-            if self.current_division_filter is None:
-                # Start with first available option
-                next_filter = available_options[0] if available_options else "All"
-            else:
-                # Find current filter index and get next
-                try:
-                    if self.current_division_filter == "All":
-                        current_name = "All"
-                    else:
-                        current_name = self.current_division_filter
-                    
-                    current_idx = available_options.index(current_name)
-                    # Get next option, wrapping around if at end
-                    next_idx = (current_idx + 1) % len(available_options)
-                    next_filter = available_options[next_idx]
-                except (ValueError, IndexError):
-                    # Current filter not found, start from beginning
-                    next_filter = available_options[0] if available_options else "All"
-            
-            # Set the filter
-            if next_filter == "All":
-                self.current_division_filter = None
-                button_text = "All Divisions"
-                button_color = '#555555'
-            else:
-                self.current_division_filter = next_filter
-                button_text = next_filter
-                button_color = self.available_colors[next_filter]
-        
-        self.division_filter_btn.config(text=button_text, bg=button_color)
-        self.canvas.yview_moveto(0.0) # make sure to scroll to top when changing views
-    
-    def setup_drag_functionality(self):
-        """Setup window dragging"""
-        self.title_bar.bind("<ButtonPress-1>", self.start_drag)
-        self.title_bar.bind("<B1-Motion>", self.drag_window)
-        self.title_label.bind("<ButtonPress-1>", self.start_drag)
-        self.title_label.bind("<B1-Motion>", self.drag_window)
-        
-    def setup_scroll_functionality(self):
-        """Setup mouse wheel scrolling"""
-        # Bind mouse wheel to canvas and all child widgets
-        self.canvas.bind("<MouseWheel>", self.on_mousewheel)
-        self.canvas.bind("<Button-4>", self.on_mousewheel)  # Linux
-        self.canvas.bind("<Button-5>", self.on_mousewheel)  # Linux
-        
-        # Also bind to the main window so scrolling works anywhere
-        self.root.bind("<MouseWheel>", self.on_mousewheel)
-        self.root.bind("<Button-4>", self.on_mousewheel)
-        self.root.bind("<Button-5>", self.on_mousewheel)
-        
-    def on_mousewheel(self, event):
-        """Handle mouse wheel scrolling"""
-        # Mark as manual scroll
-        self.last_manual_scroll = time.time()
-        
-        # Determine scroll direction and amount
-        if event.delta:  # Windows
-            delta = -1 * (event.delta / 120)
-        else:  # Linux
-            delta = -1 if event.num == 4 else 1
-            
-        # Scroll the canvas
-        self.canvas.yview_scroll(int(delta), "units")
-        
-    def start_drag(self, event):
-        """Start dragging the window"""
-        self.drag_data["x"] = event.x
-        self.drag_data["y"] = event.y
-        
-    def on_scrollbar(self, *args):
-        """Handle scrollbar scrolling"""
-        # Mark as manual scroll to prevent auto-centering
-        self.last_manual_scroll = time.time()
-        # Let the scrollbar do its normal scrolling
-        self.canvas.yview(*args)
-
-    def drag_window(self, event):
-        """Drag the window"""
-        x = self.root.winfo_x() + event.x - self.drag_data["x"]
-        y = self.root.winfo_y() + event.y - self.drag_data["y"]
-        self.root.geometry(f"+{x}+{y}")
-
-    def on_focus_in(self, event):
-        """Handle window gaining focus"""
-        if self.hide_headers:
-            # Cancel hide timer if active
-            if self.hide_timer:
-                self.root.after_cancel(self.hide_timer)
-                self.hide_timer = None
-            
-            # Show top elements if hidden
-            if not self.top_elements_visible:
-                self.show_top_elements()
-
-    def on_focus_out(self, event):
-        """Handle window losing focus"""
-        if self.hide_headers:
-            # Cancel any existing hide timer
-            if self.hide_timer:
-                self.root.after_cancel(self.hide_timer)
-            
-        # Start hide timer with 500ms delay
-        self.hide_timer = self.root.after(500, self.hide_top_elements)
-
-    def hide_top_elements(self):
-        """Hide the title bar and status label"""
-        if self.top_elements_visible:
-            self.title_bar.pack_forget()
-            self.status_label.pack_forget()
-            self.top_elements_visible = False
-            self.hide_timer = None
-            self.root.overrideredirect(True)
-
-    def show_top_elements(self):
-        """Show the title bar and status label"""
-        if not self.top_elements_visible:
-            self.title_bar.pack(fill=tk.X, before=self.header_frame)
-            if not self.is_connected or not hasattr(self, 'status_hide_timer') or not self.status_hide_timer:
-                self.status_label.pack(pady=5, before=self.header_frame)
-            self.top_elements_visible = True
-        
-        
-    def close_application(self):
-        """Close the application"""
-            # Cancel any pending timers
-        if self.hide_timer:
-            self.root.after_cancel(self.hide_timer)
-        if self.show_timer:
-            self.root.after_cancel(self.show_timer)
-
-        self.save_settings()  # Save position before closing
-        self.running = False
-        self.root.destroy()
-        
-    def load_color_config(self):
-        """Load division color configuration from file"""
-        if os.path.exists(self.color_config_file):
-            try:
-                with open(self.color_config_file, 'r') as f:
-                    return json.load(f)
-            except:
-                pass
-        return {}
-    
-    def create_new_config(self):
-        """Create a new color configuration file"""
-        self.focus_bindings(False)
-        from tkinter import filedialog, messagebox
-        
-        # Ask user where to save the new config file
-        file_path = filedialog.asksaveasfilename(
-            title="Create New League Config File",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            initialdir=".",
-            defaultextension=".json"
-        )
-        
-        if file_path:
-            try:
-                # Create empty config file
-                empty_config = {}
-                with open(file_path, 'w') as f:
-                    json.dump(empty_config, f, indent=2)
-                
-                # Load the new empty config
-                self.driver_colors = empty_config
-                self.color_config_file = file_path
-                self.save_settings()  # Save the new config file path
-                
-                # Refresh the display colors immediately (will show default colors)
-                self.refresh_driver_colors()
-                
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to create config file: {e}")
-        self.focus_bindings(True)
-    
-    def load_settings(self):
-        """Load window position and last config file and everything else from settings"""
-        if os.path.exists(self.settings_file):
-            try:
-                with open(self.settings_file, 'r') as f:
-                    data = json.load(f)
-                    # Load last used color config file if it exists
-                    league_config = data.get('league_config')
-                    if league_config and os.path.exists(league_config):
-                        self.color_config_file = league_config
-                        self.driver_colors = self.load_color_config()
-                    if data.get('opacity'):
-                        self.opacity = data.get('opacity')
-                    if data.get('refresh_rate'):
-                        try:
-                            self.refresh_rate = data.get('refresh_rate')
-                        except:
-                            pass
-                    if data.get('x'):
-                        self.x = data.get('x')
-                    if data.get('y'):
-                        self.y = data.get('y')
-                    if data.get('height'):
-                        self.height = data.get('height')
-                    if data.get('width'):
-                        self.width = data.get('width')
-                    if data.get('hide_headers'):
-                        try:
-                            self.hide_headers = data.get('hide_headers')
-                        except:
-                            pass
-                    if data.get('center_drivers'):
-                        try:
-                            self.center_drivers = data.get('center_drivers')
-                        except:
-                            pass
-                    if data.get('bold_drivers'):
-                        try:
-                            self.bold_drivers = data.get('bold_drivers')
-                        except:
-                            pass
-            except:
-                pass
-        return None
-
-    def load_division_colors(self):
-        """Load division colors from settings file or use defaults"""
-        if os.path.exists(self.settings_file):
-            try:
-                with open(self.settings_file, 'r') as f:
-                    data = json.load(f)
-                    division_colors = data.get('division_colors', {})
-                    # Merge with defaults - use saved colors if available, defaults otherwise
-                    colors = self.default_colors.copy()
-                    colors.update(division_colors)
-                    return colors
-            except:
-                pass
-        return self.default_colors.copy()
-    
-    def save_settings(self):
-        """Save window position, last config file, and division colors to settings"""
-        try:
-            settings = {
-                'league_config': self.color_config_file,
-                'division_colors': self.available_colors,
-                'x': self.root.winfo_x(), 
-                'y': self.root.winfo_y(),
-                'height': self.root.winfo_height(),
-                'width': self.root.winfo_width(),
-                'opacity': self.opacity,
-                'refresh_rate': self.refresh_rate,
-                'hide_headers': self.hide_headers,
-                'center_drivers': self.center_drivers,
-                'bold_drivers': self.bold_drivers
-            }
-            with open(self.settings_file, 'w') as f:
-                json.dump(settings, f, indent=2)
-        except Exception as e:
-            print(f"Failed to save settings: {e}")
-        
-    def save_color_config(self):
-        """Save color configuration to file"""
-        try:
-            with open(self.color_config_file, 'w') as f:
-                json.dump(self.driver_colors, f, indent=2)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save color config: {e}")
-            
-    def create_context_menu(self, driver_name):
-        """Create context menu for driver division selection"""
-        if self.context_menu:
-            self.context_menu.destroy()
-    
-        self.context_menu = tk.Menu(self.root, tearoff=0)
-        self.context_menu.add_command(label="Change Division", state="disabled")
-        self.context_menu.add_separator()
-    
-        for division_name in self.available_colors.keys():
-            self.context_menu.add_command(
-                label=division_name,
-                command=lambda c=division_name: self.set_driver_division(driver_name, c)
-            )
-    
-        return self.context_menu
-
-    def set_driver_division(self, driver_name, division_name):
-        """Set driver division and save configuration"""
-        key = driver_name
-        if division_name == "Default":
-            # Remove from config instead of setting to Default
-            if key in self.driver_colors:
-                del self.driver_colors[key]
-        else:
-            # Set the division normally
-            self.driver_colors[key] = division_name
-        self.save_color_config()
-
-        # Immediately update the display for this driver
-        self.update_driver_row_color(driver_name)
-
-        # Hide context menu
-        if self.context_menu:
-            self.context_menu.unpost()
-
-    def update_driver_row_color(self, driver_name):
-        """Immediately update the color of a specific driver's row"""
-        # Find the driver in current displayed data
-        for driver_data in self.displayed_data:
-            if driver_data['driver_name'] == driver_name:
-                car_idx = driver_data['car_idx']
-                if car_idx in self.data_widgets:
-                    widgets = self.data_widgets[car_idx]
-                    
-                    # Get the new color
-                    new_color = self.get_driver_color(driver_name)
-                    
-                    widgets['position'].config(fg=new_color)
-                    widgets['division_position'].config(fg=new_color)
-                    widgets['car_number'].config(fg=new_color)
-                    widgets['name'].config(fg=new_color)
-                    
-                break
-
-    def show_context_menu(self, event, driver_name):
-        """Show context menu at cursor position"""
-        menu = self.create_context_menu(driver_name)
-        try:
-            menu.tk_popup(event.x_root, event.y_root)
-        finally:
-            menu.grab_release()
-        
-    def get_driver_color(self, driver_name):
-        """Get color for a driver based on name"""
-        if driver_name in self.driver_colors:
-            division_name = self.driver_colors[driver_name]
-            return self.available_colors.get(division_name, self.available_colors["Default"])
- 
-        return self.available_colors["Default"]
-        
-    def load_different_config(self):
-        """Load a different color configuration file"""
-        self.focus_bindings(False)
-        from tkinter import filedialog
-        
-        file_path = filedialog.askopenfilename(
-            title="Select Division Color Config File",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            initialdir="."
-        )
-        
-        if file_path:
-            try:
-                with open(file_path, 'r') as f:
-                    self.driver_colors = json.load(f)
-                self.color_config_file = file_path
-                self.save_settings()  # Save the new config file path
-                
-                # Refresh the display colors immediately
-                self.refresh_driver_colors()
-                
-                # Show brief confirmation
-                original_text = self.load_config_btn['text']
-                self.load_config_btn.config(text="✓", bg='#4CAF50')
-                self.root.after(1000, lambda: self.load_config_btn.config(text=original_text, bg='#555555'))
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to load config file: {e}")
-        self.focus_bindings(True)
-
     def check_for_updates(self):
-        """Check GitHub for newer version"""
+        """Check GitHub for updates"""
         try:
             url = "https://api.github.com/repos/steak-and-gravy/league-overlay/releases/latest"
             with urllib.request.urlopen(url, timeout=5) as response:
@@ -771,27 +470,347 @@ class leagueOverlay:
                     'download_url': data.get('html_url', '')
                 }
         except Exception as e:
-            return {
-                'update_available': False,
-                'error': str(e)
-            }
-        
-    def check_and_notify_updates(self):
-        """Check for updates and show notification if available"""
-        if self.update_check_done:
-            return
+            return {'update_available': False, 'error': str(e)}
             
-        time.sleep(1)  # Wait for GUI to initialize
-        result = self.check_for_updates()
-        self.update_check_done = True
+    def toggle_division_filter(self):
+        """Toggle division filter"""
+        player_on_track = self.player_car_idx is not None and any(
+            d['car_idx'] == self.player_car_idx for d in self.race_data
+        )
         
-        if result.get('update_available'):
-            self.latest_version = result['latest_version']
-            msg = f"Update available: v{result['latest_version']}"
-            self.root.after(0, lambda: self.status_label.config(text=msg, fg='#00FF00'))
-            # Auto-hide after 5 seconds
-            self.root.after(5000, lambda: None)
+        if player_on_track:
+            self.show_only_my_division = not self.show_only_my_division
+            self.current_division_filter = None
+            button_text = "My Division" if self.show_only_my_division else "All Divisions"
+            button_color = "#0FC436" if self.show_only_my_division else '#555555'
+        else:
+            self.show_only_my_division = False
+            
+            divisions_with_drivers = set()
+            for driver_data in self.race_data:
+                driver_color = self.get_driver_color(driver_data['driver_info'])
+                for div_name, div_color in self.available_colors.items():
+                    if div_color == driver_color and div_name not in ["Default", "All"]:
+                        divisions_with_drivers.add(div_name)
+            
+            available_options = [div for div in self.division_cycle_order 
+                               if div == "All" or div in divisions_with_drivers]
+            
+            if self.current_division_filter is None:
+                next_filter = available_options[0] if available_options else "All"
+            else:
+                try:
+                    current_name = "All" if self.current_division_filter == "All" else self.current_division_filter
+                    current_idx = available_options.index(current_name)
+                    next_idx = (current_idx + 1) % len(available_options)
+                    next_filter = available_options[next_idx]
+                except (ValueError, IndexError):
+                    next_filter = available_options[0] if available_options else "All"
+            
+            if next_filter == "All":
+                self.current_division_filter = None
+                button_text = "All Divisions"
+                button_color = '#555555'
+            else:
+                self.current_division_filter = next_filter
+                button_text = next_filter
+                button_color = self.available_colors[next_filter]
+        
+        self.division_btn.setText(button_text)
+        self.division_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {button_color};
+                color: white;
+                border: none;
+                padding: 4px 6px;
+                font-size: 8.5pt;
+            }}
+            QPushButton:hover {{
+                background-color: {button_color};
+            }}
+        """)
+        self.scroll_area.verticalScrollBar().setValue(0)
+        
+    def on_manual_scroll(self):
+        """Track manual scrolling"""
+        self.last_manual_scroll = time.time()
 
+    def resizeEvent(self, event):
+        """Handle window resize to reposition size grip"""
+        super().resizeEvent(event)
+        # Position size grip at bottom right corner
+        if hasattr(self, 'size_grip'):
+            rect = self.rect()
+            self.size_grip.move(
+                rect.width() - self.size_grip.width(),
+                rect.height() - self.size_grip.height()
+            )
+        
+    def load_color_config(self):
+        """Load division color configuration"""
+        if os.path.exists(self.color_config_file):
+            try:
+                with open(self.color_config_file, 'r') as f:
+                    data = json.load(f)
+                    
+                    if isinstance(data, dict):
+                        if 'drivers' in data:
+                            return data
+                        else:
+                            # Migrate old format
+                            migrated = {'drivers': []}
+                            for key, division in data.items():
+                                entry = {'division': division}
+                                if key.isdigit():
+                                    entry['id'] = key
+                                    entry['name'] = ''
+                                else:
+                                    entry['name'] = key
+                                migrated['drivers'].append(entry)
+                            
+                            with open(self.color_config_file, 'w') as f:
+                                json.dump(migrated, f, indent=2)
+                            return migrated
+                    elif isinstance(data, list):
+                        return {'drivers': []}
+            except Exception as e:
+                print(f"Error loading color config: {e}")
+        return {'drivers': []}
+        
+    def load_settings(self):
+        """Load settings from file"""
+        if os.path.exists(self.settings_file):
+            try:
+                with open(self.settings_file, 'r') as f:
+                    data = json.load(f)
+                    league_config = data.get('league_config')
+                    if league_config and os.path.exists(league_config):
+                        self.color_config_file = league_config
+                        self.driver_colors = self.load_color_config()
+                    if data.get('opacity'):
+                        self.opacity = data.get('opacity')
+                    if data.get('refresh_rate'):
+                        self.refresh_rate = data.get('refresh_rate')
+                    if data.get('x'):
+                        self.x = data.get('x')
+                    if data.get('y'):
+                        self.y = data.get('y')
+                    if data.get('height'):
+                        self.height = data.get('height')
+                    if data.get('width'):
+                        self.width = data.get('width')
+                    if data.get('hide_headers'):
+                        self.hide_headers = data.get('hide_headers')
+                    if data.get('center_drivers'):
+                        self.center_drivers = data.get('center_drivers')
+                    if data.get('bold_drivers'):
+                        self.bold_drivers = data.get('bold_drivers')
+            except:
+                pass
+                
+    def load_division_colors(self):
+        """Load division colors"""
+        if os.path.exists(self.settings_file):
+            try:
+                with open(self.settings_file, 'r') as f:
+                    data = json.load(f)
+                    division_colors = data.get('division_colors', {})
+                    colors = self.default_colors.copy()
+                    colors.update(division_colors)
+                    return colors
+            except:
+                pass
+        return self.default_colors.copy()
+        
+    def save_settings(self):
+        """Save settings to file"""
+        try:
+            settings = {
+                'league_config': self.color_config_file,
+                'division_colors': self.available_colors,
+                'x': self.geometry().x(),
+                'y': self.geometry().y(),
+                'height': self.geometry().height(),
+                'width': self.geometry().width(),
+                'opacity': self.opacity,
+                'refresh_rate': self.refresh_rate,
+                'hide_headers': self.hide_headers,
+                'center_drivers': self.center_drivers,
+                'bold_drivers': self.bold_drivers
+            }
+            with open(self.settings_file, 'w') as f:
+                json.dump(settings, f, indent=2)
+        except Exception as e:
+            print(f"Failed to save settings: {e}")
+            
+    def save_color_config(self):
+        """Save color configuration"""
+        try:
+            with open(self.color_config_file, 'w') as f:
+                json.dump(self.driver_colors, f, indent=2)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save color config: {e}")
+            
+    def get_driver_division(self, driver_info):
+        """Get division for driver"""
+        user_id = driver_info.get('UserID', '')
+        user_name = driver_info.get('UserName', '')
+        
+        if 'drivers' not in self.driver_colors:
+            return None
+        
+        if user_id:
+            for driver in self.driver_colors['drivers']:
+                driver_id = driver.get('id', '')
+                if driver_id and driver_id == user_id:
+                    return driver.get('division')
+        
+        if user_name:
+            for driver in self.driver_colors['drivers']:
+                if driver.get('name') == user_name:
+                    return driver.get('division')
+        
+        return None
+        
+    def set_driver_division(self, driver_info, division_name):
+        """Set driver division"""
+        user_id = driver_info.get('UserID', '')
+        user_name = driver_info.get('UserName', '')
+        
+        if 'drivers' not in self.driver_colors:
+            self.driver_colors['drivers'] = []
+        
+        existing_entry = None
+        for i, driver in enumerate(self.driver_colors['drivers']):
+            driver_id = driver.get('id', '')
+            driver_name = driver.get('name', '')
+            
+            if (user_id and driver_id == user_id) or (user_name and driver_name == user_name):
+                existing_entry = i
+                break
+        
+        if division_name == "Default":
+            if existing_entry is not None:
+                self.driver_colors['drivers'].pop(existing_entry)
+        else:
+            entry = {'division': division_name}
+            if user_name:
+                entry['name'] = user_name
+            if user_id:
+                entry['id'] = user_id
+            
+            if existing_entry is not None:
+                old_entry = self.driver_colors['drivers'][existing_entry]
+                if not user_id and 'id' in old_entry:
+                    entry['id'] = old_entry['id']
+                if not user_name and 'name' in old_entry:
+                    entry['name'] = old_entry['name']
+                self.driver_colors['drivers'][existing_entry] = entry
+            else:
+                self.driver_colors['drivers'].append(entry)
+        
+        self.save_color_config()
+        self.update_driver_row_color(driver_info)
+        
+    def update_driver_row_color(self, driver_info):
+        """Update driver row color"""
+        user_id = driver_info.get('UserID', '')
+        user_name = driver_info.get('UserName', '')
+        
+        for driver_data in self.displayed_data:
+            data_info = driver_data.get('driver_info', {})
+            data_id = data_info.get('UserID', '')
+            data_name = data_info.get('UserName', '')
+            
+            if (user_id and data_id == user_id) or (user_name and data_name == user_name):
+                # Trigger full refresh
+                self.signals.update_data.emit(self.displayed_data.copy())
+                break
+                
+    def get_driver_color(self, driver_info):
+        """Get color for driver"""
+        division_name = self.get_driver_division(driver_info)
+        if division_name:
+            return self.available_colors.get(division_name, self.available_colors["Default"])
+        return self.available_colors["Default"]
+        
+    def refresh_driver_colors(self):
+        """Refresh all driver colors"""
+        self.driver_colors = self.load_color_config()
+        if self.displayed_data:
+            self.signals.update_data.emit(self.displayed_data.copy())
+            
+    def open_settings(self):
+        """Open settings dialog"""
+        dialog = SettingsDialog(self)
+        result = dialog.exec()
+        
+        # After settings closed, update auto-hide behavior
+        if self.hide_headers:
+            if not self.hasFocus():
+                self.hide_top_elements()
+        else:
+            self.show_top_elements()
+            
+    def hide_top_elements(self):
+        """Hide title bar and status label"""
+        if self.top_elements_visible:
+            self.title_bar.hide()
+            self.status_label.hide()
+            self.top_elements_visible = False
+            
+    def show_top_elements(self):
+        """Show title bar and status label"""
+        if not self.top_elements_visible:
+            self.title_bar.show()
+            self.status_label.show()
+            self.top_elements_visible = True
+            
+    def enterEvent(self, event):
+        """Mouse entered window"""
+        if self.hide_headers:
+            # Cancel hide timer if active
+            if self.hide_timer:
+                self.killTimer(self.hide_timer)
+                self.hide_timer = None
+            self.show_top_elements()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        """Mouse left window"""
+        if self.hide_headers:
+            # Start hide timer (500ms delay)
+            if self.hide_timer:
+                self.killTimer(self.hide_timer)
+            self.hide_timer = self.startTimer(500)
+        super().leaveEvent(event)
+
+    def focusInEvent(self, event):
+        """Window gained focus - update size grip"""
+        super().focusInEvent(event)
+        if hasattr(self, 'size_grip'):
+            self.size_grip.update()
+
+    def focusOutEvent(self, event):
+        """Window lost focus - update size grip"""
+        super().focusOutEvent(event)
+        if hasattr(self, 'size_grip'):
+            self.size_grip.update()
+            
+    def timerEvent(self, event):
+        """Handle timer events for auto-hide"""
+        if self.hide_timer and event.timerId() == self.hide_timer:
+            self.killTimer(self.hide_timer)
+            self.hide_timer = None
+            if self.hide_headers:
+                self.hide_top_elements()
+        
+    def close_application(self):
+        """Close application"""
+        self.save_settings()
+        self.running = False
+        QApplication.quit()
+        
     def telemetry_loop(self):
         """Main telemetry loop"""
         while self.running:
@@ -814,50 +833,44 @@ class leagueOverlay:
                 time.sleep(1)
                 
     def calculate_real_time_positions(self, drivers, live_data):
-        """Calculate real-time positions based on track position and lap count"""
+        """Calculate real-time positions"""
         car_idx_lap = live_data['CarIdxLap']
         car_idx_lap_dist_pct = live_data['CarIdxLapDistPct']
         car_idx_class_position = live_data['CarIdxClassPosition']
-    
+        
         if not car_idx_lap or not car_idx_lap_dist_pct or not car_idx_class_position:
             return []
-    
-        # Collect all active drivers with their track position data
+        
         active_drivers = []
-    
+        
         for car_idx in range(len(car_idx_class_position)):
-            if car_idx_class_position[car_idx] == 0:  # Not in race
+            if car_idx_class_position[car_idx] == 0:
                 continue
             
-            # Find driver info
             driver_info = None
             for driver in drivers:
                 if driver.get('CarIdx') == car_idx:
                     driver_info = driver
                     break
-                
+            
             if not driver_info:
                 continue
             
-            # Filter by class if player is on track
             if self.player_car_class_id is not None:
                 if driver_info.get('CarClassID') != self.player_car_class_id:
                     continue
-        
-            # Calculate total track position (lap + percentage through current lap)
+            
             current_lap = car_idx_lap[car_idx]
             lap_pct = car_idx_lap_dist_pct[car_idx]
-
-            # disconnected driver
+            
             if current_lap < 0:
                 continue
-        
-            # Handle invalid lap percentage data - does this ever hit?
+            
             if lap_pct < 0 or lap_pct > 1:
                 lap_pct = 0
             
             total_track_position = current_lap + lap_pct
-        
+            
             active_drivers.append({
                 'car_idx': car_idx,
                 'driver_info': driver_info,
@@ -866,70 +879,61 @@ class leagueOverlay:
                 'lap_pct': lap_pct,
                 'official_position': car_idx_class_position[car_idx]
             })
-    
-        # Sort by total track position (descending - highest lap + percentage first)
+        
         active_drivers.sort(key=lambda x: x['total_track_position'], reverse=True)
-    
-        # Assign real-time positions
+        
         for i, driver in enumerate(active_drivers):
             driver['real_time_position'] = i + 1
-    
+        
         return active_drivers
-
+        
     def get_official_positions(self, drivers, live_data):
-        """Get official positions for practice/qualifying sessions"""
+        """Get official positions"""
         car_idx_class_position = live_data['CarIdxClassPosition']
-    
+        
         if not car_idx_class_position:
             return []
-    
+        
         active_drivers = []
-    
+        
         for car_idx in range(len(car_idx_class_position)):
-            if car_idx_class_position[car_idx] == 0:  # Not in race
+            if car_idx_class_position[car_idx] == 0:
                 continue
             
-            # Find driver info
             driver_info = None
             for driver in drivers:
                 if driver.get('CarIdx') == car_idx:
                     driver_info = driver
                     break
-                
+            
             if not driver_info:
                 continue
             
-            # Filter by class if player is on track
             if self.player_car_class_id is not None:
                 if driver_info.get('CarClassID') != self.player_car_class_id:
                     continue
-        
+            
             active_drivers.append({
                 'car_idx': car_idx,
                 'driver_info': driver_info,
                 'official_position': car_idx_class_position[car_idx]
             })
-    
-        # Sort by official position
+        
         active_drivers.sort(key=lambda x: x['official_position'])
-    
+        
         return active_drivers
-    
+        
     def update_finish_status(self, live_data, current_session):
-        """Track which drivers have finished their race during checkered flag"""
+        """Update finish status"""
         if self.ir['SessionState'] < 5:
-            # Not in checkered state yet
             return
         
         car_idx_lap = live_data['CarIdxLap']
         
-        # Find the leader (P1 in player's class)
         if self.leader_car_idx is None:
             try:
                 for driver in current_session['ResultsPositions']:
-                    # Only consider drivers in player's class
                     if self.player_car_class_id is not None:
-                        # Find this driver's class
                         driver_class_id = None
                         try:
                             drivers = self.ir['DriverInfo']['Drivers']
@@ -943,7 +947,6 @@ class leagueOverlay:
                         if driver_class_id != self.player_car_class_id:
                             continue
                     
-                    # Found P1 in player's class
                     if driver.get('ClassPosition') == 1:
                         self.leader_car_idx = driver.get('CarIdx')
                         self.leader_last_lap = car_idx_lap[self.leader_car_idx] if self.leader_car_idx < len(car_idx_lap) else 0
@@ -951,20 +954,17 @@ class leagueOverlay:
             except (KeyError, TypeError, IndexError):
                 pass
         
-        # Check if leader has finished
         if self.leader_car_idx is not None and not self.leader_finished:
             if self.leader_car_idx < len(car_idx_lap):
                 current_leader_lap = car_idx_lap[self.leader_car_idx]
                 if current_leader_lap > self.leader_last_lap:
                     self.leader_finished = True
         
-        # Once leader finishes, track other drivers finishing (only in player's class)
         if self.leader_finished:
             for car_idx in range(len(car_idx_lap)):
                 if car_idx in self.finished_drivers:
                     continue
                 
-                # Check if this driver is in player's class
                 if self.player_car_class_id is not None:
                     try:
                         drivers = self.ir['DriverInfo']['Drivers']
@@ -979,30 +979,49 @@ class leagueOverlay:
                     except (KeyError, TypeError):
                         continue
                 
-                # Check if this driver's lap count increased after leader finished
                 if car_idx not in self.driver_snapshots:
                     continue
-                    
+                
                 prev_lap = self.driver_snapshots[car_idx].get('current_lap', 0)
                 current_lap = car_idx_lap[car_idx]
                 
                 if current_lap > prev_lap:
                     self.finished_drivers.add(car_idx)
-
+                    
     def get_position_from_results(self, current_session, car_idx):
-        """Get official position from ResultsPositions"""
+        """Get position from results"""
         try:
-            for driver in current_session['ResultsPositions']:
-                if driver.get('CarIdx') == car_idx:
-                    return driver.get('ClassPosition', -2) + 1 # 0-based index
-        except (KeyError, TypeError):
+            if 'ResultsPositions' in current_session:
+                for driver in current_session['ResultsPositions']:
+                    if driver.get('CarIdx') == car_idx and 'ClassPosition' in driver:
+                        return driver['ClassPosition'] + 1
+        except (KeyError, TypeError, IndexError):
             pass
         return -1
-
-    def process_telemetry(self):
-        """Process telemetry data with conditional real-time position calculations and simplified disconnect handling"""
+        
+    def get_fastest_lap_time(self, current_session):
+        """Get fastest lap time"""
+        fastest_time = float('inf')
+        for driver in current_session['ResultsPositions']:
+            best_lap = driver['FastestTime']
+            if 0 < best_lap < fastest_time:
+                fastest_time = best_lap
+        return fastest_time if fastest_time != float('inf') else 90
+        
+    def get_best_lap_from_session_info(self, current_session, car_idx):
+        """Get best lap from session info"""
         try:
-            # Get driver info directly from telemetry
+            if 'ResultsPositions' in current_session:
+                for driver in current_session['ResultsPositions']:
+                    if driver.get('CarIdx') == car_idx and 'FastestTime' in driver:
+                        return driver['FastestTime']
+        except (KeyError, TypeError, IndexError):
+            pass
+        return 90
+        
+    def process_telemetry(self):
+        """Process telemetry data"""
+        try:
             try:
                 drivers = self.ir['DriverInfo']['Drivers']
                 if not drivers:
@@ -1011,7 +1030,6 @@ class leagueOverlay:
                 print(f"Error getting driver info: {e}")
                 return
             
-            # Get session type
             try:
                 session_info = self.ir['SessionInfo']
                 current_session = session_info['Sessions'][self.ir['SessionNum']]
@@ -1019,9 +1037,8 @@ class leagueOverlay:
                 is_race = session_type.lower() == 'race'
             except (KeyError, TypeError, IndexError):
                 is_race = False
-
+                
             if self.session_info != f"{self.ir['SessionNum']}|{session_type}":
-                # session change, reset snapshots AND finish tracking
                 self.driver_snapshots = {}
                 self.leader_finished = False
                 self.finished_drivers = set()
@@ -1030,15 +1047,14 @@ class leagueOverlay:
                 self.session_info = f"{self.ir['SessionNum']}|{session_type}"
                 self.player_car_idx = None
                 self.player_car_class_id = None
-        
-            # Get player car index
+                self.final_gaps = {}
+            
             if self.player_car_idx is None:
                 try:
                     self.player_car_idx = self.ir['PlayerCarIdx']
                 except (KeyError, TypeError):
                     self.player_car_idx = None
-
-            # Get player car class
+                    
             if self.player_car_idx is not None and self.player_car_class_id is None:
                 try:
                     for driver in drivers:
@@ -1047,103 +1063,84 @@ class leagueOverlay:
                             break
                 except (KeyError, TypeError):
                     pass
-        
-            # Get live telemetry
+            
             live_data = self.ir
             if not live_data:
                 return
             
-            # Update finish status tracking (for races in checkered state)
             if is_race:
                 self.update_finish_status(live_data, current_session)
-        
-            # Use different methods based on session type
+            
             if is_race:
-                # Use real-time positions for races
                 active_drivers = self.calculate_real_time_positions(drivers, live_data)
-                # if session state is checkered use official_position
-                position_key = 'real_time_position' if self.ir['SessionState'] < 5 else 'official_position'
+                # Only use official positions after leader has actually finished, not just when checkered is shown
+                position_key = 'real_time_position' if not self.leader_finished else 'official_position'
+                
                 if active_drivers:
-                    # Update snapshots for currently active drivers
                     for driver_data in active_drivers:
                         self.driver_snapshots[driver_data['car_idx']] = driver_data.copy()
                         self.driver_snapshots[driver_data['car_idx']]['disconnected'] = False
-
-                    # Add disconnected drivers from snapshots
+                    
                     active_car_indices = {d['car_idx'] for d in active_drivers}
                     for car_idx, snapshot in self.driver_snapshots.items():
                         if car_idx not in active_car_indices:
                             if self.ir['SessionState'] < 5:
-                                # Ensure disconnected drivers official position is -1 if session state not checkered
                                 snapshot['official_position'] = -1
-                            # Add disconnected driver with their last known state
                             disconnected_driver = snapshot.copy()
                             disconnected_driver['disconnected'] = True
-                            if self.ir['SessionState'] < 5 or disconnected_driver['official_position'] >= 0: # only process disconnected drivers if not session not checkered but keep finishers in list
+                            if self.ir['SessionState'] < 5 or disconnected_driver['official_position'] >= 0:
                                 active_drivers.append(disconnected_driver)
-
-                    # Sort by total track position (descending - highest lap + percentage first)
+                    
                     active_drivers.sort(key=lambda x: x['total_track_position'], reverse=True)
-                
-                    # Assign real-time positions
+                    
                     for i, driver in enumerate(active_drivers):
                         driver['real_time_position'] = i + 1
             else:
-                # Use official positions for practice/qualifying
                 active_drivers = self.get_official_positions(drivers, live_data)
                 position_key = 'official_position'
-
+                
             if not active_drivers:
                 return
-        
-            # Calculate division positions using the appropriate position type
+            
             all_drivers_with_colors = []
             for driver in active_drivers:
-                driver_color = self.get_driver_color(driver['driver_info'].get('UserName', ''))
+                driver_color = self.get_driver_color(driver['driver_info'])
                 all_drivers_with_colors.append({
                     'car_idx': driver['car_idx'],
                     'position': driver[position_key],
                     'color': driver_color,
                     'official_position': driver.get('official_position', driver[position_key])
                 })
-
-            # Calculate division positions using display positions
+            
             division_positions = {}
             for color in set(d['color'] for d in all_drivers_with_colors):
                 same_color = [d for d in all_drivers_with_colors if d['color'] == color]
                 same_color.sort(key=lambda x: x['position'])
                 for i, driver in enumerate(same_color):
                     division_positions[driver['car_idx']] = i + 1
-        
-            # Process race standings
+            
             self.race_data = []
-        
+            
             for driver in active_drivers:
                 car_idx = driver['car_idx']
                 driver_info = driver['driver_info']
-            
-                # Check if this driver has finished - use ResultsPositions if so
+                
                 if car_idx in self.finished_drivers:
                     position = self.get_position_from_results(current_session, car_idx)
                 else:
-                    # Use the appropriate position for display
                     position = driver[position_key]
-            
-                # Get current driver's color and division position
-                current_driver_color = self.get_driver_color(driver_info.get('UserName', ''))
+                
+                current_driver_color = self.get_driver_color(driver_info)
                 current_color_position = division_positions.get(car_idx, position)
-
-                # Calculate gap
+                
                 if current_color_position == 1:
                     gap = "Leader"
                 elif car_idx in self.finished_drivers:
-                    # Driver has finished - no gap needed
-                    gap = ""
+                    gap = self.final_gaps.get(car_idx, "")
                 elif is_race:
-                    # Find division drivers using display positions
                     same_color_drivers = []
                     for temp_driver in active_drivers:
-                        temp_color = self.get_driver_color(temp_driver['driver_info'].get('UserName', ''))
+                        temp_color = self.get_driver_color(temp_driver['driver_info'])
                         if temp_color == current_driver_color:
                             same_color_drivers.append({
                                 'car_idx': temp_driver['car_idx'],
@@ -1152,25 +1149,21 @@ class leagueOverlay:
                                 'current_lap': temp_driver['current_lap'],
                                 'lap_pct': temp_driver['lap_pct']
                             })
-                
+                    
                     same_color_drivers.sort(key=lambda x: x['position'])
-                
-                    # Find current driver's position in the list
+                    
                     current_pos_index = None
                     for i, temp_driver in enumerate(same_color_drivers):
                         if temp_driver['car_idx'] == car_idx:
                             current_pos_index = i
                             break
-                
+                    
                     if current_pos_index is not None and current_pos_index > 0:
-                        # Get car ahead in division
                         car_ahead_idx = same_color_drivers[current_pos_index - 1]['car_idx']
-                        
-                        # Check if car ahead has finished
+
                         if car_ahead_idx in self.finished_drivers:
-                            gap = ""
+                            gap = self.final_gaps.get(car_idx, "")
                         else:
-                            # Get timing data for gap calculations
                             car_idx_est_time = live_data['CarIdxEstTime']
                             current_est_time = car_idx_est_time[car_idx]
                             ahead_est_time = car_idx_est_time[car_ahead_idx]
@@ -1179,17 +1172,15 @@ class leagueOverlay:
                             if current_est_time > 0 and ahead_est_time > 0 and same_color_drivers[current_pos_index - 1]['current_lap'] == driver['current_lap']:
                                 time_gap = ahead_est_time - current_est_time
                             else:
-                                # Fallback to distance calculation
                                 time_gap = (same_color_drivers[current_pos_index - 1]['total_track_position'] - driver['total_track_position']) * self.get_fastest_lap_time(current_session)
 
-                            # Adjust for lap differences
                             lap_difference = same_color_drivers[current_pos_index - 1]['total_track_position'] - driver['total_track_position']
-                        
+
                             if lap_difference > 1:
                                 gap = f"{int(lap_difference)}L"
-                            elif self.ir['SessionState'] < 5: # not checkered
+                            elif self.ir['SessionState'] < 5:
                                 if time_gap < 0:
-                                    time_gap *= -1 # just make it positive for now
+                                    time_gap *= -1
                                 if time_gap < 60:
                                     gap = f"{time_gap:.1f}"
                                 else:
@@ -1197,13 +1188,24 @@ class leagueOverlay:
                                     seconds = time_gap % 60
                                     gap = f"{minutes}:{seconds:04.1f}"
                             else:
-                                gap = ""
+                                if time_gap < 0:
+                                    time_gap *= -1
+                                if time_gap < 60:
+                                    gap = f"{time_gap:.1f}"
+                                else:
+                                    minutes = int(time_gap // 60)
+                                    seconds = time_gap % 60
+                                    gap = f"{minutes}:{seconds:04.1f}"
+
+                            # Store the gap continuously for all non-leaders
+                            if gap and gap != "":
+                                self.final_gaps[car_idx] = gap
                     else:
                         gap = ""
-                else:  # Practice or Qualifying
+                else:
                     same_color_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
                     same_color_drivers.sort(key=lambda x: x['position'])
-
+                    
                     if len(same_color_drivers) >= current_color_position - 1:
                         car_ahead_idx = same_color_drivers[current_color_position - 2]['car_idx']
                         current_best = self.get_best_lap_from_session_info(current_session, car_idx)
@@ -1215,814 +1217,778 @@ class leagueOverlay:
                             gap = ""
                     else:
                         gap = ""
-            
-                # Mark if this is the player
+                
                 is_player = (car_idx == self.player_car_idx)
-            
+
                 self.race_data.append({
                     'position': position,
                     'division_position': current_color_position,
                     'car_number': driver_info.get('CarNumber', ''),
                     'driver_name': driver_info.get('UserName', ''),
+                    'driver_info': {
+                        'UserID': driver_info.get('UserID', ''),
+                        'UserName': driver_info.get('UserName', '')
+                    },
                     'gap': gap if not driver.get('disconnected', False) or gap == "Leader" or gap == "" else "(DC)",
                     'car_idx': car_idx,
                     'is_player': is_player
                 })
-
-            # Re-sort to maintain proper order
+            
             self.race_data.sort(key=lambda x: x['position'])
-
+            
         except Exception as e:
             print(f"Processing error: {e}")
-
-    def get_fastest_lap_time(self, current_session):
-        fastest_time = float('inf')
-        for driver in current_session['ResultsPositions']:
-            best_lap = driver['FastestTime']
-            if 0 < best_lap < fastest_time:
-                fastest_time = best_lap
-        return fastest_time if fastest_time != float('inf') else 90
-
-    def get_best_lap_from_session_info(self, current_session, car_idx):
-        try:
-            if 'ResultsPositions' in current_session:
-                for driver in current_session['ResultsPositions']:
-                    if driver.get('CarIdx') == car_idx and 'FastestTime' in driver:
-                        return driver['FastestTime']
-        except (KeyError, TypeError, IndexError):
-            pass
-        return 90 # default to 90 if no best lap found
             
     def update_gui(self):
-        """Update GUI with race data"""
-        while self.running:
-            try:
-                # Wait 3 seconds after startup before updating status
-                if time.time() - self.startup_time < 3.0:
-                    time.sleep(0.1)
-                    continue
-                if self.is_connected:
-                    # Get session type for status display
-                    try:
-                        session_info = self.ir['SessionInfo']
-                        current_session = session_info['Sessions'][self.ir['SessionNum']]
-                        session_type = current_session['SessionType']
-                        status_text = f"Connected - Live Data ({session_type})"
-                    except (KeyError, TypeError, IndexError, AttributeError):
-                        status_text = "Connected - Live Data"
-
-                    self.root.after(0, lambda text=status_text: self.status_label.config(text=text, fg='green'))
-                    self.root.after(0, self.display_race_data)
-                else:
-                    # Cancel hide timer if disconnected
-                    if self.status_hide_timer:
-                        self.root.after_cancel(self.status_hide_timer)
-                        self.status_hide_timer = None
-                    self.root.after(0, lambda: self.status_label.pack(pady=5))
-                    self.root.after(0, lambda: self.status_label.config(text="Connecting to iRacing...", fg='orange'))
+        """Update GUI (called by timer)"""
+        try:
+            if time.time() - self.startup_time < 3.0:
+                return
+            
+            if self.is_connected:
+                try:
+                    session_info = self.ir['SessionInfo']
+                    current_session = session_info['Sessions'][self.ir['SessionNum']]
+                    session_type = current_session['SessionType']
+                    status_text = f"Connected - Live Data ({session_type})"
+                except (KeyError, TypeError, IndexError, AttributeError):
+                    status_text = "Connected - Live Data"
+                
+                self.signals.update_status.emit(status_text, 'green')
+                
+                # Filter and emit data
+                if self.race_data:
+                    if self.show_only_my_division and self.player_car_idx is not None:
+                        player_color = None
+                        for driver_data in self.race_data:
+                            if driver_data['car_idx'] == self.player_car_idx:
+                                player_color = self.get_driver_color(driver_data['driver_info'])
+                                break
+                        
+                        if player_color:
+                            current_data = [d for d in self.race_data if self.get_driver_color(d['driver_info']) == player_color]
+                        else:
+                            current_data = self.race_data
+                    elif self.current_division_filter is not None:
+                        division_color = self.available_colors.get(self.current_division_filter)
+                        if division_color:
+                            current_data = [d for d in self.race_data if self.get_driver_color(d['driver_info']) == division_color]
+                        else:
+                            current_data = self.race_data
+                    else:
+                        current_data = self.race_data
                     
-                time.sleep(0.25) # refresh UI quicker in case changing divisions via button
+                    self.signals.update_data.emit(current_data)
+            else:
+                self.signals.update_status.emit("Connecting to iRacing...", 'orange')
                 
-            except Exception as e:
-                print(f"GUI update error: {e}")
-                time.sleep(1)
-    
-    def get_dynamic_column_sizes(self, is_header=False):
-        """Calculate column minimum sizes based on current window width"""
-        # Account for scrollbar and padding
-        scrollbar_width = 0 if not is_header else 4
-        padding = 2  # Total padding from margins
-        available_width = self.width - scrollbar_width - padding
-
-        # Define percentage allocations (should add up to 1.0)
-        percentages = {
-            'pos': 0.11,
-            'div_pos': 0.11,
-            'car_num': 0.13,
-            'driver': 0.46,
-            'gap': 0.19
-        }
-        
-        # Calculate actual pixel widths
-        return {
-            'pos': int(available_width * percentages['pos']),
-            'div_pos': int(available_width * percentages['div_pos']),
-            'car_num': int(available_width * percentages['car_num']),
-            'driver': int(available_width * percentages['driver']),
-            'gap': int(available_width * percentages['gap'])
-        }
-                
-    def display_race_data(self):
-        """Display race data in the GUI - optimized to prevent flicker"""
-        if not self.race_data:
+        except Exception as e:
+            print(f"GUI update error: {e}")
+            
+    def display_race_data(self, data):
+        """Display race data (thread-safe slot)"""
+        if not data:
             return
-            
-        # Replace the existing filter section with:
-        if self.show_only_my_division and self.player_car_idx is not None:
-            # Find player's color
-            player_color = None
-            for driver_data in self.race_data:
-                if driver_data['car_idx'] == self.player_car_idx:
-                    player_color = self.get_driver_color(driver_data['driver_name'])
-                    break
-                
-            if player_color:
-                current_data = [d for d in self.race_data if self.get_driver_color(d['driver_name']) == player_color]
-            else:
-                current_data = self.race_data
-        elif self.current_division_filter is not None:
-            # Filter by specific division
-            division_color = self.available_colors.get(self.current_division_filter)
-            if division_color:
-                current_data = [d for d in self.race_data if self.get_driver_color(d['driver_name']) == division_color]
-            else:
-                current_data = self.race_data
-        else:
-            current_data = self.race_data
         
-        # Check if we need to rebuild the display
-        need_rebuild = (len(current_data) != len(self.displayed_data) or
-                       any(d1['car_idx'] != d2['car_idx'] for d1, d2 in zip(current_data, self.displayed_data)))
-        if need_rebuild:
-            self.rebuild_display(current_data)
-        else:
-            self.update_existing_display(current_data)
-            
-        # Auto-center on player if enough time has passed since manual scroll
+        # Clear existing widgets
+        while self.scroll_layout.count() > 1:
+            item = self.scroll_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Add new driver rows
+        for driver_data in data:
+            row = self.create_driver_row(driver_data)
+            self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, row)
+        
+        # Auto-center on player
         if (self.player_car_idx is not None and 
             time.time() - self.last_manual_scroll > self.manual_scroll_timeout):
-            self.center_on_player(current_data)
-
-        self.displayed_data = current_data.copy()
+            self.center_on_player(data)
+        
+        self.displayed_data = data.copy()
         
     def center_on_player(self, current_data):
-        """Center the view on the player's position"""
+        """Center view on player"""
         if not current_data or self.player_car_idx is None:
             return
-            
-        # Find player's position in the data
+        
         player_index = None
         for i, driver_data in enumerate(current_data):
             if driver_data['car_idx'] == self.player_car_idx:
                 player_index = i
                 break
-                
+        
         if player_index is None:
             return
-            
-        # Wait a frame to ensure canvas is properly updated
-        self.root.after(1, lambda: self._do_center_scroll(current_data))
-    
-    def _do_center_scroll(self, current_data):
-        """Actually perform the centering scroll"""
-        try:
-            # Force canvas update
-            self.canvas.update_idletasks()
         
-            if not current_data:
-                return
-            
-            # Find the player's index in the active drivers list
-            player_active_index = None
-            for i, driver_data in enumerate(current_data):
-                if driver_data['car_idx'] == self.player_car_idx:
-                    player_active_index = i
-                    break
-                
-            if player_active_index is None:
-                return
-            
-            # Get canvas and content dimensions
-            canvas_height = self.canvas.winfo_height()
-            bbox = self.canvas.bbox("all")
-            if not bbox:
-                return
-                
-            total_height = bbox[3] - bbox[1]
+        # Force update to ensure proper calculation
+        self.scroll_area.verticalScrollBar().update()
+        QApplication.processEvents()
         
-            # If everything fits in the canvas, just scroll to top
-            if total_height <= canvas_height:
-                self.canvas.yview_moveto(0)
-                return
+        scrollbar = self.scroll_area.verticalScrollBar()
         
-            # Calculate how many items are visible at once
-            item_height = total_height / len(current_data)
-            visible_items = canvas_height / item_height
+        # Calculate the height per item
+        total_items = len(current_data)
+        if total_items == 0:
+            return
+        
+        # Get the visible height and total scrollable height
+        viewport_height = self.scroll_area.viewport().height()
+        total_height = scrollbar.maximum() + viewport_height
+        
+        if total_height <= viewport_height:
+            # Everything fits, no need to scroll
+            return
+        
+        # Calculate height per item
+        item_height = total_height / total_items
+        
+        # Calculate position to center player
+        # We want player to be at (viewport_height / 2)
+        player_top_position = player_index * item_height
+        target_scroll = player_top_position - (viewport_height / 2) + (item_height / 2)
+        
+        # Clamp to valid scroll range
+        target_scroll = max(0, min(target_scroll, scrollbar.maximum()))
+        
+        scrollbar.setValue(int(target_scroll))
+        
+    def create_driver_row(self, driver_data):
+        """Create a driver row widget"""
+        row_widget = QWidget()
+        base_bg = "#1a1a1a" if driver_data.get('is_player', False) else "#000000"
+        bg_color = self.get_bg_color(base_bg)
+        row_widget.setStyleSheet(f"background-color: {bg_color};")
+        
+        layout = QGridLayout(row_widget)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(2)
+        
+        layout.setColumnStretch(0, 11)
+        layout.setColumnStretch(1, 11)
+        layout.setColumnStretch(2, 13)
+        layout.setColumnStretch(3, 46)
+        layout.setColumnStretch(4, 19)
+        
+        color = self.get_driver_color(driver_data.get('driver_info', {}))
+        font_weight = "bold" if driver_data.get('is_player', False) or self.bold_drivers else "normal"
+        
+        # Position
+        pos_label = QLabel(str(driver_data.get('position', '')))
+        pos_label.setStyleSheet(f"""
+            QLabel {{
+                color: {color};
+                background-color: {bg_color};
+                font-size: 9pt;
+                font-weight: {font_weight};
+            }}
+        """)
+        pos_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(pos_label, 0, 0)
+        
+        # Division Position
+        div_pos_label = QLabel(str(driver_data.get('division_position', '')))
+        div_pos_label.setStyleSheet(f"""
+            QLabel {{
+                color: {color};
+                background-color: {bg_color};
+                font-size: 9pt;
+                font-weight: {font_weight};
+            }}
+        """)
+        div_pos_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(div_pos_label, 0, 1)
+        
+        # Car Number
+        car_label = QLabel(str(driver_data.get('car_number', '')))
+        car_label.setStyleSheet(f"""
+            QLabel {{
+                color: {color};
+                background-color: {bg_color};
+                font-size: 9pt;
+                font-weight: {font_weight};
+            }}
+        """)
+        car_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(car_label, 0, 2)
+        
+        # Driver Name
+        name_align = Qt.AlignCenter if self.center_drivers else Qt.AlignLeft
+        name_label = QLabel(driver_data.get('driver_name', ''))
+        name_label.setStyleSheet(f"""
+            QLabel {{
+                color: {color};
+                background-color: {bg_color};
+                font-size: 9pt;
+                font-weight: {font_weight};
+            }}
+        """)
+        name_label.setAlignment(name_align | Qt.AlignVCenter)
+        # Prevent name from expanding beyond allocated width
+        name_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        name_label.setWordWrap(False)
+        layout.addWidget(name_label, 0, 3)
+        
+        # Gap
+        gap_label = QLabel(driver_data.get('gap', ''))
+        gap_label.setStyleSheet(f"""
+            QLabel {{
+                color: white;
+                background-color: {bg_color};
+                font-size: 9pt;
+                font-weight: {font_weight};
+            }}
+        """)
+        gap_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(gap_label, 0, 4)
+        
+        # Context menu
+        row_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        row_widget.customContextMenuRequested.connect(
+            lambda pos, data=driver_data, w=row_widget: self.show_context_menu(pos, data, w)
+        )
+        
+        return row_widget
+        
+    def show_context_menu(self, pos, driver_data, widget):
+        """Show context menu for division assignment"""
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #333333;
+                color: white;
+                border: 1px solid #555555;
+            }
+            QMenu::item:selected {
+                background-color: #555555;
+            }
+        """)
 
-            # Calculate the ideal scroll position to center the player
-            # We want the player to be in the middle of the visible area
-            center_position = player_active_index - (visible_items / 2)
+        menu.addAction("Change Division").setEnabled(False)
+        menu.addSeparator()
 
-            # Convert to a fraction (0.0 to 1.0)
-            max_scroll_position = len(current_data)
-            if max_scroll_position <= 0:
-                scroll_fraction = 0.0
-            else:
-                scroll_fraction = center_position / max_scroll_position
-                scroll_fraction = max(0.0, min(1.0, scroll_fraction))
+        driver_info = driver_data.get('driver_info', {})
 
-            # Apply the scroll
-            self.canvas.yview_moveto(0.0)
-            self.canvas.yview_moveto(scroll_fraction)
+        for division_name in self.available_colors.keys():
+            action = menu.addAction(division_name)
+            action.triggered.connect(
+                lambda checked, d=division_name, info=driver_info:
+                self.set_driver_division(info, d)
+            )
+
+        # Map position from widget to global coordinates
+        global_pos = widget.mapToGlobal(pos)
+        menu.exec(global_pos)
         
-        except Exception as e:
-            print(f"Error centering on player: {e}")
-
-    def refresh_layout(self):
-        """Refresh the layout after window resize"""
-        # Recreate headers
-        self.create_headers()
-
-        # Force a display refresh to update row widths
-        if hasattr(self, 'displayed_data') and self.displayed_data:
-            self.rebuild_display(self.displayed_data)
+    def update_status_label(self, text, color):
+        """Update status label (thread-safe slot)"""
+        self.status_label.setText(text)
+        self.update_status_style(color)
         
-    def rebuild_display(self, data):
-        """Rebuild the entire display"""
-        # Clear existing data widgets
-        for widget in self.scrollable_frame.winfo_children():
-            widget.destroy()
-            
-        self.data_widgets = {}
-        
-        # Create new widgets
-        for i, driver_data in enumerate(data):
-            self.create_driver_row(i, driver_data)
+    # Mouse events for dragging
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            # Check if in title bar for dragging
+            if event.position().y() < 30:
+                self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                event.accept()
 
-    def create_driver_row(self, index, data):
-        """Create a new driver row using grid layout"""
-        row_frame = tk.Frame(self.scrollable_frame, bg='black')
-        row_frame.pack(fill=tk.X, expand=True, padx=5, pady=1)
-    
-        sizes = self.get_dynamic_column_sizes()
-        
-        # Configure same grid with dynamic sizes and uniform groups
-        row_frame.grid_columnconfigure(0, weight=sizes['pos'], minsize=sizes['pos'], uniform="col0")
-        row_frame.grid_columnconfigure(1, weight=sizes['div_pos'], minsize=sizes['div_pos'], uniform="col1")
-        row_frame.grid_columnconfigure(2, weight=sizes['car_num'], minsize=sizes['car_num'], uniform="col2")
-        row_frame.grid_columnconfigure(3, weight=sizes['driver'], minsize=sizes['driver'], uniform="col3")
-        row_frame.grid_columnconfigure(4, weight=sizes['gap'], minsize=sizes['gap'], uniform="col4")
-    
-        # Get driver color
-        color = self.get_driver_color(data['driver_name'])
-    
-        # Highlight player row
-        if data['is_player']:
-            row_frame.configure(bg='#1a1a1a')
-    
-        # Create labels using grid instead of pack
-        pos_label = tk.Label(row_frame, text=str(data['position']), 
-                        fg=color, bg=row_frame['bg'], 
-                        font=('Arial', 9, 'bold' if data['is_player'] or self.bold_drivers else 'normal'))
-        pos_label.grid(row=0, column=0, sticky='ew', padx=2)
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton:
+            if not self.drag_position.isNull():
+                self.move(event.globalPosition().toPoint() - self.drag_position)
+                event.accept()
 
-        division_pos_label = tk.Label(row_frame, text=str(data['division_position']), 
-                        fg=color, bg=row_frame['bg'], 
-                        font=('Arial', 9, 'bold' if data['is_player'] or self.bold_drivers else 'normal'))
-        division_pos_label.grid(row=0, column=1, sticky='ew', padx=2)
-    
-        car_label = tk.Label(row_frame, text=data['car_number'], 
-                        fg=color, bg=row_frame['bg'], 
-                        font=('Arial', 9, 'bold' if data['is_player'] or self.bold_drivers else 'normal'))
-        car_label.grid(row=0, column=2, sticky='ew', padx=2)
+    def mouseReleaseEvent(self, event):
+        self.drag_position = QPoint()
+        # Save settings when user finishes moving/resizing
+        if event.button() == Qt.LeftButton:
+            self.save_settings()
 
-        name_anchor = "w" # Left align name
-        if self.center_drivers:
-            name_anchor = "center" # Center name
-        name_label = tk.Label(row_frame, text=data['driver_name'], 
-                    fg=color, bg=row_frame['bg'], 
-                    font=('Arial', 9, 'bold' if data['is_player'] or self.bold_drivers else 'normal'),
-                    anchor=name_anchor, width=sizes['driver'])  
-        name_label.grid(row=0, column=3, sticky='ew', padx=2)
-    
-        gap_label = tk.Label(row_frame, text=data['gap'], 
-                        fg='white', bg=row_frame['bg'], 
-                        font=('Arial', 9, 'bold' if data['is_player'] or self.bold_drivers else 'normal'), 
-                        anchor="w")
-        gap_label.grid(row=0, column=4, sticky='', padx=2)
-        
-        # Bind right-click to row frame and all labels for context menu
-        row_frame.bind("<Button-3>", lambda e: self.show_context_menu(e, data['driver_name']))
-        pos_label.bind("<Button-3>", lambda e: self.show_context_menu(e, data['driver_name']))
-        division_pos_label.bind("<Button-3>", lambda e: self.show_context_menu(e, data['driver_name']))
-        car_label.bind("<Button-3>", lambda e: self.show_context_menu(e, data['driver_name']))
-        name_label.bind("<Button-3>", lambda e: self.show_context_menu(e, data['driver_name']))
-        gap_label.bind("<Button-3>", lambda e: self.show_context_menu(e, data['driver_name']))
-        
-        # Store widget references
-        self.data_widgets[data['car_idx']] = {
-            'frame': row_frame,
-            'position': pos_label,
-            'division_position': division_pos_label,
-            'car_number': car_label,
-            'name': name_label,
-            'gap': gap_label
-        } 
-        
-    def update_existing_display(self, data):
-        """Update existing widgets with new data"""
-        for i, driver_data in enumerate(data):
-            car_idx = driver_data['car_idx']
-            if car_idx in self.data_widgets:
-                widgets = self.data_widgets[car_idx]
-                
-                # Get driver color
-                color = self.get_driver_color(driver_data['driver_name'])
-                
-                # Update row background for player
-                bg_color = '#1a1a1a' if driver_data['is_player'] else 'black'
-                widgets['frame'].configure(bg=bg_color)
-                
-                # Update font weight for player
-                font_weight = 'bold' if driver_data['is_player'] or self.bold_drivers else 'normal'
-                
-                # Update only if values changed
-                if widgets['position']['text'] != str(driver_data['position']):
-                    widgets['position'].config(text=str(driver_data['position']), fg=color, bg=bg_color,
-                                            font=('Arial', 9, font_weight))
 
-                if widgets['division_position']['text'] != str(driver_data['division_position']):
-                    widgets['division_position'].config(text=str(driver_data['division_position']), fg=color, bg=bg_color,
-                                            font=('Arial', 9, font_weight))
-                    
-                if widgets['car_number']['text'] != driver_data['car_number']:
-                    widgets['car_number'].config(text=driver_data['car_number'], fg=color, bg=bg_color,
-                                            font=('Arial', 9, font_weight))
-                
-                if widgets['name']['text'] != driver_data['driver_name']:
-                    widgets['name'].config(text=driver_data['driver_name'], fg=color, bg=bg_color,
-                                            font=('Arial', 9, font_weight))
-                    
-                if widgets['gap']['text'] != driver_data['gap']:
-                    widgets['gap'].config(text=driver_data['gap'], bg=bg_color,
-                                         font=('Arial', 9, font_weight))
-                                                  
-    def reorder_and_update_display(self, data):
-        """Reorder existing widgets and update their data without rebuilding"""
-        # Temporarily disable canvas updates
-        self.scrollable_frame.update_idletasks()
-    
-        # Get all current widget frames
-        existing_frames = []
-        for driver_data in data:
-            car_idx = driver_data['car_idx']
-            if car_idx in self.data_widgets:
-                existing_frames.append(self.data_widgets[car_idx]['frame'])
-    
-        # Repack frames in correct order
-        for i, frame in enumerate(existing_frames):
-            frame.pack_forget()
-    
-        for i, driver_data in enumerate(data):
-            car_idx = driver_data['car_idx']
-            if car_idx in self.data_widgets:
-                widgets = self.data_widgets[car_idx]
-                frame = widgets['frame']
-            
-                # Repack in correct position
-                frame.pack(fill=tk.X, padx=5, pady=1)
-            
-                # Update data
-                color = self.get_driver_color(driver_data['driver_name'])
-                bg_color = '#1a1a1a' if driver_data['is_player'] else 'black'
-                font_weight = 'bold' if driver_data['is_player'] else 'normal'
-            
-                # Update frame background
-                frame.configure(bg=bg_color)
-            
-                # Update all widgets at once
-                widgets['position'].config(text=str(driver_data['position']), fg=color, bg=bg_color,
-                                    font=('Arial', 9, font_weight))
-                widgets['division_position'].config(text=str(driver_data['division_position']), fg=color, bg=bg_color,
-                                    font=('Arial', 9, font_weight))
-                widgets['car_number'].config(text=driver_data['car_number'], fg=color, bg=bg_color,
-                                    font=('Arial', 9, font_weight))
-                widgets['name'].config(text=driver_data['driver_name'], fg=color, bg=bg_color,
-                                    font=('Arial', 9, font_weight))
-                widgets['gap'].config(text=driver_data['gap'], fg='white', bg=bg_color,
-                                    font=('Arial', 9, font_weight))   
-
-    def open_settings(self):
-        """Open the settings window"""
-        self.focus_bindings(False)
-        try:
-            settings_window = SettingsWindow(self)
-            # Wait for settings window to close before re-enabling focus bindings
-            self.root.wait_window(settings_window.window)
-        finally:
-            self.focus_bindings(True)
-
-    def refresh_driver_colors(self):
-        """Refresh all driver colors in the current display"""
-        self.driver_colors = self.load_color_config()
-        if hasattr(self, 'displayed_data') and self.displayed_data:
-            for driver_data in self.displayed_data:
-                self.update_driver_row_color(driver_data['driver_name'])           
-                            
-    def run(self):
-        """Run the application"""
-        try:
-            self.root.mainloop()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.running = False
-            if self.is_connected:
-                self.ir.shutdown()
-
-import tkinter as tk
-from tkinter import ttk, colorchooser, messagebox, filedialog
-import json
-import os
-
-class SettingsWindow:
-    def __init__(self, parent_app):
-        global VERSION  # Access the version variable
-        self.version = VERSION
-        self.parent_app = parent_app
-        self.window = tk.Toplevel(parent_app.root)
-        self.window.title("BB's League Overlay - Settings")
-        self.window.geometry("290x590")
-        self.window.configure(bg='#2b2b2b')
-        self.window.resizable(True, True)
+class SettingsDialog(QDialog):
+    """Settings dialog"""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent_overlay = parent
+        self.setWindowTitle("BB's League Overlay - Settings")
+        self.setModal(True)
+        self.setFixedSize(300, 670)
         
-        # Make window modal
-        self.window.transient(parent_app.root)
-        self.window.grab_set()
+        self.original_opacity = parent.opacity
         
-        # Center the window
-        self.center_window()
-        
-        # Store original values for cancel functionality
-        self.original_settings = self.get_current_settings()
-        
-        # Create the settings interface
         self.setup_ui()
         
-        # Handle window closing
-        self.window.protocol("WM_DELETE_WINDOW", self.on_cancel)
-        
-    def center_window(self):
-        """Center the settings window on the parent window"""
-        self.window.update_idletasks()
-        parent_x = self.parent_app.root.winfo_x()
-        parent_y = self.parent_app.root.winfo_y()
-        parent_width = self.parent_app.root.winfo_width()
-        parent_height = self.parent_app.root.winfo_height()
-        
-        settings_width = self.window.winfo_width()
-        settings_height = self.window.winfo_height()
-        
-        x = parent_x + (parent_width - settings_width) // 2
-        y = parent_y + (parent_height - settings_height) // 2
-        
-        self.window.geometry(f"+{x}+{y}")
-        
-    def get_current_settings(self):
-        """Get current settings from the parent application"""
-        return {
-            'opacity': self.parent_app.opacity,
-            'refresh_rate': self.parent_app.refresh_rate,
-            'width': self.parent_app.width,
-            'height': self.parent_app.height,
-            'hide_headers': self.parent_app.hide_headers,
-            'center_drivers': self.parent_app.center_drivers,
-            'bold_drivers': self.parent_app.bold_drivers,
-            'league_config': self.parent_app.color_config_file,
-            'division_colors': self.parent_app.available_colors.copy()
-        }
-        
     def setup_ui(self):
-        """Create the settings user interface"""
-        # Create main container without scrollbar
-        main_frame = tk.Frame(self.window, bg='#2b2b2b')
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        """Setup settings UI"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(5)
         
-        # Use main_frame directly as scrollable_frame
-        scrollable_frame = main_frame
-
-        # === DRIVER COLOR CONFIG SECTION ===
-        config_frame = tk.LabelFrame(scrollable_frame, text="Driver Color Configuration", 
-                                   bg='#2b2b2b', fg='white', font=('Arial', 10, 'bold'))
-        config_frame.pack(fill=tk.X, pady=5)
+        # Config section
+        config_group = QFrame()
+        config_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 5px; background-color: #333333; }")
+        config_layout = QVBoxLayout(config_group)
+        config_layout.setSpacing(8)
         
-        # Current config file
-        current_config_frame = tk.Frame(config_frame, bg='#2b2b2b')
-        current_config_frame.pack(fill=tk.X, padx=10, pady=5)
+        config_title = QLabel("Driver Color Configuration")
+        config_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
+        config_layout.addWidget(config_title)
         
-        tk.Label(current_config_frame, text="Current config file:", bg='#2b2b2b', fg='white', 
-               font=('Arial', 9)).pack(side=tk.LEFT)
-        self.config_file_var = tk.StringVar(value=os.path.basename(self.parent_app.color_config_file))
-        config_label = tk.Label(current_config_frame, textvariable=self.config_file_var, 
-                              bg='#404040', fg='white', font=('Arial', 9), relief='sunken')
-        config_label.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
+        # Current config row
+        config_file_layout = QHBoxLayout()
+        config_file_label = QLabel("Current config file:")
+        config_file_label.setStyleSheet("font-size: 9pt; color: white; border: none;")
+        config_file_layout.addWidget(config_file_label)
         
-        # Config file buttons
-        config_buttons_frame = tk.Frame(config_frame, bg='#2b2b2b')
-        config_buttons_frame.pack(fill=tk.X, padx=10, pady=5)
+        self.current_config_label = QLabel(os.path.basename(self.parent_overlay.color_config_file))
+        self.current_config_label.setStyleSheet("""
+            font-size: 8pt; 
+            color: white; 
+            border: none; 
+            background-color: #404040;
+            padding: 2px 6px;
+        """)
+        config_file_layout.addWidget(self.current_config_label, 1)
+        config_layout.addLayout(config_file_layout)
         
-        self.new_btn = tk.Button(config_buttons_frame, text="Create New Config", 
-                          command=self.create_new_config, bg='#404040', fg='white',
-                          font=('Arial', 9))
-        self.new_btn.pack(side=tk.LEFT, padx=(0, 5))
+        config_btn_layout = QHBoxLayout()
+        config_btn_layout.setSpacing(5)
         
-        self.load_btn = tk.Button(config_buttons_frame, text="Load Different Config", 
-                           command=self.load_config_file, bg='#404040', fg='white',
-                           font=('Arial', 9))
-        self.load_btn.pack(side=tk.LEFT)
+        new_config_btn = QPushButton("Create New")
+        new_config_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #404040;
+                color: white;
+                padding: 4px 8px;
+                border: none;
+                font-size: 8pt;
+            }
+            QPushButton:hover {
+                background-color: #505050;
+            }
+        """)
+        new_config_btn.clicked.connect(self.create_new_config)
+        config_btn_layout.addWidget(new_config_btn)
         
-        # === WINDOW SETTINGS SECTION ===
-        window_frame = tk.LabelFrame(scrollable_frame, text="Window Settings", 
-                                   bg='#2b2b2b', fg='white', font=('Arial', 10, 'bold'))
-        window_frame.pack(fill=tk.X, pady=5)
+        load_config_btn = QPushButton("Load")
+        load_config_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #404040;
+                color: white;
+                padding: 4px 8px;
+                border: none;
+                font-size: 8pt;
+            }
+            QPushButton:hover {
+                background-color: #505050;
+            }
+        """)
+        load_config_btn.clicked.connect(self.load_config)
+        config_btn_layout.addWidget(load_config_btn)
         
-        # Opacity setting
-        opacity_frame = tk.Frame(window_frame, bg='#2b2b2b')
-        opacity_frame.pack(fill=tk.X, padx=10, pady=5)
+        config_layout.addLayout(config_btn_layout)
+        layout.addWidget(config_group)
         
-        tk.Label(opacity_frame, text="Opacity:", bg='#2b2b2b', fg='white', font=('Arial', 9), anchor='sw').pack(side=tk.LEFT, anchor='sw')
-        self.opacity_var = tk.DoubleVar(value=self.parent_app.opacity)
-        self.opacity_scale = tk.Scale(opacity_frame, from_=0.1, to=1.0, resolution=0.05, 
-                                    orient=tk.HORIZONTAL, variable=self.opacity_var,
-                                    bg='#2b2b2b', fg='white', highlightthickness=0,
-                                    command=self.on_opacity_change)
-        self.opacity_scale.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
-
-        # Refresh Rate setting
-        refresh_frame = tk.Frame(window_frame, bg='#2b2b2b')
-        refresh_frame.pack(fill=tk.X, padx=10, pady=5)
+        # Window settings
+        window_group = QFrame()
+        window_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 5px; background-color: #333333; }")
+        window_layout = QVBoxLayout(window_group)
+        window_layout.setSpacing(8)
         
-        tk.Label(refresh_frame, text="Refresh Rate (sec):", bg='#2b2b2b', fg='white', font=('Arial', 9), anchor='sw').pack(side=tk.LEFT, anchor='sw')
-        self.refresh_rate_var = tk.DoubleVar(value=self.parent_app.refresh_rate)
-        self.refresh_scale = tk.Scale(refresh_frame, from_=0.5, to=5.0, resolution=0.5, 
-                                    orient=tk.HORIZONTAL, variable=self.refresh_rate_var,
-                                    bg='#2b2b2b', fg='white', highlightthickness=0)
-        self.refresh_scale.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(10, 0))
+        window_title = QLabel("Window Settings")
+        window_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
+        window_layout.addWidget(window_title)
         
-        # Window behavior settings
-        behavior_frame = tk.Frame(window_frame, bg='#2b2b2b')
-        behavior_frame.pack(fill=tk.X, padx=10, pady=5)
+        # Opacity with value display - 0.05 increments (20 steps per 1.0 = 2000 steps for 0-100)
+        opacity_row = QHBoxLayout()
+        opacity_label = QLabel("Opacity:")
+        opacity_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 100px;")
+        opacity_row.addWidget(opacity_label)
         
-        self.hide_headers_var = tk.BooleanVar(value=self.parent_app.hide_headers)
-        hide_check = tk.Checkbutton(behavior_frame, text="Auto-hide headers when not focused", 
-                                  variable=self.hide_headers_var, bg='#2b2b2b', fg='white',
-                                  selectcolor='#404040', font=('Arial', 9))
-        hide_check.pack(anchor='w')
+        self.opacity_slider = QSlider(Qt.Horizontal)
+        self.opacity_slider.setMinimum(2)  # 0.10
+        self.opacity_slider.setMaximum(20)  # 1.00
+        self.opacity_slider.setSingleStep(1)  # 0.05 increment
+        self.opacity_slider.setPageStep(1)
+        self.opacity_slider.setValue(int(self.parent_overlay.opacity * 20))
+        self.opacity_slider.valueChanged.connect(self.on_opacity_change)
+        opacity_row.addWidget(self.opacity_slider)
         
-        self.center_drivers_var = tk.BooleanVar(value=self.parent_app.center_drivers)
-        center_check = tk.Checkbutton(behavior_frame, text="Center driver names", 
-                                    variable=self.center_drivers_var, bg='#2b2b2b', fg='white',
-                                    selectcolor='#404040', font=('Arial', 9))
-        center_check.pack(anchor='w')
+        self.opacity_value_label = QLabel(f"{self.parent_overlay.opacity:.2f}")
+        self.opacity_value_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 35px;")
+        self.opacity_slider.valueChanged.connect(
+            lambda v: self.opacity_value_label.setText(f"{v/20:.2f}")
+        )
+        opacity_row.addWidget(self.opacity_value_label)
+        window_layout.addLayout(opacity_row)
         
-        self.bold_drivers_var = tk.BooleanVar(value=self.parent_app.bold_drivers)
-        center_check = tk.Checkbutton(behavior_frame, text="Bold all driver rows", 
-                                    variable=self.bold_drivers_var, bg='#2b2b2b', fg='white',
-                                    selectcolor='#404040', font=('Arial', 9))
-        center_check.pack(anchor='w')
+        # Refresh rate with value display - 0.25 increments (4 steps per 1.0 = 40 steps for 0-10)
+        refresh_row = QHBoxLayout()
+        refresh_label = QLabel("Refresh Rate (sec):")
+        refresh_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 100px;")
+        refresh_row.addWidget(refresh_label)
         
-        # === DIVISION COLORS SECTION ===
-        colors_frame = tk.LabelFrame(scrollable_frame, text="Division Colors", 
-                                   bg='#2b2b2b', fg='white', font=('Arial', 10, 'bold'))
-        colors_frame.pack(fill=tk.X, pady=5)
+        self.refresh_slider = QSlider(Qt.Horizontal)
+        self.refresh_slider.setMinimum(1)  # 0.25 seconds
+        self.refresh_slider.setMaximum(20)  # 5.0 seconds
+        self.refresh_slider.setSingleStep(1)  # 0.25 increment
+        self.refresh_slider.setPageStep(1)
+        self.refresh_slider.setValue(int(self.parent_overlay.refresh_rate * 4))
+        refresh_row.addWidget(self.refresh_slider)
         
-        # Create color selection widgets
-        self.color_vars = {}
+        self.refresh_value_label = QLabel(f"{self.parent_overlay.refresh_rate:.2f}")
+        self.refresh_value_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 35px;")
+        self.refresh_slider.valueChanged.connect(
+            lambda v: self.refresh_value_label.setText(f"{v/4:.2f}")
+        )
+        refresh_row.addWidget(self.refresh_value_label)
+        window_layout.addLayout(refresh_row)
+        
+        # Checkboxes
+        self.hide_headers_cb = QCheckBox("Auto-hide headers")
+        self.hide_headers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.hide_headers_cb.setChecked(self.parent_overlay.hide_headers)
+        window_layout.addWidget(self.hide_headers_cb)
+        
+        self.center_drivers_cb = QCheckBox("Center driver names")
+        self.center_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.center_drivers_cb.setChecked(self.parent_overlay.center_drivers)
+        window_layout.addWidget(self.center_drivers_cb)
+        
+        self.bold_drivers_cb = QCheckBox("Bold all driver rows")
+        self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.bold_drivers_cb.setChecked(self.parent_overlay.bold_drivers)
+        window_layout.addWidget(self.bold_drivers_cb)
+        
+        layout.addWidget(window_group)
+        
+        # Division colors
+        colors_group = QFrame()
+        colors_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 5px; background-color: #333333; }")
+        colors_layout = QVBoxLayout(colors_group)
+        colors_layout.setSpacing(8)
+        
+        colors_title = QLabel("Division Colors")
+        colors_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
+        colors_layout.addWidget(colors_title)
+        
         self.color_buttons = {}
+        self.color_value_labels = {}
         
-        for i, (division, color) in enumerate(self.parent_app.available_colors.items()):
-            if division == "Default":
-                continue  # Skip default color in settings
+        for division in ["Pro", "ProAm", "Am", "Rookie"]:
+            if division not in self.parent_overlay.available_colors:
+                continue
                 
-            color_row = tk.Frame(colors_frame, bg='#2b2b2b')
-            color_row.pack(fill=tk.X, padx=10, pady=3)
+            color = self.parent_overlay.available_colors[division]
             
-            # Division name label
-            tk.Label(color_row, text=f"{division}:", bg='#2b2b2b', fg='white', 
-                   font=('Arial', 9), width=12, anchor='w').pack(side=tk.LEFT)
+            color_row = QHBoxLayout()
+            color_row.setSpacing(5)
             
-            # Color display button
-            self.color_vars[division] = tk.StringVar(value=color)
-            color_btn = tk.Button(color_row, text="     ", 
-                                command=lambda d=division: self.choose_color(d),
-                                bg=color, width=8, relief='raised', borderwidth=2)
-            color_btn.pack(side=tk.LEFT, padx=5)
+            div_label = QLabel(f"{division}:")
+            div_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 50px;")
+            color_row.addWidget(div_label)
+            
+            color_btn = QPushButton()
+            color_btn.setFixedSize(80, 30)
+            color_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color};
+                    border: 2px solid #555555;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #777777;
+                }}
+            """)
+            color_btn.clicked.connect(lambda checked, d=division: self.choose_color(d))
             self.color_buttons[division] = color_btn
+            color_row.addWidget(color_btn)
             
-            # Color value label
-            color_value_label = tk.Label(color_row, textvariable=self.color_vars[division], 
-                                       bg='#404040', fg='white', font=('Arial', 8), 
-                                       width=10, relief='sunken')
-            color_value_label.pack(side=tk.LEFT, padx=(5, 0))
+            color_value = QLabel(color)
+            color_value.setStyleSheet("""
+                border: none; 
+                color: white; 
+                font-size: 9pt; 
+                background-color: #404040;
+                padding: 2px 4px;
+                min-width: 60px;
+            """)
+            self.color_value_labels[division] = color_value
+            color_row.addWidget(color_value)
+            
+            color_row.addStretch()
+            colors_layout.addLayout(color_row)
         
-        # === BUTTONS SECTION ===
-        button_frame = tk.Frame(scrollable_frame, bg='#2b2b2b')
-        button_frame.pack(fill=tk.X, pady=20)
+        layout.addWidget(colors_group)
         
-        # Top row with Cancel and Apply
-        top_button_frame = tk.Frame(button_frame, bg='#2b2b2b')
-        top_button_frame.pack(fill=tk.X)
+        layout.addStretch()
         
-        # Cancel button on upper left
-        cancel_btn = tk.Button(top_button_frame, text="Cancel", command=self.on_cancel,
-                             bg='#f44336', fg='white', font=('Arial', 10, 'bold'),
-                             width=15)
-        cancel_btn.pack(side=tk.LEFT)
+        # Buttons - Top row with Cancel and Apply
+        top_button_layout = QHBoxLayout()
+        top_button_layout.setSpacing(5)
         
-        # Apply button on upper right
-        apply_btn = tk.Button(top_button_frame, text="Apply Settings", command=self.apply_settings,
-                            bg='#4CAF50', fg='white', font=('Arial', 10, 'bold'),
-                            width=15)
-        apply_btn.pack(side=tk.RIGHT)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                font-size: 9pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+        """)
+        cancel_btn.clicked.connect(self.on_cancel)
+        top_button_layout.addWidget(cancel_btn)
+        
+        apply_btn = QPushButton("Apply Settings")
+        apply_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                font-size: 9pt;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        apply_btn.clicked.connect(self.apply_settings)
+        top_button_layout.addWidget(apply_btn)
+        
+        layout.addLayout(top_button_layout)
         
         # Reset button centered below
-        reset_btn = tk.Button(button_frame, text="Reset to Defaults", command=self.reset_to_defaults,
-                            bg='#FF9800', fg='white', font=('Arial', 10),
-                            width=15)
-        reset_btn.pack(pady=(10, 0))
+        reset_btn = QPushButton("Reset to Defaults")
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                padding: 6px 12px;
+                border: none;
+                font-size: 9pt;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+        """)
+        reset_btn.clicked.connect(self.reset_to_defaults)
+        layout.addWidget(reset_btn)
+        
+        # Version with update link if available
+        if hasattr(self.parent_overlay, 'latest_version') and self.parent_overlay.latest_version:
+            version_text = f"Version {VERSION} | <a href='https://leagueoverlay.com/download.php' style='color: #4CAF50;'>Update to v{self.parent_overlay.latest_version}</a>"
+            version_label = QLabel(version_text)
+            version_label.setOpenExternalLinks(True)
+        else:
+            version_label = QLabel(f"Version {VERSION}")
 
-        # Version number at the bottom
-        version_frame = tk.Frame(scrollable_frame, bg='#2b2b2b')
-        version_frame.pack(fill=tk.X, pady=(20, 0))
-
-        version_label = tk.Label(version_frame, text=f"Version {VERSION}", 
-                            bg='#2b2b2b', fg='#888888', font=('Arial', 8),
-                            anchor='center')
-        version_label.pack()
+        version_label.setAlignment(Qt.AlignCenter)
+        version_label.setStyleSheet("color: #888888; font-size: 8pt;")
+        layout.addWidget(version_label)
+        
+        # Overall styling
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #2b2b2b;
+            }
+            QSlider::groove:horizontal {
+                background: #444444;
+                height: 4px;
+            }
+            QSlider::handle:horizontal {
+                background: white;
+                width: 12px;
+                height: 12px;
+                margin: -4px 0;
+                border-radius: 6px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #e0e0e0;
+            }
+            QCheckBox {
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
+                background-color: #404040;
+                border: 1px solid #666666;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4CAF50;
+                border: 1px solid #4CAF50;
+            }
+        """)
         
     def on_opacity_change(self, value):
-        """Handle opacity slider change - apply immediately for preview"""
-        try:
-            opacity = float(value)
-            self.parent_app.root.attributes('-alpha', opacity)
-        except:
-            pass
-            
-    def choose_color(self, division):
-        """Open color chooser for division color"""
-        current_color = self.color_vars[division].get()
-        color = colorchooser.askcolor(color=current_color, title=f"Choose {division} Color")
+        """Preview opacity change"""
+        opacity = value / 20.0
+        self.parent_overlay.opacity = opacity
+        self.parent_overlay.update_all_backgrounds()
         
-        if color[1]:  # If user didn't cancel
-            new_color = color[1]
-            self.color_vars[division].set(new_color)
-            self.color_buttons[division].config(bg=new_color)
+    def choose_color(self, division):
+        """Choose color for division"""
+        current_color = self.parent_overlay.available_colors[division]
+        color = QColorDialog.getColor(QColor(current_color), self, f"Choose {division} Color")
+        
+        if color.isValid():
+            new_color = color.name()
+            self.parent_overlay.available_colors[division] = new_color
+            self.color_buttons[division].setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {new_color};
+                    border: 2px solid #555555;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #777777;
+                }}
+            """)
+            self.color_value_labels[division].setText(new_color)
             
-    def load_config_file(self):
-        """Load a different league configuration file"""
-        file_path = filedialog.askopenfilename(
-            title="Select Division Color Config File",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            initialdir="."
+    def create_new_config(self):
+        """Create new config file"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Create New League Config File",
+            ".",
+            "JSON files (*.json);;All files (*.*)"
+        )
+        
+        if file_path:
+            try:
+                empty_config = {'drivers': []}
+                with open(file_path, 'w') as f:
+                    json.dump(empty_config, f, indent=2)
+                
+                self.parent_overlay.color_config_file = file_path
+                self.parent_overlay.driver_colors = empty_config
+                self.current_config_label.setText(os.path.basename(file_path))
+                self.parent_overlay.signals.refresh_colors.emit()
+                
+                QMessageBox.information(self, "Success", "Config file created successfully!")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to create config file: {e}")
+                
+    def load_config(self):
+        """Load different config file"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Division Color Config File",
+            ".",
+            "JSON files (*.json);;All files (*.*)"
         )
         
         if file_path:
             try:
                 with open(file_path, 'r') as f:
                     config_data = json.load(f)
-                    
-                # Update the config file path
-                self.parent_app.color_config_file = file_path
-                self.config_file_var.set(os.path.basename(file_path))
                 
-                # Update color variables and buttons (keep existing divisions that aren't in config)
-                for division in self.color_vars.keys():
-                    if division in config_data:
-                        # Find the color from division name
-                        for driver_name, div_name in config_data.items():
-                            if div_name == division:
-                                color = self.parent_app.available_colors.get(division, "#FFFFFF")
-                                self.color_vars[division].set(color)
-                                self.color_buttons[division].config(bg=color)
-                                break
-                            
-                self.parent_app.refresh_driver_colors()
-                # Show brief confirmation
-                original_text = self.load_btn['text']
-                self.load_btn.config(text="Config Loaded ✓", bg='#4CAF50')
-                self.window.after(1000, lambda: self.load_btn.config(text=original_text, bg='#555555'))
+                self.parent_overlay.color_config_file = file_path
+                self.parent_overlay.driver_colors = config_data
+                self.current_config_label.setText(os.path.basename(file_path))
+                self.parent_overlay.signals.refresh_colors.emit()
                 
+                QMessageBox.information(self, "Success", "Config file loaded successfully!")
             except Exception as e:
-                messagebox.showerror("Error", f"Failed to load config file: {e}")
-                
-    def create_new_config(self):
-        """Create a new empty league configuration file"""
-        file_path = filedialog.asksaveasfilename(
-            title="Create New League Config File",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            initialdir=".",
-            defaultextension=".json"
-        )
-        
-        if file_path:
-            try:
-                # Create empty config file
-                empty_config = {}
-                with open(file_path, 'w') as f:
-                    json.dump(empty_config, f, indent=2)
-                
-                # Update the config file path
-                self.parent_app.color_config_file = file_path
-                self.config_file_var.set(os.path.basename(file_path))
-                
-                self.parent_app.refresh_driver_colors()
-                # Show brief confirmation
-                original_text = self.new_btn['text']
-                self.new_btn.config(text="Config Created ✓", bg='#4CAF50')
-                self.window.after(1000, lambda: self.new_btn.config(text=original_text, bg='#555555'))
-                
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to create config file: {e}")
+                QMessageBox.critical(self, "Error", f"Failed to load config file: {e}")
                 
     def reset_to_defaults(self):
-        """Reset all settings to default values"""
-        result = messagebox.askyesno("Reset to Defaults", 
-                                   "Are you sure you want to reset all settings to their default values?")
+        """Reset to default settings"""
+        reply = QMessageBox.question(
+            self,
+            "Reset to Defaults",
+            "Are you sure you want to reset all settings to their default values?",
+            QMessageBox.Yes | QMessageBox.No
+        )
         
-        if result:
-            # Reset window settings
-            self.opacity_var.set(1.0)
-            self.refresh_rate_var.set(2.0)
-            self.hide_headers_var.set(False)
-            self.center_drivers_var.set(False)
-            self.bold_drivers_var.set(False)
+        if reply == QMessageBox.Yes:
+            self.opacity_slider.setValue(20)  # 1.0
+            self.refresh_slider.setValue(8)  # 2.0 seconds (8 * 0.25)
+            self.hide_headers_cb.setChecked(False)
+            self.center_drivers_cb.setChecked(False)
+            self.bold_drivers_cb.setChecked(False)
             
-            # Reset division colors to defaults
             default_colors = {
                 "Pro": "#FF8C00",
-                "ProAm": "#9370DB", 
+                "ProAm": "#9370DB",
                 "Am": "#45B3E0",
                 "Rookie": "#FF2000"
             }
             
-            for division, default_color in default_colors.items():
-                if division in self.color_vars:
-                    self.color_vars[division].set(default_color)
-                    self.color_buttons[division].config(bg=default_color)
-                    
-            # Apply opacity immediately for preview
-            self.parent_app.root.attributes('-alpha', 1.0)
-            self.apply_settings(False)
+            for division, color in default_colors.items():
+                if division in self.color_buttons:
+                    self.parent_overlay.available_colors[division] = color
+                    self.color_buttons[division].setStyleSheet(f"""
+                        QPushButton {{
+                            background-color: {color};
+                            border: 2px solid #555555;
+                        }}
+                        QPushButton:hover {{
+                            border: 2px solid #777777;
+                        }}
+                    """)
+                    self.color_value_labels[division].setText(color)
             
-    def apply_settings(self, isDestroyWindow = True):
-        """Apply all settings and save to config"""
+            self.parent_overlay.opacity = 1.0
+            self.parent_overlay.update_all_backgrounds()
+
+    def apply_settings(self):
+        """Apply all settings"""
         try:
-            # Update parent application settings
-            self.parent_app.opacity = self.opacity_var.get()
-            self.parent_app.refresh_rate = self.refresh_rate_var.get()
-            self.parent_app.hide_headers = self.hide_headers_var.get()
-            self.parent_app.center_drivers = self.center_drivers_var.get()
-            self.parent_app.bold_drivers = self.bold_drivers_var.get()
+            self.parent_overlay.opacity = self.opacity_slider.value() / 20.0
+            self.parent_overlay.refresh_rate = self.refresh_slider.value() / 4.0  # Changed from /10 to /4
+            self.parent_overlay.hide_headers = self.hide_headers_cb.isChecked()
+            self.parent_overlay.center_drivers = self.center_drivers_cb.isChecked()
+            self.parent_overlay.bold_drivers = self.bold_drivers_cb.isChecked()
+
+            self.parent_overlay.update_all_backgrounds()
             
-            # Update division colors
-            for division, color_var in self.color_vars.items():
-                self.parent_app.available_colors[division] = color_var.get()
+            # Save and refresh
+            self.parent_overlay.save_settings()
+            self.parent_overlay.signals.refresh_colors.emit()
             
-            # Apply window changes
-            self.parent_app.root.attributes('-alpha', self.parent_app.opacity)
-            self.parent_app.root.geometry(f"{self.parent_app.width}x{self.parent_app.height}")
-            
-            # Handle header hiding change
-            if self.parent_app.hide_headers:
-                self.parent_app.focus_bindings(True)
-                if not self.parent_app.top_elements_visible:
-                    self.parent_app.hide_top_elements()
-            else:
-                self.parent_app.focus_bindings(False)
-                if not self.parent_app.top_elements_visible:
-                    self.parent_app.show_top_elements()
-            
-            # Force layout refresh
-            self.parent_app.refresh_layout()
-            
-            # Save settings
-            self.parent_app.save_settings()
-            
-            if isDestroyWindow:
-                # Close settings window
-                self.window.destroy()
-            
+            self.accept()
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to apply settings: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to apply settings: {e}")
             
     def on_cancel(self):
-        """Handle cancel - restore original opacity and close"""
-        # Restore original opacity
-        self.parent_app.root.attributes('-alpha', self.original_settings['opacity'])
-        self.window.destroy()
+        """Cancel settings"""
+        self.parent_overlay.opacity = self.original_opacity
+        self.parent_overlay.update_all_backgrounds()
+        self.reject()
+
+
+def main():
+    app = QApplication(sys.argv)
+    
+    # Set application style
+    app.setStyle('Fusion')
+    
+    # Dark palette
+    palette = QPalette()
+    palette.setColor(QPalette.Window, QColor(43, 43, 43))
+    palette.setColor(QPalette.WindowText, Qt.white)
+    palette.setColor(QPalette.Base, QColor(25, 25, 25))
+    palette.setColor(QPalette.AlternateBase, QColor(43, 43, 43))
+    palette.setColor(QPalette.Text, Qt.white)
+    palette.setColor(QPalette.Button, QColor(43, 43, 43))
+    palette.setColor(QPalette.ButtonText, Qt.white)
+    palette.setColor(QPalette.Highlight, QColor(85, 85, 85))
+    palette.setColor(QPalette.HighlightedText, Qt.white)
+    app.setPalette(palette)
+    
+    overlay = LeagueOverlay()
+    overlay.show()
+    
+    sys.exit(app.exec())
+
 
 if __name__ == "__main__":
-    try:
-        app = leagueOverlay()
-        app.run()
-    except Exception as e:
-        import traceback
-        with open('error_log.txt', 'w') as f:
-            f.write(f"Error: {e}\n")
-            f.write(traceback.format_exc())
-        # Show error dialog if possible
-        try:
-            import tkinter.messagebox as msgbox
-            msgbox.showerror("Error", f"An error occurred: {e}")
-        except:
-            pass
+    main()
