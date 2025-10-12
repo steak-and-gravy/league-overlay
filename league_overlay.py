@@ -42,6 +42,9 @@ import threading
 import time
 import json
 import os
+from enum import Enum
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple, Any, Set
 import irsdk
 import urllib.request
 from packaging import version
@@ -55,7 +58,142 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, Signal, QObject, QPoint, QSize
 from PySide6.QtGui import QColor, QPalette, QFont, QCursor, QPainter, QMouseEvent
 
-VERSION = "0.9.7"
+VERSION = "0.9.7.1"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CONFIGURATION CONSTANTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+class SessionType(Enum):
+    """iRacing session types."""
+    PRACTICE = "Practice"
+    QUALIFY = "Qualify"
+    RACE = "Race"
+
+
+class SessionState(Enum):
+    """iRacing session states."""
+    INVALID = 0
+    GET_IN_CAR = 1
+    WARMUP = 2
+    PARADE_LAPS = 3
+    RACING = 4
+    CHECKERED = 5
+    COOL_DOWN = 6
+
+
+class ColorScheme(Enum):
+    """Available color schemes for driver rows."""
+    DEFAULT = "Default"
+    ALTERNATE = "Alternate"
+    OUTLINE = "Outline"
+
+
+@dataclass(frozen=True)
+class UIConfig:
+    """UI configuration constants."""
+    # Font size configurations
+    FONT_SIZES: Dict[str, Dict[str, Any]] = None
+
+    # Default division colors
+    DEFAULT_COLORS: Dict[str, str] = None
+
+    # Auto-center settings
+    MANUAL_SCROLL_TIMEOUT: float = 5.0  # seconds
+    GUI_UPDATE_INTERVAL: int = 250  # milliseconds
+
+    # Column proportions
+    POSITION_COL_PROPORTION: float = 0.12
+    DRIVER_COL_PROPORTION: float = 0.65
+    GAP_COL_PROPORTION: float = 0.23
+
+    def __post_init__(self):
+        if self.FONT_SIZES is None:
+            object.__setattr__(self, 'FONT_SIZES', {
+                "Small": {
+                    "title": "8.5pt",
+                    "button": "8pt",
+                    "status": "8pt",
+                    "header": "8pt",
+                    "data": "8pt",
+                    "spacing": 2
+                },
+                "Medium": {
+                    "title": "9.5pt",
+                    "button": "8.5pt",
+                    "status": "9pt",
+                    "header": "9pt",
+                    "data": "9pt",
+                    "spacing": 3
+                },
+                "Large": {
+                    "title": "10.5pt",
+                    "button": "9pt",
+                    "status": "10pt",
+                    "header": "10pt",
+                    "data": "10pt",
+                    "spacing": 4
+                },
+                "Extra Large": {
+                    "title": "11.5pt",
+                    "button": "9.5pt",
+                    "status": "11pt",
+                    "header": "11pt",
+                    "data": "11pt",
+                    "spacing": 5
+                }
+            })
+
+        if self.DEFAULT_COLORS is None:
+            object.__setattr__(self, 'DEFAULT_COLORS', {
+                "Pro": "#FF8C00",
+                "ProAm": "#9370DB",
+                "Am": "#45B3E0",
+                "Rookie": "#FF2000",
+                "Default": "#FFFFFF"
+            })
+
+
+@dataclass(frozen=True)
+class FileConfig:
+    """File path configuration constants."""
+    SETTINGS_FILE: str = "LeagueOverlay.config"
+    DIVISIONS_FILE: str = "league_divisions.json"
+
+
+@dataclass(frozen=True)
+class TelemetryConfig:
+    """Telemetry configuration constants."""
+    DEFAULT_REFRESH_RATE: float = 2.0  # seconds
+    MIN_REFRESH_RATE: float = 0.25
+    MAX_REFRESH_RATE: float = 5.0
+
+    # iRacing SDK constants
+    MAX_CARS: int = 64
+    INACTIVE_POSITION: int = 0
+    INVALID_LAP: int = -1
+    INVALID_LAP_PCT: float = -1.0
+
+
+# Global configuration instances
+UI_CONFIG = UIConfig()
+FILE_CONFIG = FileConfig()
+TELEMETRY_CONFIG = TelemetryConfig()
+
+
+@dataclass
+class DriverData:
+    """Data structure for a single driver's information."""
+    position: int
+    division_position: int
+    car_number: str
+    driver_name: str
+    driver_info: Dict[str, str]
+    gap: str
+    car_idx: int
+    is_player: bool
+    division: Optional[str] = None
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CRITICAL iRACING SDK VARIABLES USED IN THIS APPLICATION
@@ -205,44 +343,397 @@ CRITICAL EDGE CASES:
    → Filter by CarClassID before processing
 """
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SECTION 1: RACING DOMAIN LOGIC
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# These classes handle racing-specific logic independent of UI:
+# - DivisionManager: Driver-to-division assignments and colors
+# - GapCalculator: Time/distance gap calculations
+# - RaceStateTracker: Race finish state machine
+#
+# TO SPLIT: Move this entire section to racing_logic.py
+# ═══════════════════════════════════════════════════════════════════════════
+
+class DivisionManager:
+    """Manages driver-to-division assignments and color configuration.
+
+    Responsibilities:
+    - Load/save division configuration from/to JSON file
+    - Assign drivers to divisions (Pro, ProAm, Am, Rookie)
+    - Provide division colors for UI rendering
+    - Handle default division colors
+    """
+
+    def __init__(self, config_file: str = FILE_CONFIG.DIVISIONS_FILE):
+        """Initialize division manager.
+
+        Args:
+            config_file: Path to JSON file containing driver-division mappings
+        """
+        self.config_file = config_file
+        self.driver_colors: Dict[str, Dict[str, str]] = {}
+        self.division_colors: Dict[str, str] = UI_CONFIG.DEFAULT_COLORS.copy()
+        self.load_config()
+
+    def load_config(self) -> None:
+        """Load driver-division mappings from config file."""
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, 'r') as f:
+                    data = json.load(f)
+                    self.driver_colors = data.get('drivers', {})
+                    self.division_colors = data.get('division_colors', UI_CONFIG.DEFAULT_COLORS.copy())
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Error loading division config: {e}")
+                self.driver_colors = {}
+                self.division_colors = UI_CONFIG.DEFAULT_COLORS.copy()
+        else:
+            self.driver_colors = {}
+            self.division_colors = UI_CONFIG.DEFAULT_COLORS.copy()
+
+    def save_config(self) -> None:
+        """Save driver-division mappings to config file."""
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump({
+                    'drivers': self.driver_colors,
+                    'division_colors': self.division_colors
+                }, f, indent=2)
+        except IOError as e:
+            print(f"Error saving division config: {e}")
+
+    def get_driver_division(self, driver_info: Dict[str, str]) -> Optional[str]:
+        """Get the division assigned to a driver.
+
+        Args:
+            driver_info: Dictionary with 'UserID' and 'UserName' keys
+
+        Returns:
+            Division name (e.g., "Pro", "ProAm") or None if not assigned
+        """
+        user_id = driver_info.get('UserID', '')
+        user_name = driver_info.get('UserName', '')
+
+        for division_info in self.driver_colors:
+            if division_info['id'] == user_id:
+                return division_info.get('division')
+            if division_info['name'] == user_name:
+                return division_info.get('division')
+        return None
+
+    def set_driver_division(self, driver_info: Dict[str, str], division: str) -> None:
+        """Assign a driver to a division or remove assignment.
+
+        Args:
+            driver_info: Dictionary with 'UserID' and 'UserName' keys
+            division: Division name to assign (e.g., "Pro", "ProAm", "Am", "Rookie")
+                     or "Default" to remove the driver from config
+
+        Note:
+            Setting division to "Default" removes the driver from the config,
+            causing them to display with the default white color.
+        """
+        user_id = str(driver_info.get('UserID', ''))
+        user_name = driver_info.get('UserName', '')
+
+        # Use UserID as primary key, fallback to UserName
+        key = user_id if user_id else user_name
+
+        if key:
+            if division == "Default":
+                # Remove driver from config (they'll get default white color)
+                if key in self.driver_colors:
+                    del self.driver_colors[key]
+            else:
+                # Add or update driver's division assignment
+                self.driver_colors[key] = {
+                    'division': division,
+                    'UserName': user_name,
+                    'UserID': user_id
+                }
+            self.save_config()
+
+    def get_division_color(self, division: Optional[str]) -> str:
+        """Get the color hex code for a division.
+
+        Args:
+            division: Division name (e.g., "Pro", "ProAm")
+
+        Returns:
+            Hex color code (e.g., "#FF8C00")
+        """
+        if division and division in self.division_colors:
+            return self.division_colors[division]
+        return self.division_colors.get("Default", "#FFFFFF")
+
+    def set_division_color(self, division: str, color: str) -> None:
+        """Set the color for a division.
+
+        Args:
+            division: Division name
+            color: Hex color code
+        """
+        self.division_colors[division] = color
+        self.save_config()
+
+
+class GapCalculator:
+    """Calculates and formats time/distance gaps between cars.
+
+    Responsibilities:
+    - Calculate time-based gaps using iRacing telemetry
+    - Calculate lap-based gaps for cars on different laps
+    - Format gap strings for display (e.g., "5.3", "2L", "Leader")
+    - Handle edge cases (disconnected cars, invalid data)
+    """
+
+    @staticmethod
+    def calculate_time_gap(est_time_ahead: float, est_time_behind: float) -> Optional[float]:
+        """Calculate time gap in seconds between two cars.
+
+        Args:
+            est_time_ahead: Estimated time for car ahead (from CarIdxEstTime)
+            est_time_behind: Estimated time for car behind (from CarIdxEstTime)
+
+        Returns:
+            Time gap in seconds, or None if data invalid
+        """
+        if est_time_ahead > 0 and est_time_behind > 0:
+            gap = est_time_ahead - est_time_behind
+            return gap if gap >= 0 else gap * -1
+        return None
+
+    @staticmethod
+    def calculate_lap_gap(lap_ahead, lap_behind) -> int:
+        """Calculate lap difference between two cars based on lap + possibly distance.
+
+        Args:
+            lap_ahead: Lap number + optionally current lap distance of car ahead
+            lap_behind: Lap number + optionally current lap distance of car behind
+
+        Returns:
+            Number of laps behind (always >= 0)
+        """
+        gap = lap_ahead - lap_behind
+        return int(gap) if gap > 0 else 0
+
+    @staticmethod
+    def format_gap_display(time_gap: Optional[float] = None,
+                          lap_gap: int = 0,
+                          is_leader: bool = False,
+                          is_disconnected: bool = False) -> str:
+        """Format gap for display in UI.
+
+        Args:
+            time_gap: Time gap in seconds (None if not on same lap)
+            lap_gap: Number of laps behind
+            is_leader: Whether this is the race leader
+            is_disconnected: Whether driver is disconnected
+
+        Returns:
+            Formatted gap string (e.g., "Leader", "5.3", "2L", "(DC)")
+        """
+        if is_disconnected:
+            return "(DC)"
+
+        if is_leader:
+            return "Leader"
+
+        if lap_gap > 0:
+            return f"{lap_gap}L"
+
+        if time_gap is not None:
+            if time_gap < 60:
+                return f"{time_gap:.1f}"
+            else:
+                minutes = int(time_gap // 60)
+                seconds = time_gap % 60
+                gap = f"{minutes}:{seconds:04.1f}"
+
+        return "-"
+
+
+class RaceStateTracker:
+    """Tracks race finish state machine and completed laps after checkered flag.
+
+    State Machine:
+    - RACING: Normal racing, no checkered flag yet
+    - CHECKERED_WAVED: Checkered flag shown, waiting for leader to finish
+    - LEADER_FINISHED: Leader completed, tracking other cars finishing
+
+    Responsibilities:
+    - Track when checkered flag waves
+    - Detect when each car completes their finish lap
+    - Freeze positions and gaps when cars finish
+    - Handle disconnected drivers in final results
+    """
+
+    def __init__(self):
+        """Initialize race state tracker."""
+        self.reset()
+
+    def reset(self) -> None:
+        """Reset all finish tracking state (called on session change)."""
+        self.leader_finished: bool = False
+        self.finished_drivers: Set[int] = set()
+        self.leader_car_idx: Optional[int] = None
+        self.leader_last_lap: Optional[int] = None
+        self.final_gaps: Dict[int, str] = {}
+        self.driver_snapshots: Dict[int, Dict[str, Any]] = {}
+
+    def is_racing(self) -> bool:
+        """Check if race is still in progress (not finished).
+
+        Returns:
+            True if race is ongoing, False if checkered flag waved
+        """
+        return self.leader_last_lap is None
+
+    def set_checkered_flag(self, leader_car_idx: int, leader_lap: int) -> None:
+        """Mark checkered flag as waved and record leader state.
+
+        Args:
+            leader_car_idx: Car index of current leader
+            leader_lap: Current lap number of leader
+        """
+        if self.leader_last_lap is None:
+            self.leader_car_idx = leader_car_idx
+            self.leader_last_lap = leader_lap
+
+    def mark_driver_finished(self, car_idx: int, gap: str, official_position: int) -> None:
+        """Mark a driver as having completed their finish lap.
+
+        Args:
+            car_idx: Car index of finished driver
+            gap: Final gap string to freeze
+            official_position: Final official position
+        """
+        if car_idx not in self.finished_drivers:
+            self.finished_drivers.add(car_idx)
+            self.final_gaps[car_idx] = gap
+
+            if car_idx == self.leader_car_idx:
+                self.leader_finished = True
+
+            # Store final position in snapshot
+            if car_idx in self.driver_snapshots:
+                self.driver_snapshots[car_idx]['official_position'] = official_position
+
+    def is_driver_finished(self, car_idx: int) -> bool:
+        """Check if a driver has finished their race.
+
+        Args:
+            car_idx: Car index to check
+
+        Returns:
+            True if driver has completed their finish lap
+        """
+        return car_idx in self.finished_drivers
+
+    def get_final_gap(self, car_idx: int) -> Optional[str]:
+        """Get the frozen gap for a finished driver.
+
+        Args:
+            car_idx: Car index
+
+        Returns:
+            Frozen gap string, or None if not finished
+        """
+        return self.final_gaps.get(car_idx)
+
+    def update_snapshot(self, car_idx: int, snapshot_data: Dict[str, Any]) -> None:
+        """Update or create driver snapshot with current state.
+
+        Args:
+            car_idx: Car index
+            snapshot_data: Dictionary with driver state (lap, position, etc.)
+        """
+        self.driver_snapshots[car_idx] = snapshot_data
+
+    def get_snapshot(self, car_idx: int) -> Optional[Dict[str, Any]]:
+        """Get stored snapshot for a driver.
+
+        Args:
+            car_idx: Car index
+
+        Returns:
+            Snapshot dictionary or None if not found
+        """
+        return self.driver_snapshots.get(car_idx)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SECTION 2: UI COMPONENTS
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# These classes provide UI-specific functionality:
+# - DataUpdateSignal: Thread-safe signals for telemetry → UI communication
+# - CustomSizeGrip: Custom resize grip for frameless window
+# - SettingsDialog: Settings/preferences dialog (defined later in file)
+#
+# TO SPLIT: Move this section (and SettingsDialog below) to ui_components.py
+# ═══════════════════════════════════════════════════════════════════════════
+
 class DataUpdateSignal(QObject):
-    """Signal emitter for thread-safe GUI updates"""
+    """Signal emitter for thread-safe GUI updates.
+
+    Emits signals from telemetry thread to UI thread for safe updates.
+    """
     update_data = Signal(list)
     update_status = Signal(str, str)  # text, color
     refresh_colors = Signal()
 
 class CustomSizeGrip(QSizeGrip):
-    """Custom size grip with conditional visibility and icon"""
-    def __init__(self, parent):
+    """Custom size grip widget with transparent background and conditional visibility.
+
+    Shows diagonal arrow pattern when parent window has focus, allows window resizing.
+    """
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        """Initialize custom size grip.
+
+        Args:
+            parent: Parent widget
+        """
         super().__init__(parent)
-        self.parent_window = None
+        self.parent_window: Optional[QMainWindow] = None
         # Make the widget background transparent
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
-    def set_parent_window(self, window):
-        """Set reference to parent window for focus checking"""
+    def set_parent_window(self, window: QMainWindow) -> None:
+        """Set reference to parent window for focus checking.
+
+        Args:
+            window: Parent main window reference
+        """
         self.parent_window = window
 
-    def paintEvent(self, event):
-        """Custom paint to show diagonal arrows when focused with transparent background"""
+    def paintEvent(self, event) -> None:
+        """Custom paint to show diagonal arrows when focused with transparent background.
+
+        Args:
+            event: Paint event
+        """
         # Don't call super().paintEvent() to avoid default rendering
-        
+
         if self.parent_window and self.parent_window.hasFocus():
             painter = QPainter(self)
             painter.setRenderHint(QPainter.Antialiasing)
-            
+
             # Make background fully transparent
             painter.setCompositionMode(QPainter.CompositionMode_Source)
             painter.fillRect(self.rect(), Qt.transparent)
             painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
-            
+
             # Draw diagonal arrows
             painter.setPen(QColor("#888888"))
-            
+
             # Draw diagonal double arrow pattern
             size = self.width()
             spacing = 4
-            
+
             # Draw three diagonal lines to create arrow effect
             for i in range(3):
                 offset = i * spacing
@@ -251,8 +742,23 @@ class CustomSizeGrip(QSizeGrip):
                     offset + 3, size - 3 - offset
                 )
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SECTION 3: MAIN APPLICATION CLASS
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# This is the main application window that orchestrates everything:
+# - LeagueOverlay: Main window, telemetry processing, UI rendering
+#
+# TO SPLIT: Keep this in league_overlay.py (main file)
+# Import: from racing_logic import DivisionManager, GapCalculator, RaceStateTracker
+# Import: from ui_components import DataUpdateSignal, CustomSizeGrip, SettingsDialog
+# ═══════════════════════════════════════════════════════════════════════════
+
 class LeagueOverlay(QMainWindow):
     """
+    Main application window for iRacing race position overlay.
+
     KEY INSTANCE VARIABLES - DATA STRUCTURES & THEIR LIFECYCLE
     ============================================================
 
@@ -368,71 +874,44 @@ class LeagueOverlay(QMainWindow):
         self.current_division_filter = None  # Active spectator division filter
         self.division_cycle_order = ["Pro", "ProAm", "Am", "Rookie", "All"]
 
-        # Font size mappings
-        self.font_sizes = {
-            "Small": {
-                "title": "8.5pt",
-                "button": "8pt",
-                "status": "8pt",
-                "header": "8pt",
-                "data": "8pt",
-                "spacing": 2
-            },
-            "Medium": {
-                "title": "9.5pt",
-                "button": "8.5pt",
-                "status": "9pt",
-                "header": "9pt",
-                "data": "9pt",
-                "spacing": 3
-            },
-            "Large": {
-                "title": "10.5pt",
-                "button": "9pt",
-                "status": "10pt",
-                "header": "10pt",
-                "data": "10pt",
-                "spacing": 4
-            },
-            "Extra Large": {
-                "title": "11.5pt",
-                "button": "9.5pt",
-                "status": "11pt",
-                "header": "11pt",
-                "data": "11pt",
-                "spacing": 5
-            }
-        }
-        
-        # Data tracking
-        self.driver_snapshots = {}
-        self.current_session_num = None
-        self.current_session_type = None
-        self.update_check_done = False
-        self.latest_version = None
-        self.leader_finished = False
-        self.finished_drivers = set()
-        self.leader_car_idx = None
-        self.leader_last_lap = None
-        self.player_car_class_id = None
-        self.final_gaps = {}  # Store final gaps for finished drivers
-        
-        # Color configuration
-        self.color_config_file = "league_divisions.json"
-        self.settings_file = "LeagueOverlay.config"
-        self.driver_colors = self.load_color_config()
+        # Font size mappings (use UI_CONFIG)
+        self.font_sizes = UI_CONFIG.FONT_SIZES
+
+        # ═══════════════════════════════════════════════════════════
+        # HELPER CLASSES - Extracted responsibilities
+        # ═══════════════════════════════════════════════════════════
+        self.division_manager = DivisionManager(FILE_CONFIG.DIVISIONS_FILE)
+        self.race_state_tracker = RaceStateTracker()
+        self.gap_calculator = GapCalculator()
+
+        # Session tracking
+        self.current_session_num: Optional[int] = None
+        self.current_session_type: Optional[str] = None
+        self.player_car_class_id: Optional[int] = None
+
+        # Update checking
+        self.update_check_done: bool = False
+        self.latest_version: Optional[str] = None
+
+        # Configuration files
+        self.settings_file = FILE_CONFIG.SETTINGS_FILE
         self.load_settings()
-        
-        # Division colors
-        self.default_colors = {
-            "Pro": "#FF8C00",
-            "ProAm": "#9370DB",
-            "Am": "#45B3E0",
-            "Rookie": "#FF2000",
-            "Default": "#FFFFFF"
-        }
-        self.available_colors = self.load_division_colors()
-        
+
+        # Legacy compatibility - keep references for backward compatibility
+        # These delegate to the helper classes
+        self.driver_colors = self.division_manager.driver_colors
+        self.available_colors = self.division_manager.division_colors
+        self.default_colors = UI_CONFIG.DEFAULT_COLORS
+
+        # Race state tracking - maintain direct references for compatibility
+        # These are also tracked in race_state_tracker, but kept here for legacy code
+        self.driver_snapshots: Dict[int, Dict[str, Any]] = {}
+        self.leader_finished: bool = False
+        self.finished_drivers: Set[int] = set()
+        self.leader_car_idx: Optional[int] = None
+        self.leader_last_lap: Optional[int] = None
+        self.final_gaps: Dict[int, str] = {}
+
         # ═══════════════════════════════════════════════════════════
         # DATA STRUCTURES - What race_data and displayed_data contain
         # ═══════════════════════════════════════════════════════════
@@ -1170,6 +1649,10 @@ class LeagueOverlay(QMainWindow):
                     if league_config and os.path.exists(league_config):
                         self.color_config_file = league_config
                         self.driver_colors = self.load_color_config()
+
+                        # IMPORTANT: Also reload the DivisionManager with the custom config
+                        self.division_manager = DivisionManager(league_config)
+                        self.available_colors = self.division_manager.division_colors
                     if data.get('opacity'):
                         self.opacity = data.get('opacity')
                     if data.get('refresh_rate'):
@@ -1248,47 +1731,42 @@ class LeagueOverlay(QMainWindow):
         except Exception as e:
             print(f"Failed to save settings: {e}")
             
-    def save_color_config(self):
-        """Save color configuration"""
+    def save_color_config(self) -> None:
+        """Save color configuration - delegates to DivisionManager.
+
+        Purpose: Called when user changes driver division assignments via
+        right-click context menu. Ensures changes are persisted.
+
+        Note: This method delegates to DivisionManager.save_config() to maintain
+        single source of truth for division persistence logic.
+        """
         try:
-            with open(self.color_config_file, 'w') as f:
-                json.dump(self.driver_colors, f, indent=2)
+            self.division_manager.save_config()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save color config: {e}")
-            
-    def get_driver_division(self, driver_info):
-        """Get the assigned division for a driver from the config file.
+
+    def get_driver_division(self, driver_info: Dict[str, str]) -> Optional[str]:
+        """Get the assigned division for a driver - delegates to DivisionManager.
 
         Lookup priority:
         1. Match by UserID (most reliable, survives name changes)
         2. Match by UserName (fallback)
         3. Return None if not found (will use "Default" color)
 
-        The division name (Pro, ProAm, Am, Rookie) maps to a color in available_colors.
+        Args:
+            driver_info: Dictionary with 'UserID' and 'UserName' keys
+
+        Returns:
+            Division name ("Pro", "ProAm", "Am", "Rookie") or None
+
+        Note:
+            This method now delegates to DivisionManager to avoid duplicate logic.
+            The division name maps to a color in available_colors.
         """
-        user_id = driver_info.get('UserID', '')
-        user_name = driver_info.get('UserName', '')
+        return self.division_manager.get_driver_division(driver_info)
 
-        if 'drivers' not in self.driver_colors:
-            return None
-
-        # Try matching by ID first (most reliable)
-        if user_id:
-            for driver in self.driver_colors['drivers']:
-                driver_id = driver.get('id', '')
-                if driver_id and driver_id == user_id:
-                    return driver.get('division')
-
-        # Fallback to name matching
-        if user_name:
-            for driver in self.driver_colors['drivers']:
-                if driver.get('name') == user_name:
-                    return driver.get('division')
-
-        return None
-        
-    def set_driver_division(self, driver_info, division_name):
-        """Assign a driver to a division (or remove assignment).
+    def set_driver_division(self, driver_info: Dict[str, str], division_name: str) -> None:
+        """Assign a driver to a division - delegates to DivisionManager.
 
         This is called from the right-click context menu on driver rows.
         Changes are immediately saved to the config file and UI refreshes.
@@ -1297,46 +1775,21 @@ class LeagueOverlay(QMainWindow):
             driver_info: Dict with 'UserID' and 'UserName'
             division_name: "Pro", "ProAm", "Am", "Rookie", or "Default"
                           "Default" removes the driver from the config
+
+        Note:
+            This method now delegates to DivisionManager for the actual assignment,
+            then triggers UI refresh. Single source of truth for division logic.
         """
-        user_id = driver_info.get('UserID', '')
-        user_name = driver_info.get('UserName', '')
+        # Delegate to DivisionManager for assignment logic
+        self.division_manager.set_driver_division(driver_info, division_name)
 
-        if 'drivers' not in self.driver_colors:
-            self.driver_colors['drivers'] = []
+        # Update legacy self.driver_colors reference for backward compatibility
+        self.driver_colors = self.division_manager.driver_colors
 
-        # Check if driver already has an entry
-        existing_entry = None
-        for i, driver in enumerate(self.driver_colors['drivers']):
-            driver_id = driver.get('id', '')
-            driver_name = driver.get('name', '')
-
-            if (user_id and driver_id == user_id) or (user_name and driver_name == user_name):
-                existing_entry = i
-                break
-
-        if division_name == "Default":
-            # Remove driver from config (they'll get default white color)
-            if existing_entry is not None:
-                self.driver_colors['drivers'].pop(existing_entry)
-        else:
-            # Add or update driver's division assignment
-            entry = {'division': division_name}
-            if user_name:
-                entry['name'] = user_name
-            if user_id:
-                entry['id'] = user_id
-            
-            if existing_entry is not None:
-                old_entry = self.driver_colors['drivers'][existing_entry]
-                if not user_id and 'id' in old_entry:
-                    entry['id'] = old_entry['id']
-                if not user_name and 'name' in old_entry:
-                    entry['name'] = old_entry['name']
-                self.driver_colors['drivers'][existing_entry] = entry
-            else:
-                self.driver_colors['drivers'].append(entry)
-        
+        # Save configuration
         self.save_color_config()
+
+        # Refresh UI to show new color
         self.update_driver_row_color(driver_info)
         
     def update_driver_row_color(self, driver_info):
@@ -1807,7 +2260,7 @@ class LeagueOverlay(QMainWindow):
             pass
         return 90
     
-    def reset_fields(self):
+    def reset_fields(self) -> None:
         """Clear all session-specific tracking data.
 
         Purpose: Called when switching sessions (practice->qualify->race) or when
@@ -1817,12 +2270,9 @@ class LeagueOverlay(QMainWindow):
         carry over to the next session. Each session needs clean state.
 
         Clears:
-            - driver_snapshots: Position tracking for all cars
-            - leader_finished: Race finish tracking flag
-            - finished_drivers: Set of cars that have finished
-            - leader_last_lap: The lap number when checkered waved
-            - player_car_idx/class: Player identification (re-detected each session)
-            - final_gaps: Frozen gaps for finished drivers
+            - Race state tracker (finish tracking, snapshots, gaps)
+            - Player identification (car_idx and class_id)
+            - Legacy state variables for backward compatibility
 
         Called by:
             - Session number change detection in process_telemetry()
@@ -1830,14 +2280,20 @@ class LeagueOverlay(QMainWindow):
 
         Assumptions: None - safe to call at any time
         """
+        # Clear legacy state variables (still used by existing code)
         self.driver_snapshots = {}
         self.leader_finished = False
         self.finished_drivers = set()
         self.leader_car_idx = None
         self.leader_last_lap = None
+        self.final_gaps = {}
+
+        # Also reset the race state tracker for consistency
+        self.race_state_tracker.reset()
+
+        # Clear player identification
         self.player_car_idx = None
         self.player_car_class_id = None
-        self.final_gaps = {}
         
     def process_telemetry(self):
         """Process telemetry data"""
@@ -1961,8 +2417,9 @@ class LeagueOverlay(QMainWindow):
                 current_color_position = division_positions.get(car_idx, position)
                 
                 # GAP CALCULATION: Show time/distance behind the car ahead in the same division
+                # Now uses GapCalculator for consistent formatting
                 if current_color_position == 1:
-                    gap = "Leader"  # First in their division
+                    gap = GapCalculator.format_gap_display(is_leader=True)
                 elif car_idx in self.finished_drivers:
                     # Once finished, gap is frozen from the last update before crossing the line
                     gap = self.final_gaps.get(car_idx, "")
@@ -1998,36 +2455,35 @@ class LeagueOverlay(QMainWindow):
                             # Car ahead has finished, use frozen gap
                             gap = self.final_gaps.get(car_idx, "")
                         else:
-                            # Both cars still racing - calculate live time gap
+                            # Both cars still racing - calculate live time gap using GapCalculator
                             car_idx_est_time = live_data['CarIdxEstTime']
                             current_est_time = car_idx_est_time[car_idx]
                             ahead_est_time = car_idx_est_time[car_ahead_idx]
 
-                            time_gap = 0.0
+                            time_gap_raw = None
                             # If both cars on same lap, use iRacing's estimated time (most accurate)
                             if current_est_time > 0 and ahead_est_time > 0 and same_color_drivers[current_pos_index - 1]['current_lap'] == driver['current_lap']:
-                                time_gap = ahead_est_time - current_est_time
+                                # Use GapCalculator for time gap calculation
+                                time_gap_raw = GapCalculator.calculate_time_gap(ahead_est_time, current_est_time)
                             else:
                                 # Different laps - estimate gap based on track position difference
-                                time_gap = (same_color_drivers[current_pos_index - 1]['total_track_position'] - driver['total_track_position']) * self.get_fastest_lap_time(current_session)
+                                position_diff = same_color_drivers[current_pos_index - 1]['total_track_position'] - driver['total_track_position']
+                                time_gap_raw = position_diff * self.get_fastest_lap_time(current_session)
 
+                            # Calculate exact lap distance difference for lap-based gaps
                             lap_difference = same_color_drivers[current_pos_index - 1]['total_track_position'] - driver['total_track_position']
+                            lap_gap = GapCalculator.calculate_lap_gap(same_color_drivers[current_pos_index - 1]['total_track_position'], driver['total_track_position'])
 
-                            # Format gap display
-                            if lap_difference > 1:
-                                # More than 1 lap down - show as "2L", "3L", etc.
-                                gap = f"{int(lap_difference)}L"
-                            else:
-                                # Less than 1 lap - show time gap
-                                if time_gap < 0:
-                                    time_gap *= -1
-                                if time_gap < 60:
-                                    gap = f"{time_gap:.1f}"  # "5.3" seconds
-                                else:
-                                    # Over a minute - show as "1:05.3"
-                                    minutes = int(time_gap // 60)
-                                    seconds = time_gap % 60
-                                    gap = f"{minutes}:{seconds:04.1f}"
+                            # Use GapCalculator to format the gap display
+                            # Handle negative time gaps (shouldn't happen but be safe)
+                            if time_gap_raw is not None and time_gap_raw < 0:
+                                time_gap_raw = abs(time_gap_raw)
+
+                            # Use GapCalculator for standard formatting
+                            gap = GapCalculator.format_gap_display(
+                                time_gap=time_gap_raw,
+                                lap_gap=lap_gap
+                            )
 
                             # Store gap continuously - used when driver finishes to freeze the display
                             if gap and gap != "":
@@ -2035,16 +2491,19 @@ class LeagueOverlay(QMainWindow):
                     else:
                         gap = ""
                 else:
+                    # Practice/Qualifying: Calculate gap based on best lap times
                     same_color_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
                     same_color_drivers.sort(key=lambda x: x['position'])
-                    
+
                     if len(same_color_drivers) >= current_color_position - 1:
                         car_ahead_idx = same_color_drivers[current_color_position - 2]['car_idx']
                         current_best = self.get_best_lap_from_session_info(current_session, car_idx)
                         ahead_best = self.get_best_lap_from_session_info(current_session, car_ahead_idx)
                         if current_best > 0 and ahead_best > 0:
-                            time_gap = current_best - ahead_best
-                            gap = f"{time_gap:.3f}"
+                            # Calculate gap (current - ahead, so positive = behind)
+                            time_gap_raw = current_best - ahead_best
+                            # Format to 3 decimal places for practice/quali precision
+                            gap = f"{time_gap_raw:.3f}"
                         else:
                             gap = ""
                     else:
@@ -2538,6 +2997,16 @@ class LeagueOverlay(QMainWindow):
         if event.button() == Qt.LeftButton:
             self.save_settings()
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SECTION 4: SETTINGS DIALOG (UI Component)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Settings dialog for user preferences and configuration:
+# - SettingsDialog: Modal dialog for overlay configuration
+#
+# TO SPLIT: Move this section to ui_components.py (with Section 2 components)
+# ═══════════════════════════════════════════════════════════════════════════
 
 class SettingsDialog(QDialog):
     """Modal settings dialog for configuring overlay appearance and behavior.
@@ -3039,6 +3508,10 @@ class SettingsDialog(QDialog):
                 self.parent_overlay.color_config_file = file_path
                 self.parent_overlay.driver_colors = empty_config
                 self.current_config_label.setText(os.path.basename(file_path))
+
+                # IMPORTANT: Also reload the DivisionManager with the custom config
+                self.parent_overlay.division_manager = DivisionManager(file_path)
+                self.parent_overlay.available_colors = self.parent_overlay.division_manager.division_colors
                 self.parent_overlay.signals.refresh_colors.emit()
                 
                 QMessageBox.information(self, "Success", "Config file created successfully!")
@@ -3062,6 +3535,10 @@ class SettingsDialog(QDialog):
                 self.parent_overlay.color_config_file = file_path
                 self.parent_overlay.driver_colors = config_data
                 self.current_config_label.setText(os.path.basename(file_path))
+
+                # IMPORTANT: Also reload the DivisionManager with the custom config
+                self.parent_overlay.division_manager = DivisionManager(file_path)
+                self.parent_overlay.available_colors = self.parent_overlay.division_manager.division_colors
                 self.parent_overlay.signals.refresh_colors.emit()
                 
                 QMessageBox.information(self, "Success", "Config file loaded successfully!")
@@ -3137,6 +3614,17 @@ class SettingsDialog(QDialog):
         self.parent_overlay.update_all_backgrounds()
         self.reject()
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SECTION 5: APPLICATION ENTRY POINT
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Main function to start the application:
+# - main(): Initialize Qt application and show main window
+# - if __name__ == '__main__': Entry point when run as script
+#
+# TO SPLIT: Keep this in league_overlay.py (main file)
+# ═══════════════════════════════════════════════════════════════════════════
 
 def main():
     app = QApplication(sys.argv)
