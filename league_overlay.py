@@ -58,7 +58,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, Signal, QObject, QPoint, QSize
 from PySide6.QtGui import QColor, QPalette, QFont, QCursor, QPainter, QMouseEvent
 
-VERSION = "0.9.7.3"
+VERSION = "0.9.7.4"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -366,18 +366,20 @@ class DivisionManager:
     - Handle default division colors
     """
 
-    def __init__(self, config_file: str = FILE_CONFIG.DIVISIONS_FILE):
+    def __init__(self, config_file: str = FILE_CONFIG.DIVISIONS_FILE, settings_file: str = FILE_CONFIG.SETTINGS_FILE):
         """Initialize division manager.
 
         Args:
             config_file: Path to JSON file containing driver-division mappings
         """
         self.config_file = config_file
+        self.settings_file = settings_file
         self.driver_colors: dict[str, list] = {'drivers': []}
-        self.division_colors: Dict[str, str] = UI_CONFIG.DEFAULT_COLORS.copy()
-        self.load_config()
+        self.division_colors: dict[str, str] = UI_CONFIG.DEFAULT_COLORS.copy()
+        self.load_driver_config()
+        self.load_division_config()
 
-    def load_config(self) -> None:
+    def load_driver_config(self) -> None:
         """Load driver-division mappings from config file."""
         if os.path.exists(self.config_file):
             try:
@@ -393,6 +395,20 @@ class DivisionManager:
         else:
             self.driver_colors = {'drivers': []}
 
+    def load_division_config(self) -> None:
+        """Load division colors"""
+        if os.path.exists(self.settings_file):
+            try:
+                with open(self.settings_file, 'r') as f:
+                    data = json.load(f)
+                    division_colors = data.get('division_colors', {})
+                    self.division_colors.update(division_colors)
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Error loading division colors: {e}")
+                self.division_colors = UI_CONFIG.DEFAULT_COLORS.copy()
+        else:
+            self.division_colors = UI_CONFIG.DEFAULT_COLORS.copy()
+ 
     def save_config(self) -> None:
         """Save driver-division mappings to config file."""
         try:
@@ -569,7 +585,7 @@ class GapCalculator:
             else:
                 minutes = int(time_gap // 60)
                 seconds = time_gap % 60
-                gap = f"{minutes}:{seconds:04.1f}"
+                return f"{minutes}:{seconds:04.1f}"
 
         return "-"
 
