@@ -32,7 +32,7 @@ KEY CONCEPTS:
    - Frameless, always-on-top window
    - Auto-hide headers on mouse leave (optional)
    - Auto-center on player (allows manual scroll but auto-centers again after 5 seconds)
-   - Three color schemes: Default, Alternate, Outline
+   - Three color styles: Default, Alternate, Outline
    - Adjustable opacity, refresh rate, and font sizes
    - Opacity setting affects background but text stays at full opacity
 """
@@ -58,7 +58,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, Signal, QObject, QPoint, QSize
 from PySide6.QtGui import QColor, QPalette, QFont, QCursor, QPainter, QMouseEvent
 
-VERSION = "0.9.7.4"
+VERSION = "0.9.7.5"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -83,8 +83,8 @@ class SessionState(Enum):
     COOL_DOWN = 6
 
 
-class ColorScheme(Enum):
-    """Available color schemes for driver rows."""
+class ColorStyle(Enum):
+    """Available color styles for driver rows."""
     DEFAULT = "Default"
     ALTERNATE = "Alternate"
     OUTLINE = "Outline"
@@ -904,7 +904,7 @@ class LeagueOverlay(QMainWindow):
         self.center_drivers = False  # Center driver names in column
         self.bold_drivers = True  # Bold all driver names
         self.font_size = "Medium"  # Small, Medium, Large, Extra Large
-        self.row_color_scheme = "Default"  # Default, Alternate, Outline
+        self.row_color_style = "Default"  # Default, Alternate, Outline
         self.top_elements_visible = True  # Current visibility of title/status
         self.current_division_filter = None  # Active spectator division filter
         self.division_cycle_order = ["Pro", "ProAm", "Am", "Rookie", "All"]
@@ -929,6 +929,7 @@ class LeagueOverlay(QMainWindow):
         self.latest_version: Optional[str] = None
 
         # Configuration files
+        self.color_config_file = "league_divisions.json"
         self.settings_file = FILE_CONFIG.SETTINGS_FILE
         self.load_settings()
 
@@ -1096,7 +1097,7 @@ class LeagueOverlay(QMainWindow):
         """Calculate the inverse/complementary color for maximum contrast.
 
         Purpose: Currently unused, but intended for future features that might
-        need high contrast text on colored backgrounds (like Alternate color scheme).
+        need high contrast text on colored backgrounds (like Alternate color style).
 
         Args:
             color_hex: Hex color like "#FF8C00"
@@ -1127,7 +1128,7 @@ class LeagueOverlay(QMainWindow):
     def update_all_backgrounds(self):
         """Refresh all UI backgrounds, fonts, and styling after settings change.
 
-        Purpose: When user changes opacity, font size, or color scheme in settings,
+        Purpose: When user changes opacity, font size, or color style in settings,
         we need to update all existing UI elements to reflect the new values.
 
         Why this exists: Qt doesn't automatically update stylesheets when variables
@@ -1666,7 +1667,7 @@ class LeagueOverlay(QMainWindow):
         Settings loaded:
             - Window position (x, y) and size (width, height)
             - Opacity and refresh rate
-            - Font size and color scheme
+            - Font size and color style
             - UI preferences (hide_headers, center_drivers, bold_drivers)
             - Division color customizations
             - Path to league-specific driver config file
@@ -1708,8 +1709,8 @@ class LeagueOverlay(QMainWindow):
                         self.bold_drivers = data.get('bold_drivers')
                     if data.get('font_size'):
                         self.font_size = data.get('font_size')
-                    if data.get('row_color_scheme'):
-                        self.row_color_scheme = data.get('row_color_scheme')
+                    if data.get('row_color_style'):
+                        self.row_color_style = data.get('row_color_style')
             except:
                 pass
                 
@@ -1759,7 +1760,7 @@ class LeagueOverlay(QMainWindow):
                 'center_drivers': self.center_drivers,
                 'bold_drivers': self.bold_drivers,
                 'font_size': self.font_size,
-                'row_color_scheme': self.row_color_scheme
+                'row_color_style': self.row_color_style
             }
             with open(self.settings_file, 'w') as f:
                 json.dump(settings, f, indent=2)
@@ -2687,19 +2688,19 @@ class LeagueOverlay(QMainWindow):
         scrollbar.setValue(int(target_scroll))
         
     def create_driver_row(self, driver_data):
-        """Create a driver row widget with styling based on color scheme.
+        """Create a driver row widget with styling based on color style.
 
-        Three color schemes supported:
+        Three color styles supported:
         1. Default: Black background, colored text, player gets gradient glow
         2. Alternate: Colored background, black text, player gets white border
         3. Outline: Black background, colored border and text, player gets gradient glow
         """
         driver_color = self.get_driver_color(driver_data.get('driver_info', {}))
 
-        # Determine styling based on selected color scheme
+        # Determine styling based on selected color style
         is_player = driver_data.get('is_player', False)
 
-        if self.row_color_scheme == "Alternate":
+        if self.row_color_style == "Alternate":
             # ALTERNATE SCHEME: Division color fills the entire row background
             # Alternate: colored background, black text
             base_bg = driver_color
@@ -2727,7 +2728,7 @@ class LeagueOverlay(QMainWindow):
                 container_widget = None
                 border_style = ""
 
-        elif self.row_color_scheme == "Outline":
+        elif self.row_color_style == "Outline":
             # OUTLINE SCHEME: Black background with colored border and text
             base_bg = "#000000"
             text_color = driver_color
@@ -2757,13 +2758,13 @@ class LeagueOverlay(QMainWindow):
             container_widget = None
 
         layout = QGridLayout(row_widget)
-        if self.row_color_scheme == "Outline":
+        if self.row_color_style == "Outline":
             # No spacing for outline mode to avoid inner cell borders
             layout.setContentsMargins(3, 2, 3, 2)
             layout.setSpacing(0)
             layout.setHorizontalSpacing(0)
             layout.setVerticalSpacing(0)
-        elif self.row_color_scheme == "Alternate" and is_player:
+        elif self.row_color_style == "Alternate" and is_player:
             # Same spacing as non-player rows to show cell borders
             layout.setContentsMargins(2, 2, 2, 2)
             layout.setSpacing(2)
@@ -2780,15 +2781,15 @@ class LeagueOverlay(QMainWindow):
         font_weight = "bold" if driver_data.get('is_player', False) or self.bold_drivers else "normal"
 
         # Handle label backgrounds and borders
-        if self.row_color_scheme == "Outline":
+        if self.row_color_style == "Outline":
             # Outline mode: transparent labels, no borders
             label_bg = "transparent"
             label_border = "border: none;"
-        elif self.row_color_scheme == "Alternate" and is_player:
+        elif self.row_color_style == "Alternate" and is_player:
             # Alternate player row: with cell borders
             label_bg = self.get_bg_color(base_bg) if 'base_bg' in locals() else self.get_bg_color('#000000')
             label_border = ""
-        elif is_player and self.row_color_scheme == "Default":
+        elif is_player and self.row_color_style == "Default":
             # For gradient background in Default, use tinted color for labels
             label_bg = self.blend_color_with_black(driver_color, 0.25)
             label_border = ""
@@ -3054,7 +3055,7 @@ class SettingsDialog(QDialog):
         - Window opacity (0.10 to 1.00 in 0.05 increments)
         - Refresh rate (0.25 to 5.0 seconds in 0.25 increments)
         - Font size (Small/Medium/Large/Extra Large)
-        - Row color scheme (Default/Alternate/Outline)
+        - Row color style (Default/Alternate/Outline)
         - UI preferences (auto-hide headers, center names, bold rows)
         - Division colors (customize Pro/ProAm/Am/Rookie colors)
 
@@ -3245,16 +3246,16 @@ class SettingsDialog(QDialog):
         font_size_row.addWidget(self.font_size_combo)
         window_layout.addLayout(font_size_row)
 
-        # Row color scheme selector
-        color_scheme_row = QHBoxLayout()
-        color_scheme_label = QLabel("Row Color Scheme:")
-        color_scheme_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 100px;")
-        color_scheme_row.addWidget(color_scheme_label)
+        # Row color style selector
+        color_style_row = QHBoxLayout()
+        color_style_label = QLabel("Row Color Style:")
+        color_style_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 100px;")
+        color_style_row.addWidget(color_style_label)
 
-        self.color_scheme_combo = QComboBox()
-        self.color_scheme_combo.addItems(["Default", "Alternate", "Outline"])
-        self.color_scheme_combo.setCurrentText(self.parent_overlay.row_color_scheme)
-        self.color_scheme_combo.setStyleSheet("""
+        self.color_style_combo = QComboBox()
+        self.color_style_combo.addItems(["Default", "Alternate", "Outline"])
+        self.color_style_combo.setCurrentText(self.parent_overlay.row_color_style)
+        self.color_style_combo.setStyleSheet("""
             QComboBox {
                 background-color: #404040;
                 color: white;
@@ -3283,8 +3284,8 @@ class SettingsDialog(QDialog):
                 border: 1px solid #555555;
             }
         """)
-        color_scheme_row.addWidget(self.color_scheme_combo)
-        window_layout.addLayout(color_scheme_row)
+        color_style_row.addWidget(self.color_style_combo)
+        window_layout.addLayout(color_style_row)
 
         # Checkboxes
         self.hide_headers_cb = QCheckBox("Auto-hide headers")
@@ -3596,7 +3597,7 @@ class SettingsDialog(QDialog):
             self.center_drivers_cb.setChecked(False)
             self.bold_drivers_cb.setChecked(True)
             self.font_size_combo.setCurrentText("Medium")
-            self.color_scheme_combo.setCurrentText("Default")
+            self.color_style_combo.setCurrentText("Default")
             
             default_colors = {
                 "Pro": "#FF8C00",
@@ -3631,7 +3632,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.center_drivers = self.center_drivers_cb.isChecked()
             self.parent_overlay.bold_drivers = self.bold_drivers_cb.isChecked()
             self.parent_overlay.font_size = self.font_size_combo.currentText()
-            self.parent_overlay.row_color_scheme = self.color_scheme_combo.currentText()
+            self.parent_overlay.row_color_style = self.color_style_combo.currentText()
 
             self.parent_overlay.update_all_backgrounds()
 
