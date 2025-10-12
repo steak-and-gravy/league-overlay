@@ -58,7 +58,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, Signal, QObject, QPoint, QSize
 from PySide6.QtGui import QColor, QPalette, QFont, QCursor, QPainter, QMouseEvent
 
-VERSION = "0.9.7.1"
+VERSION = "0.9.7.3"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -373,7 +373,7 @@ class DivisionManager:
             config_file: Path to JSON file containing driver-division mappings
         """
         self.config_file = config_file
-        self.driver_colors: Dict[str, Dict[str, str]] = {}
+        self.driver_colors: dict[str, list] = {'drivers': []}
         self.division_colors: Dict[str, str] = UI_CONFIG.DEFAULT_COLORS.copy()
         self.load_config()
 
@@ -383,24 +383,21 @@ class DivisionManager:
             try:
                 with open(self.config_file, 'r') as f:
                     data = json.load(f)
-                    self.driver_colors = data.get('drivers', {})
-                    self.division_colors = data.get('division_colors', UI_CONFIG.DEFAULT_COLORS.copy())
+                    if 'drivers' in data:
+                        self.driver_colors = data
+                    else:
+                        self.driver_colors = {'drivers': []}
             except (json.JSONDecodeError, IOError) as e:
                 print(f"Error loading division config: {e}")
-                self.driver_colors = {}
-                self.division_colors = UI_CONFIG.DEFAULT_COLORS.copy()
+                self.driver_colors = {'drivers': []}
         else:
-            self.driver_colors = {}
-            self.division_colors = UI_CONFIG.DEFAULT_COLORS.copy()
+            self.driver_colors = {'drivers': []}
 
     def save_config(self) -> None:
         """Save driver-division mappings to config file."""
         try:
             with open(self.config_file, 'w') as f:
-                json.dump({
-                    'drivers': self.driver_colors,
-                    'division_colors': self.division_colors
-                }, f, indent=2)
+                json.dump(self.driver_colors, f, indent=2)
         except IOError as e:
             print(f"Error saving division config: {e}")
 
@@ -416,11 +413,13 @@ class DivisionManager:
         user_id = driver_info.get('UserID', '')
         user_name = driver_info.get('UserName', '')
 
-        for division_info in self.driver_colors:
-            if division_info['id'] == user_id:
-                return division_info.get('division')
-            if division_info['name'] == user_name:
-                return division_info.get('division')
+        for driver in self.driver_colors['drivers']:
+            driver_id = driver.get('id', '')
+            if driver_id and driver_id == user_id:
+                return driver.get('division')
+            if driver.get('name') == user_name:
+                return driver.get('division')
+
         return None
 
     def set_driver_division(self, driver_info: Dict[str, str], division: str) -> None:
@@ -435,24 +434,44 @@ class DivisionManager:
             Setting division to "Default" removes the driver from the config,
             causing them to display with the default white color.
         """
-        user_id = str(driver_info.get('UserID', ''))
+        user_id = driver_info.get('UserID', '')
         user_name = driver_info.get('UserName', '')
 
-        # Use UserID as primary key, fallback to UserName
-        key = user_id if user_id else user_name
+        if 'drivers' not in self.driver_colors:
+            self.driver_colors['drivers'] = []
 
-        if key:
-            if division == "Default":
-                # Remove driver from config (they'll get default white color)
-                if key in self.driver_colors:
-                    del self.driver_colors[key]
+        # Check if driver already has an entry
+        existing_entry = None
+        for i, driver in enumerate(self.driver_colors['drivers']):
+            driver_id = driver.get('id', '')
+            driver_name = driver.get('name', '')
+
+            if (user_id and driver_id == user_id) or (user_name and driver_name == user_name):
+                existing_entry = i
+                break
+
+        if division == "Default":
+            # Remove driver from config (they'll get default white color)
+            if existing_entry is not None:
+                self.driver_colors['drivers'].pop(existing_entry)
+        else:
+            # Add or update driver's division assignment
+            entry = {'division': division}
+            if user_id:
+                entry['id'] = user_id
+            if user_name:
+                entry['name'] = user_name
+            
+            if existing_entry is not None:
+                old_entry = self.driver_colors['drivers'][existing_entry]
+                if not user_id and 'id' in old_entry:
+                    entry['id'] = old_entry['id']
+                if not user_name and 'name' in old_entry:
+                    entry['name'] = old_entry['name']
+                self.driver_colors['drivers'][existing_entry] = entry
             else:
-                # Add or update driver's division assignment
-                self.driver_colors[key] = {
-                    'division': division,
-                    'UserName': user_name,
-                    'UserID': user_id
-                }
+                self.driver_colors['drivers'].append(entry)
+
             self.save_config()
 
     def get_division_color(self, division: Optional[str]) -> str:
