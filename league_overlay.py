@@ -2,39 +2,13 @@
 BB's League Overlay - Real-time iRacing race position overlay
 
 This application provides a floating, semi-transparent overlay that shows:
-- Real-time race positions (updates before crossing start/finish line)
+- Real-time race positions (using lap distances during race)
 - Division-based color coding (Pro, ProAm, Am, Rookie)
 - Live time gaps to cars ahead (within same division)
-- Division-specific filtering for spectators
+- Division-specific filtering
 - Multi-class race support (always only show cars within same class)
 - Class refers to different types of cars (LMP2, GT3, GT4, etc), Divisions refers to groupings of drivers within the same class
 - Uses irsdk to read telemetry data from iRacing
-
-KEY CONCEPTS:
-1. REAL-TIME vs OFFICIAL POSITIONS
-   - Official: Only updates when crossing start/finish line (iRacing default)
-   - Real-time: Updates constantly based on track position (lap + lap%)
-   - This overlay uses real-time during race, official after finish (and best lap time during practice or qualifying)
-
-2. DIVISION SYSTEM
-   - Drivers are assigned to divisions via league_divisions.json config file
-   - Each division has a color (customizable in settings)
-   - Gaps are calculated within divisions (Pro only competes with Pro, etc.)
-   - Right-click any driver to change their division
-
-3. FINISH TRACKING
-   - Checkered flag waves when leader approaches the finish line, but race isn't over
-   - Tracks when each car completes their current lap after checkered
-   - Locks positions and gaps at the moment each car finishes
-   - Prevents position changes after individual cars finish
-
-4. UI FEATURES
-   - Frameless, always-on-top window
-   - Auto-hide headers on mouse leave (optional)
-   - Auto-center on player (allows manual scroll but auto-centers again after 5 seconds)
-   - Three color styles: Default, Alternate, Outline
-   - Adjustable opacity, refresh rate, and font sizes
-   - Opacity setting affects background but text stays at full opacity
 """
 
 import sys
@@ -59,7 +33,6 @@ from PySide6.QtCore import Qt, QTimer, Signal, QObject, QPoint, QSize
 from PySide6.QtGui import QColor, QPalette, QFont, QCursor, QPainter, QMouseEvent
 
 VERSION = "0.9.7.5"
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION CONSTANTS
@@ -195,176 +168,8 @@ class DriverData:
     is_player: bool
     division: Optional[str] = None
 
-# ═══════════════════════════════════════════════════════════════════════════
-# CRITICAL iRACING SDK VARIABLES USED IN THIS APPLICATION
-# ═══════════════════════════════════════════════════════════════════════════
-"""
-The irsdk library provides access to iRacing telemetry through a dict-like interface.
-Access variables like: ir['VariableName']
-
-KEY TELEMETRY VARIABLES USED:
-─────────────────────────────────────────────────────────────────────────────
-
-SESSION INFO (from ir['SessionInfo'] - YAML structure):
-    SessionInfo['Sessions'][session_num]['SessionType']
-        - Type: string - "Practice", "Qualify", "Race"
-        - Purpose: Determine if we use real-time or official positions
-
-    SessionInfo['Sessions'][session_num]['ResultsPositions']
-        - Type: list[dict] with 'CarIdx', 'ClassPosition', 'FastestTime'
-        - When: Only after session ends (checkered flag)
-        - Purpose: Get final results and lap times
-
-    DriverInfo['Drivers']
-        - Type: list[dict] with 'CarIdx', 'UserID', 'UserName', 'CarClassID', 'CarNumber'
-        - When: Always available
-        - Purpose: Map car indices to driver info for display
-
-LIVE TELEMETRY VARIABLES (from ir['VariableName'] - updated each tick):
-    SessionNum: int
-        - Current session number (0=practice, 1=qualify, 2=race typically)
-        - Purpose: Detect session changes to reset state
-
-    SessionState: int
-        - 0=Invalid, 1=GetInCar, 2=Warmup, 3=ParadeLaps, 4=Racing, 5=Checkered, 6=CoolDown
-        - CRITICAL: SessionState >= 5 means checkered flag has waved
-        - Purpose: Trigger race finish tracking
-
-    PlayerCarIdx: int
-        - Index of player's car (0-63)
-        - Purpose: Auto-centering and "My Division" filter
-
-    CarIdxLap: list[int] - Array indexed by car_idx
-        - Current lap number for each car
-        - CRITICAL: Used to detect when cars complete finish lap
-        - Edge case: Can be -1 if car not on track
-
-    CarIdxLapDistPct: list[float] - Array indexed by car_idx
-        - Percentage through current lap (0.0 to 1.0)
-        - CRITICAL: Used for real-time position calculation
-        - Edge case: Can be -1.0 if car not on track, >1.0 rarely (glitch)
-
-    CarIdxClassPosition: list[int] - Array indexed by car_idx
-        - Official class position (updated at start/finish line)
-        - Value 0 = car not participating/active
-        - Purpose: Get official positions, filter active cars
-
-    CarIdxEstTime: list[float] - Array indexed by car_idx
-        - iRacing's estimated time (for time-based gap calculation)
-        - More accurate than distance when cars on same lap
-        - Value 0 = no estimate available
-
-EDGE CASES & ASSUMPTIONS:
-─────────────────────────────────────────────────────────────────────────────
-1. Car indices (car_idx) range from 0-63, even in small fields
-2. Arrays are always length 64, even with fewer cars
-3. Position 0 in CarIdxClassPosition means "not active" (DNF, spectator, etc.)
-4. Lap numbers can be -1 (car in pits, not on track yet)
-5. LapDistPct should be 0.0-1.0 but can exceed (treat as 0 if invalid)
-6. SessionState transitions: Racing(4) -> Checkered(5) -> CoolDown(6)
-7. ResultsPositions only populated AFTER checkered, not during racing
-8. Driver list is static per session (doesn't update if someone joins mid-race)
-"""
-
-# ═══════════════════════════════════════════════════════════════════════════
-# RACE FINISH STATE MACHINE
-# ═══════════════════════════════════════════════════════════════════════════
-"""
-PROBLEM: iRacing waves checkered flag when leader crosses line, but other cars
-haven't finished yet. We need to track when EACH car finishes their current lap.
-
-STATE MACHINE FLOW:
-─────────────────────────────────────────────────────────────────────────────
-
-STATE 0: RACING (SessionState < 5)
-    Variables: All finish tracking vars are None/False/empty
-    Exit condition: SessionState >= 5 (checkered flag)
-    → Transition to STATE 1
-
-STATE 1: CHECKERED WAVED, IDENTIFYING FINISH LAP
-    leader_last_lap = None
-    leader_finished = False
-
-    Action: Find P1 car, record their current lap number
-    Variables set:
-        - leader_last_lap = current lap of P1
-        - leader_car_idx = car_idx of P1
-
-    Purpose: This lap number is the "finish lap" - when it increments,
-             that car has crossed the finish line and completed the race
-
-    Exit condition: leader_last_lap is set
-    → Transition to STATE 2
-
-STATE 2: WAITING FOR LEADER TO COMPLETE FINISH LAP
-    leader_last_lap = <lap number>
-    leader_finished = False
-
-    Action: Every tick, check if current P1's lap > leader_last_lap
-    Purpose: Leader might change due to last-lap pass
-
-    Exit condition: Current P1's lap increments
-    Variables set:
-        - leader_finished = True
-        - finished_drivers.add(leader_car_idx)
-        - driver_snapshots[leader]['official_position'] = final position
-
-    → Transition to STATE 3
-
-STATE 3: LEADER DONE, TRACKING OTHER DRIVERS FINISHING
-    leader_finished = True
-    finished_drivers = {leader_car_idx, ...}
-
-    Action: For each car NOT in finished_drivers:
-        - Check if their lap incremented (compared to snapshot)
-        - If yes: Add to finished_drivers, capture official_position
-        - final_gaps[car_idx] preserved from last update before finish
-
-    Purpose: Each car finishes when their lap counter increments
-    Exit condition: All cars finish or session ends
-    → Stay in STATE 3 until session change (resets to STATE 0)
-
-KEY INVARIANTS:
-─────────────────────────────────────────────────────────────────────────────
-1. Once in finished_drivers, a car never leaves (until session reset)
-2. Gaps are continuously updated for racing cars, frozen on finish
-3. leader_last_lap never changes after initial set (even if P1 changes)
-4. States only progress forward, reset only on session change
-
-CRITICAL EDGE CASES:
-─────────────────────────────────────────────────────────────────────────────
-1. Last-lap pass: P1 at checkered might not be P1 at finish
-   → Track "current P1" each update, not "P1 when checkered waved"
-
-2. Disconnected cars: May finish based on ResultsPositions, not lap increment
-   → Handle separately in disconnected driver logic
-
-3. Multi-class: Only track cars in player's class
-   → Filter by CarClassID before processing
-"""
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# SECTION 1: RACING DOMAIN LOGIC
-# ═══════════════════════════════════════════════════════════════════════════
-#
-# These classes handle racing-specific logic independent of UI:
-# - DivisionManager: Driver-to-division assignments and colors
-# - GapCalculator: Time/distance gap calculations
-# - RaceStateTracker: Race finish state machine
-#
-# TO SPLIT: Move this entire section to racing_logic.py
-# ═══════════════════════════════════════════════════════════════════════════
-
 class DivisionManager:
-    """Manages driver-to-division assignments and color configuration.
-
-    Responsibilities:
-    - Load/save division configuration from/to JSON file
-    - Assign drivers to divisions (Pro, ProAm, Am, Rookie)
-    - Provide division colors for UI rendering
-    - Handle default division colors
-    """
+    """Manages driver-to-division assignments and color configuration."""
 
     def __init__(self, config_file: str = FILE_CONFIG.DIVISIONS_FILE, settings_file: str = FILE_CONFIG.SETTINGS_FILE):
         """Initialize division manager.
@@ -418,14 +223,7 @@ class DivisionManager:
             print(f"Error saving division config: {e}")
 
     def get_driver_division(self, driver_info: Dict[str, str]) -> Optional[str]:
-        """Get the division assigned to a driver.
-
-        Args:
-            driver_info: Dictionary with 'UserID' and 'UserName' keys
-
-        Returns:
-            Division name (e.g., "Pro", "ProAm") or None if not assigned
-        """
+        """Get the division assigned to a driver."""
         user_id = driver_info.get('UserID', '')
         user_name = driver_info.get('UserName', '')
 
@@ -440,12 +238,6 @@ class DivisionManager:
 
     def set_driver_division(self, driver_info: Dict[str, str], division: str) -> None:
         """Assign a driver to a division or remove assignment.
-
-        Args:
-            driver_info: Dictionary with 'UserID' and 'UserName' keys
-            division: Division name to assign (e.g., "Pro", "ProAm", "Am", "Rookie")
-                     or "Default" to remove the driver from config
-
         Note:
             Setting division to "Default" removes the driver from the config,
             causing them to display with the default white color.
@@ -491,50 +283,23 @@ class DivisionManager:
             self.save_config()
 
     def get_division_color(self, division: Optional[str]) -> str:
-        """Get the color hex code for a division.
-
-        Args:
-            division: Division name (e.g., "Pro", "ProAm")
-
-        Returns:
-            Hex color code (e.g., "#FF8C00")
-        """
+        """Get the color hex code for a division."""
         if division and division in self.division_colors:
             return self.division_colors[division]
         return self.division_colors.get("Default", "#FFFFFF")
 
     def set_division_color(self, division: str, color: str) -> None:
-        """Set the color for a division.
-
-        Args:
-            division: Division name
-            color: Hex color code
-        """
+        """Set the color for a division."""
         self.division_colors[division] = color
         self.save_config()
 
 
 class GapCalculator:
-    """Calculates and formats time/distance gaps between cars.
-
-    Responsibilities:
-    - Calculate time-based gaps using iRacing telemetry
-    - Calculate lap-based gaps for cars on different laps
-    - Format gap strings for display (e.g., "5.3", "2L", "Leader")
-    - Handle edge cases (disconnected cars, invalid data)
-    """
+    """Calculates and formats time/distance gaps between cars."""
 
     @staticmethod
     def calculate_time_gap(est_time_ahead: float, est_time_behind: float) -> Optional[float]:
-        """Calculate time gap in seconds between two cars.
-
-        Args:
-            est_time_ahead: Estimated time for car ahead (from CarIdxEstTime)
-            est_time_behind: Estimated time for car behind (from CarIdxEstTime)
-
-        Returns:
-            Time gap in seconds, or None if data invalid
-        """
+        """Calculate time gap in seconds between two cars."""
         if est_time_ahead > 0 and est_time_behind > 0:
             gap = est_time_ahead - est_time_behind
             return gap if gap >= 0 else gap * -1
@@ -542,15 +307,7 @@ class GapCalculator:
 
     @staticmethod
     def calculate_lap_gap(lap_ahead, lap_behind) -> int:
-        """Calculate lap difference between two cars based on lap + possibly distance.
-
-        Args:
-            lap_ahead: Lap number + optionally current lap distance of car ahead
-            lap_behind: Lap number + optionally current lap distance of car behind
-
-        Returns:
-            Number of laps behind (always >= 0)
-        """
+        """Calculate lap difference between two cars based on lap + possibly distance."""
         gap = lap_ahead - lap_behind
         return int(gap) if gap > 0 else 0
 
@@ -559,17 +316,7 @@ class GapCalculator:
                           lap_gap: int = 0,
                           is_leader: bool = False,
                           is_disconnected: bool = False) -> str:
-        """Format gap for display in UI.
-
-        Args:
-            time_gap: Time gap in seconds (None if not on same lap)
-            lap_gap: Number of laps behind
-            is_leader: Whether this is the race leader
-            is_disconnected: Whether driver is disconnected
-
-        Returns:
-            Formatted gap string (e.g., "Leader", "5.3", "2L", "(DC)")
-        """
+        """Format gap for display in UI."""
         if is_disconnected:
             return "(DC)"
 
@@ -591,19 +338,7 @@ class GapCalculator:
 
 
 class RaceStateTracker:
-    """Tracks race finish state machine and completed laps after checkered flag.
-
-    State Machine:
-    - RACING: Normal racing, no checkered flag yet
-    - CHECKERED_WAVED: Checkered flag shown, waiting for leader to finish
-    - LEADER_FINISHED: Leader completed, tracking other cars finishing
-
-    Responsibilities:
-    - Track when checkered flag waves
-    - Detect when each car completes their finish lap
-    - Freeze positions and gaps when cars finish
-    - Handle disconnected drivers in final results
-    """
+    """Tracks race finish state machine and completed laps after checkered flag."""
 
     def __init__(self):
         """Initialize race state tracker."""
@@ -619,32 +354,17 @@ class RaceStateTracker:
         self.driver_snapshots: Dict[int, Dict[str, Any]] = {}
 
     def is_racing(self) -> bool:
-        """Check if race is still in progress (not finished).
-
-        Returns:
-            True if race is ongoing, False if checkered flag waved
-        """
+        """Check if race is still in progress (not finished)."""
         return self.leader_last_lap is None
 
     def set_checkered_flag(self, leader_car_idx: int, leader_lap: int) -> None:
-        """Mark checkered flag as waved and record leader state.
-
-        Args:
-            leader_car_idx: Car index of current leader
-            leader_lap: Current lap number of leader
-        """
+        """Mark checkered flag as waved and record leader state."""
         if self.leader_last_lap is None:
             self.leader_car_idx = leader_car_idx
             self.leader_last_lap = leader_lap
 
     def mark_driver_finished(self, car_idx: int, gap: str, official_position: int) -> None:
-        """Mark a driver as having completed their finish lap.
-
-        Args:
-            car_idx: Car index of finished driver
-            gap: Final gap string to freeze
-            official_position: Final official position
-        """
+        """Mark a driver as having completed their finish lap."""
         if car_idx not in self.finished_drivers:
             self.finished_drivers.add(car_idx)
             self.final_gaps[car_idx] = gap
@@ -657,72 +377,29 @@ class RaceStateTracker:
                 self.driver_snapshots[car_idx]['official_position'] = official_position
 
     def is_driver_finished(self, car_idx: int) -> bool:
-        """Check if a driver has finished their race.
-
-        Args:
-            car_idx: Car index to check
-
-        Returns:
-            True if driver has completed their finish lap
-        """
+        """Check if a driver has finished their race."""
         return car_idx in self.finished_drivers
 
     def get_final_gap(self, car_idx: int) -> Optional[str]:
-        """Get the frozen gap for a finished driver.
-
-        Args:
-            car_idx: Car index
-
-        Returns:
-            Frozen gap string, or None if not finished
-        """
+        """Get the frozen gap for a finished driver."""
         return self.final_gaps.get(car_idx)
 
     def update_snapshot(self, car_idx: int, snapshot_data: Dict[str, Any]) -> None:
-        """Update or create driver snapshot with current state.
-
-        Args:
-            car_idx: Car index
-            snapshot_data: Dictionary with driver state (lap, position, etc.)
-        """
+        """Update or create driver snapshot with current state."""
         self.driver_snapshots[car_idx] = snapshot_data
 
     def get_snapshot(self, car_idx: int) -> Optional[Dict[str, Any]]:
-        """Get stored snapshot for a driver.
-
-        Args:
-            car_idx: Car index
-
-        Returns:
-            Snapshot dictionary or None if not found
-        """
+        """Get stored snapshot for a driver."""
         return self.driver_snapshots.get(car_idx)
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# SECTION 2: UI COMPONENTS
-# ═══════════════════════════════════════════════════════════════════════════
-#
-# These classes provide UI-specific functionality:
-# - DataUpdateSignal: Thread-safe signals for telemetry → UI communication
-# - CustomSizeGrip: Custom resize grip for frameless window
-# - SettingsDialog: Settings/preferences dialog (defined later in file)
-#
-# TO SPLIT: Move this section (and SettingsDialog below) to ui_components.py
-# ═══════════════════════════════════════════════════════════════════════════
-
 class DataUpdateSignal(QObject):
-    """Signal emitter for thread-safe GUI updates.
-
-    Emits signals from telemetry thread to UI thread for safe updates.
-    """
+    """Signal emitter for thread-safe GUI updates."""
     update_data = Signal(list)
     update_status = Signal(str, str)  # text, color
     refresh_colors = Signal()
 
 class CustomSizeGrip(QSizeGrip):
     """Custom size grip widget with transparent background and conditional visibility.
-
     Shows diagonal arrow pattern when parent window has focus, allows window resizing.
     """
 
@@ -777,123 +454,28 @@ class CustomSizeGrip(QSizeGrip):
                     offset + 3, size - 3 - offset
                 )
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# SECTION 3: MAIN APPLICATION CLASS
-# ═══════════════════════════════════════════════════════════════════════════
-#
-# This is the main application window that orchestrates everything:
-# - LeagueOverlay: Main window, telemetry processing, UI rendering
-#
-# TO SPLIT: Keep this in league_overlay.py (main file)
-# Import: from racing_logic import DivisionManager, GapCalculator, RaceStateTracker
-# Import: from ui_components import DataUpdateSignal, CustomSizeGrip, SettingsDialog
-# ═══════════════════════════════════════════════════════════════════════════
-
 class LeagueOverlay(QMainWindow):
-    """
-    Main application window for iRacing race position overlay.
-
-    KEY INSTANCE VARIABLES - DATA STRUCTURES & THEIR LIFECYCLE
-    ============================================================
-
-    IRSDK CONNECTION:
-        self.ir: irsdk.IRSDK instance - Connection to iRacing simulator
-            - Provides telemetry data via self.ir['VariableName']
-            - Must call startup() before use, shutdown() on disconnect
-            - Access like dict: self.ir['SessionState'], self.ir['CarIdxLap']
-
-        self.is_connected: bool - Whether currently connected to iRacing
-            - Set True when ir.startup() succeeds
-            - Set False when ir.is_connected fails (iRacing closed)
-
-        self.running: bool - Main loop control flag
-            - Set False to stop telemetry thread (on app close)
-
-    SESSION STATE TRACKING (cleared on session change):
-        self.driver_snapshots: dict[int, dict] - Last known state of each car
-            - Key: car_idx (iRacing's car index, 0-63)
-            - Value: Full driver data with position, lap, lap_pct, etc.
-            - Used to track disconnected drivers and finish status
-            - CLEARED: On session number or type change
-
-        self.current_session_num: int | None - iRacing's session number
-            - 0 = practice, 1 = qualify, 2 = race (typically)
-            - Used to detect session changes and reset state
-
-        self.current_session_type: str | None - "Race", "Practice", "Qualify"
-            - Used with session_num to detect transitions
-
-    RACE FINISH STATE MACHINE (see detailed diagram below):
-        self.leader_finished: bool - Has the race leader completed their finish lap?
-            - False: Still racing or waiting for leader
-            - True: Leader done, now tracking other drivers finishing
-
-        self.finished_drivers: set[int] - Car indices that have finished
-            - Added when car's lap increments after checkered flag
-            - Prevents re-processing the same finish
-
-        self.leader_car_idx: int | None - Car index of the race leader
-            - Set when checkered flag waves (SessionState >= 5)
-
-        self.leader_last_lap: int | None - Lap number leader was on at checkered
-            - When this lap increments, leader has truly finished
-            - CRITICAL: Used to determine "finish lap" for all drivers
-
-        self.final_gaps: dict[int, str] - Frozen gap strings for finished drivers
-            - Key: car_idx
-            - Value: Gap string like "5.3", "2L", "Leader"
-            - Continuously updated during race, frozen on finish
-
-    PLAYER IDENTIFICATION:
-        self.player_car_idx: int | None - iRacing index of player's car
-            - From self.ir['PlayerCarIdx']
-            - Used for auto-centering and "My Division" filter
-            - CLEARED: On session change (re-detected)
-
-        self.player_car_class_id: int | None - Player's car class (multi-class)
-            - Used to filter overlay to only player's class
-            - CLEARED: On session change
-
-    UI DATA:
-        self.race_data: list[dict] - All drivers from telemetry (unfiltered)
-            - Updated by telemetry thread, filtered in update_gui()
-
-        self.displayed_data: list[dict] - Filtered data currently shown in UI
-            - Copy of race_data after division filtering applied
-            - Used to preserve context for UI updates
-    """
+    """Main application window for iRacing race position overlay."""
 
     def __init__(self):
         super().__init__()
-
-        # ═══════════════════════════════════════════════════════════
-        # IRSDK CONNECTION
-        # ═══════════════════════════════════════════════════════════
         self.ir = irsdk.IRSDK()  # iRacing SDK connection object
         self.is_connected = False  # Connection status flag
         self.running = True  # Thread control flag
 
-        # ═══════════════════════════════════════════════════════════
-        # THREAD-SAFE COMMUNICATION (telemetry thread -> UI thread)
-        # ═══════════════════════════════════════════════════════════
+        # Thread-safe communication (telemetry thread -> UI thread)
         self.signals = DataUpdateSignal()
         self.signals.update_data.connect(self.display_race_data)
         self.signals.update_status.connect(self.update_status_label)
         self.signals.refresh_colors.connect(self.refresh_driver_colors)
 
-        # ═══════════════════════════════════════════════════════════
-        # AUTO-CENTERING STATE
-        # ═══════════════════════════════════════════════════════════
         self.player_car_idx = None  # Player's car (from iRacing API)
         self.last_manual_scroll = 0  # Timestamp of last manual scroll
         self.manual_scroll_timeout = 5  # Seconds before re-enabling auto-center
         self.auto_center_enabled = True  # Master switch (currently unused)
         self.refresh_rate = 2.0  # Seconds between telemetry polls
 
-        # ═══════════════════════════════════════════════════════════
-        # USER PREFERENCES (persisted to LeagueOverlay.config)
-        # ═══════════════════════════════════════════════════════════
+        # User preferences (most persisted to LeagueOverlay.config)
         self.show_only_my_division = False  # Filter to player's division only
         self.opacity = 0.5  # Window transparency (0.1 to 1.0)
         self.width = 320  # Window width in pixels
@@ -948,26 +530,8 @@ class LeagueOverlay(QMainWindow):
         self.leader_last_lap: Optional[int] = None
         self.final_gaps: Dict[int, str] = {}
 
-        # ═══════════════════════════════════════════════════════════
-        # DATA STRUCTURES - What race_data and displayed_data contain
-        # ═══════════════════════════════════════════════════════════
-        # Both are list[dict] with this structure per driver:
-        # {
-        #     'position': int,              # Overall class position (1-based)
-        #     'division_position': int,     # Position within division (1-based)
-        #     'car_number': str,            # Car number from iRacing
-        #     'driver_name': str,           # UserName from iRacing
-        #     'driver_info': {              # Subset for division lookup
-        #         'UserID': str,            # iRacing user ID
-        #         'UserName': str           # iRacing username
-        #     },
-        #     'gap': str,                   # "Leader", "5.3", "2L", "(DC)"
-        #     'car_idx': int,               # iRacing car index (0-63)
-        #     'is_player': bool             # True if this is the player's car
-        # }
         self.race_data = []  # Unfiltered - all drivers from telemetry
         self.displayed_data = []  # Filtered - what's currently shown in UI
-        self.data_widgets = {}  # Currently unused legacy variable
         
         self.startup_time = time.time()
         
@@ -996,21 +560,7 @@ class LeagueOverlay(QMainWindow):
             pass
 
     def get_bg_color(self, base_color):
-        """Convert a hex color to RGBA format with current window opacity.
-
-        Purpose: All background colors must respect the user's opacity setting for
-        the semi-transparent overlay effect. This centralizes that conversion.
-
-        Args:
-            base_color: Hex color string like "#FF8C00" or "rgba(...)" already
-
-        Returns:
-            RGBA string like "rgba(255, 140, 0, 0.5)" for use in stylesheets
-
-        Assumptions:
-            - self.opacity is a float between 0.0 and 1.0
-            - Input is either hex format or already rgba (passed through unchanged)
-        """
+        """Convert a hex color to RGBA format with current window opacity."""
         # Parse hex color
         if base_color.startswith('#'):
             r = int(base_color[1:3], 16)
@@ -1021,42 +571,15 @@ class LeagueOverlay(QMainWindow):
 
     def get_font_size(self, element_type):
         """Get the appropriate font size or spacing for a UI element.
-
         Purpose: Centralizes font sizing to make the entire UI scale together
         when user changes font size setting (Small/Medium/Large/Extra Large).
-
-        Args:
-            element_type: One of "title", "button", "status", "header", "data", "spacing"
-
-        Returns:
-            For font elements: String like "9pt", "10pt", etc.
-            For "spacing": Integer pixel value (2, 3, 4, 5)
-
-        Why this exists: Different UI elements need different sizes, but they
-        should all scale proportionally when user adjusts the font size setting.
         """
         if element_type == "spacing":
             return self.font_sizes.get(self.font_size, self.font_sizes["Medium"]).get(element_type, 3)
         return self.font_sizes.get(self.font_size, self.font_sizes["Medium"]).get(element_type, "9pt")
 
     def blend_color_with_black(self, color_hex, amount=0.15):
-        """Blend a division color with black to create a subtle tinted background.
-
-        Purpose: Used for gradient backgrounds on player rows. We want a hint of
-        the division color without being too bright or distracting. This creates
-        a "glow" effect that's visible but doesn't overpower the text.
-
-        Args:
-            color_hex: Division color like "#FF8C00" (orange for Pro)
-            amount: How much of the color to keep (0.0 = pure black, 1.0 = full color)
-                   Default 0.15 gives a subtle tint, 0.25 is more visible
-
-        Returns:
-            Hex color string like "#261500" (very dark orange)
-
-        Why this exists: Pure division colors are too bright for backgrounds.
-        We need darkened versions that still convey the division color.
-        """
+        """Blend a division color with black to create a subtle tinted background."""
         # Remove the # if present
         color_hex = color_hex.lstrip('#')
 
@@ -1073,77 +596,16 @@ class LeagueOverlay(QMainWindow):
         return f"#{r:02x}{g:02x}{b:02x}"
 
     def create_gradient_background(self, color_hex):
-        """Create a horizontal gradient that creates a subtle "glow" effect for player row.
-
-        Purpose: Makes the player's row stand out without being overpowering.
-        The gradient goes from tinted color on edges to dark gray in the middle.
-
-        Args:
-            color_hex: Division color like "#FF8C00"
-
-        Returns:
-            Qt gradient string for stylesheet backgrounds
-
-        Why this exists: A solid colored background would be too bright and
-        distracting. A gradient gives a nice subtle highlight that draws the eye
-        to the player without overwhelming the data.
-
-        Visual effect: [dark orange] -> [dark gray] -> [dark orange]
-        """
+        """Create a horizontal gradient that creates a subtle "glow" effect for player row."""
         tinted = self.blend_color_with_black(color_hex, 0.25)
         return f"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {tinted}, stop:0.5 #1a1a1a, stop:1 {tinted})"
 
-    def get_inverse_color(self, color_hex):
-        """Calculate the inverse/complementary color for maximum contrast.
-
-        Purpose: Currently unused, but intended for future features that might
-        need high contrast text on colored backgrounds (like Alternate color style).
-
-        Args:
-            color_hex: Hex color like "#FF8C00"
-
-        Returns:
-            Inverted hex color like "#0073FF"
-
-        How it works: Inverts each RGB channel (255 - value)
-        Example: Orange #FF8C00 -> Blue #0073FF
-
-        Assumptions: Input is a valid 6-character hex color
-        """
-        # Remove the # if present
-        color_hex = color_hex.lstrip('#')
-
-        # Convert hex to RGB
-        r = int(color_hex[0:2], 16)
-        g = int(color_hex[2:4], 16)
-        b = int(color_hex[4:6], 16)
-
-        # Invert the RGB values
-        inv_r = 255 - r
-        inv_g = 255 - g
-        inv_b = 255 - b
-
-        return f"#{inv_r:02x}{inv_g:02x}{inv_b:02x}"
-
     def update_all_backgrounds(self):
         """Refresh all UI backgrounds, fonts, and styling after settings change.
-
-        Purpose: When user changes opacity, font size, or color style in settings,
-        we need to update all existing UI elements to reflect the new values.
-
-        Why this exists: Qt doesn't automatically update stylesheets when variables
-        change. We must manually reapply styles to all widgets that depend on
-        opacity or font settings.
-
-        Called by:
-            - Settings dialog when user changes opacity slider
-            - Settings dialog when applying changes
-            - On startup after loading saved settings
-
         Assumptions:
-            - All UI widgets have been created (checks with hasattr)
             - self.opacity and self.font_size are already updated with new values
         """
+        # TODO: set opacity and font_size here for consistency then update comment above
         if hasattr(self, 'main_widget'):
             self.main_widget.setStyleSheet(f"background-color: {self.get_bg_color('#000000')};")
         if hasattr(self, 'title_bar'):
@@ -1486,13 +948,9 @@ class LeagueOverlay(QMainWindow):
             
     def toggle_division_filter(self):
         """Toggle division filter - cycles through different division views.
-
         Two modes:
         1. Player is on track: Toggle between "All Divisions" and "My Division"
         2. Player spectating: Cycle through each division (Pro -> ProAm -> Am -> Rookie -> All)
-
-        This allows spectators to focus on specific divisions, while active racers
-        can quickly filter to just their competition.
         """
         player_on_track = self.player_car_idx is not None and any(
             d['car_idx'] == self.player_car_idx for d in self.race_data
@@ -1557,40 +1015,13 @@ class LeagueOverlay(QMainWindow):
         self.scroll_area.verticalScrollBar().setValue(0)
         
     def on_manual_scroll(self):
-        """Record when user manually scrolls, to temporarily disable auto-centering.
-
-        Purpose: When user manually scrolls to look at other drivers, we don't
-        want auto-center immediately yanking the view back to the player.
-
-        Why this exists: Auto-centering is helpful but shouldn't fight user input.
-        By recording scroll time, center_on_player() can check if enough time has
-        passed (manual_scroll_timeout, default 5 seconds) before re-enabling.
-
-        How it works:
-            1. User scrolls -> this sets last_manual_scroll = now
-            2. Auto-center checks: if (now - last_manual_scroll < 5s), skip centering
-            3. After 5s of no scrolling, auto-center resumes
-
-        Assumptions:
-            - Connected to scroll_area.verticalScrollBar().valueChanged signal
-        """
+        """Record when user manually scrolls, to temporarily disable auto-centering."""
         self.last_manual_scroll = time.time()
 
     def resizeEvent(self, event):
         """Qt event handler: Window was resized by user or programmatically.
-
-        Purpose: Keep the resize grip (bottom-right corner handle) positioned
-        correctly as window size changes.
-
         Why this exists: The size grip is a widget that must be manually positioned.
         Qt doesn't auto-anchor it, so we must move it on every resize.
-
-        Args:
-            event: QResizeEvent from Qt (unused, but required by Qt signature)
-
-        Assumptions:
-            - size_grip widget exists (checked with hasattr)
-            - Called automatically by Qt framework
         """
         super().resizeEvent(event)
         # Position size grip at bottom right corner
@@ -1603,27 +1034,12 @@ class LeagueOverlay(QMainWindow):
         
     def load_color_config(self):
         """Load the driver-to-division mapping from JSON config file.
-
-        Purpose: Each league maintains a JSON file that maps drivers to divisions
-        (Pro, ProAm, Am, Rookie). This file is shared among league members so
-        everyone sees consistent division colors.
-
         Returns:
             Dict with 'drivers' key containing list of driver entries:
             {'drivers': [
                 {'id': '12345', 'name': 'John Doe', 'division': 'Pro'},
                 ...
             ]}
-
-        Why this exists: Different leagues have different division structures.
-        Using a config file allows customization per league without code changes.
-
-        File migration: Automatically converts old format (dict of drivers) to
-        new format (drivers list) if needed.
-
-        Assumptions:
-            - File is valid JSON or doesn't exist (returns empty structure)
-            - File path is set in self.color_config_file
         """
         if os.path.exists(self.color_config_file):
             try:
@@ -1655,28 +1071,7 @@ class LeagueOverlay(QMainWindow):
         return {'drivers': []}
         
     def load_settings(self):
-        """Load user preferences from LeagueOverlay.config JSON file.
-
-        Purpose: Persists window position, size, opacity, colors, and all user
-        preferences between application sessions.
-
-        Why this exists: Users want the overlay to remember their settings,
-        especially window position and opacity, so they don't have to reconfigure
-        every time they start the app.
-
-        Settings loaded:
-            - Window position (x, y) and size (width, height)
-            - Opacity and refresh rate
-            - Font size and color style
-            - UI preferences (hide_headers, center_drivers, bold_drivers)
-            - Division color customizations
-            - Path to league-specific driver config file
-
-        Assumptions:
-            - File may not exist on first run (silently ignored)
-            - Invalid JSON or missing keys are handled gracefully
-            - Settings are validated elsewhere (e.g., opacity clamped to 0-1)
-        """
+        """Load user preferences from LeagueOverlay.config JSON file."""
         if os.path.exists(self.settings_file):
             try:
                 with open(self.settings_file, 'r') as f:
@@ -1729,23 +1124,7 @@ class LeagueOverlay(QMainWindow):
         return self.default_colors.copy()
         
     def save_settings(self):
-        """Persist current settings to LeagueOverlay.config JSON file.
-
-        Purpose: Automatically called when user moves/resizes window, closes app,
-        or applies settings changes. Ensures preferences survive between sessions.
-
-        Why this exists: Paired with load_settings() to provide persistent config.
-        Called frequently (on window move, resize, close) to minimize data loss.
-
-        Saves:
-            - Current window geometry (position and size)
-            - All user preferences (opacity, fonts, colors, etc.)
-            - Path to active league config file
-
-        Assumptions:
-            - Write permissions exist in current directory
-            - Failures are non-fatal (prints error, continues)
-        """
+        """Persist current settings to LeagueOverlay.config JSON file."""
         try:
             settings = {
                 'league_config': self.color_config_file,
@@ -1768,54 +1147,18 @@ class LeagueOverlay(QMainWindow):
             print(f"Failed to save settings: {e}")
             
     def save_color_config(self) -> None:
-        """Save color configuration - delegates to DivisionManager.
-
-        Purpose: Called when user changes driver division assignments via
-        right-click context menu. Ensures changes are persisted.
-
-        Note: This method delegates to DivisionManager.save_config() to maintain
-        single source of truth for division persistence logic.
-        """
+        """Save color configuration - delegates to DivisionManager. """
         try:
             self.division_manager.save_config()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save color config: {e}")
 
     def get_driver_division(self, driver_info: Dict[str, str]) -> Optional[str]:
-        """Get the assigned division for a driver - delegates to DivisionManager.
-
-        Lookup priority:
-        1. Match by UserID (most reliable, survives name changes)
-        2. Match by UserName (fallback)
-        3. Return None if not found (will use "Default" color)
-
-        Args:
-            driver_info: Dictionary with 'UserID' and 'UserName' keys
-
-        Returns:
-            Division name ("Pro", "ProAm", "Am", "Rookie") or None
-
-        Note:
-            This method now delegates to DivisionManager to avoid duplicate logic.
-            The division name maps to a color in available_colors.
-        """
+        """Get the assigned division for a driver - delegates to DivisionManager."""
         return self.division_manager.get_driver_division(driver_info)
 
     def set_driver_division(self, driver_info: Dict[str, str], division_name: str) -> None:
-        """Assign a driver to a division - delegates to DivisionManager.
-
-        This is called from the right-click context menu on driver rows.
-        Changes are immediately saved to the config file and UI refreshes.
-
-        Args:
-            driver_info: Dict with 'UserID' and 'UserName'
-            division_name: "Pro", "ProAm", "Am", "Rookie", or "Default"
-                          "Default" removes the driver from the config
-
-        Note:
-            This method now delegates to DivisionManager for the actual assignment,
-            then triggers UI refresh. Single source of truth for division logic.
-        """
+        """Assign a driver to a division - delegates to DivisionManager."""
         # Delegate to DivisionManager for assignment logic
         self.division_manager.set_driver_division(driver_info, division_name)
 
@@ -1928,28 +1271,7 @@ class LeagueOverlay(QMainWindow):
         QApplication.quit()
         
     def telemetry_loop(self):
-        """Background thread that continuously reads data from iRacing SDK.
-
-        Purpose: Runs in a separate thread to avoid blocking the UI. Continuously
-        polls iRacing for telemetry data at the configured refresh rate.
-
-        Why this exists: The iRacing SDK requires continuous polling. Running in
-        a thread keeps the UI responsive while we wait for data.
-
-        Flow:
-            1. Try to connect to iRacing if not connected
-            2. If connected, process telemetry data
-            3. Sleep for refresh_rate seconds
-            4. Repeat until self.running = False
-
-        Thread safety: Uses self.signals (Qt signals) to communicate updates
-        back to the main UI thread safely.
-
-        Assumptions:
-            - irsdk library is properly installed
-            - Runs as daemon thread (dies when main thread exits)
-            - self.refresh_rate is a positive float (seconds)
-        """
+        """Background thread that continuously reads data from iRacing SDK."""
         while self.running:
             try:
                 if not self.is_connected:
@@ -1970,16 +1292,7 @@ class LeagueOverlay(QMainWindow):
                 time.sleep(1)
                 
     def calculate_real_time_positions(self, drivers, live_data):
-        """Calculate real-time positions based on actual track position.
-
-        This provides more accurate positioning than iRacing's official positions,
-        which only update at the start/finish line. Real-time positions update
-        constantly based on where each car is on track.
-
-        Formula: total_track_position = current_lap + lap_distance_percentage
-        Example: Car on lap 5, 30% through = 5.30
-                 Car on lap 5, 90% through = 5.90 (ahead of the 30% car)
-        """
+        """Calculate real-time positions based on actual track position."""
         car_idx_lap = live_data['CarIdxLap']
         car_idx_lap_dist_pct = live_data['CarIdxLapDistPct']
         car_idx_class_position = live_data['CarIdxClassPosition']
@@ -2041,25 +1354,8 @@ class LeagueOverlay(QMainWindow):
         
     def get_official_positions(self, drivers, live_data):
         """Get positions from iRacing's official timing system (updates at start/finish line).
-
-        Purpose: Used during practice/qualifying sessions where real-time position
-        tracking isn't needed. Simpler than calculate_real_time_positions() since
-        we just use iRacing's official positions directly.
-
         Why this exists: Practice/qualifying don't need the complexity of real-time
         tracking. Official positions are sufficient and more stable.
-
-        Returns:
-            List of driver dicts with 'official_position' sorted by that position
-
-        Differences from calculate_real_time_positions():
-            - No track position calculation (lap + lap%)
-            - Uses official positions directly from iRacing
-            - Faster, simpler, less CPU intensive
-
-        Assumptions:
-            - CarIdxClassPosition is available in live_data
-            - Position 0 means not active/participating
         """
         car_idx_class_position = live_data['CarIdxClassPosition']
         
@@ -2069,6 +1365,7 @@ class LeagueOverlay(QMainWindow):
         active_drivers = []
         
         for car_idx in range(len(car_idx_class_position)):
+            # Position 0 means car is not active/participating
             if car_idx_class_position[car_idx] == 0:
                 continue
             
@@ -2098,9 +1395,9 @@ class LeagueOverlay(QMainWindow):
     def update_finish_status(self, live_data, current_session):
         """Track which drivers have finished the race after the checkered flag.
 
-        IMPORTANT: iRacing shows the checkered flag when the leader crosses the line,
-        but other drivers haven't finished yet. We need to track when each driver
-        completes their current lap after the checkered to know their final position.
+        IMPORTANT: iRacing shows the checkered flag BEFORE the leader crosses the
+        line. We need to track when each driver completes their current lap after
+        the checkered and after the leader finishes to know their final position.
 
         This method:
         1. Identifies what lap the leader is on when checkered waves
@@ -2208,55 +1505,20 @@ class LeagueOverlay(QMainWindow):
                         self.driver_snapshots[car_idx]['official_position'] = car_idx_class_position[car_idx]
                     
     def get_position_from_results(self, current_session, car_idx):
-        """Look up a car's final position from session results.
-
-        Purpose: After race ends, iRacing provides complete results in SessionInfo.
-        This extracts the final class position for a specific car.
-
-        Why this exists: Used for:
-            - Finished drivers (to lock in their final position)
-            - Disconnected drivers after checkered (to show where they finished)
-
-        Args:
-            current_session: Session dict from SessionInfo['Sessions'][session_num]
-            car_idx: The car index to look up
-
-        Returns:
-            1-based position (int) or -1 if not found
-
-        Assumptions:
-            - Session has ResultsPositions array (only after session ends)
-            - ClassPosition is 0-based, so we add 1
-        """
+        """Look up a car's final position from session results."""
         try:
             if 'ResultsPositions' in current_session:
                 for driver in current_session['ResultsPositions']:
                     if driver.get('CarIdx') == car_idx and 'ClassPosition' in driver:
-                        return driver['ClassPosition'] + 1
+                        return driver['ClassPosition'] + 1 #ClassPosition is 0-based
         except (KeyError, TypeError, IndexError):
             pass
         return -1
         
     def get_fastest_lap_time(self, current_session):
         """Find the fastest lap time in the session for gap estimation.
-
-        Purpose: When cars are on different laps, we estimate time gaps by
-        multiplying lap difference by average lap time. This finds the fastest
-        lap as a reasonable estimate.
-
-        Why this exists: Estimating gaps between cars on different laps requires
-        knowing typical lap time. Fastest lap is used as a baseline (assumes
-        cars lap at similar pace to the fastest).
-
-        Returns:
-            Fastest lap time in seconds (float), or 90 if none found
-
         Why 90 seconds: Fallback for when no laps recorded yet (session start).
         90s is a reasonable default that won't cause divide-by-zero or absurd gaps.
-
-        Assumptions:
-            - ResultsPositions exists and has FastestTime field
-            - FastestTime of 0 means no lap recorded (skipped)
         """
         fastest_time = float('inf')
         for driver in current_session['ResultsPositions']:
@@ -2267,25 +1529,7 @@ class LeagueOverlay(QMainWindow):
         
     def get_best_lap_from_session_info(self, current_session, car_idx):
         """Look up a specific car's fastest lap time from session results.
-
-        Purpose: In practice/qualifying, gaps are shown as delta to best lap
-        times, not real-time gaps. This retrieves a car's personal best.
-
-        Why this exists: Practice/qualifying use different gap logic than racing.
-        Instead of "5.3s behind," it shows "+0.234" (delta to car ahead's best lap).
-
-        Args:
-            current_session: Session dict from SessionInfo
-            car_idx: Which car to look up
-
-        Returns:
-            Best lap time in seconds (float), or 90 if not found/no laps
-
         Why 90 seconds: Same reason as get_fastest_lap_time() - safe fallback.
-
-        Assumptions:
-            - ResultsPositions exists (practice/qualifying sessions)
-            - FastestTime field is present
         """
         try:
             if 'ResultsPositions' in current_session:
@@ -2297,25 +1541,7 @@ class LeagueOverlay(QMainWindow):
         return 90
     
     def reset_fields(self) -> None:
-        """Clear all session-specific tracking data.
-
-        Purpose: Called when switching sessions (practice->qualify->race) or when
-        session number changes. Ensures we start fresh with no stale data.
-
-        Why this exists: Data from one session (like finish tracking) should not
-        carry over to the next session. Each session needs clean state.
-
-        Clears:
-            - Race state tracker (finish tracking, snapshots, gaps)
-            - Player identification (car_idx and class_id)
-            - Legacy state variables for backward compatibility
-
-        Called by:
-            - Session number change detection in process_telemetry()
-            - Session type change (practice -> qualifying -> race)
-
-        Assumptions: None - safe to call at any time
-        """
+        """Clear all session-specific tracking data."""
         # Clear legacy state variables (still used by existing code)
         self.driver_snapshots = {}
         self.leader_finished = False
@@ -2392,7 +1618,6 @@ class LeagueOverlay(QMainWindow):
 
                     # DISCONNECTED DRIVER HANDLING
                     # If a driver was racing but is no longer in active_drivers, they've disconnected
-                    # Keep them in the list so spectators can see who DNF'd
                     active_car_indices = {d['car_idx'] for d in active_drivers}
                     for car_idx, snapshot in self.driver_snapshots.items():
                         if car_idx not in active_car_indices:
@@ -2637,7 +1862,6 @@ class LeagueOverlay(QMainWindow):
         
     def center_on_player(self, current_data):
         """Auto-center the scroll view on the player's position.
-
         This only activates if the user hasn't manually scrolled recently
         (see manual_scroll_timeout). Helps keep player visible during races
         without fighting manual scrolling.
@@ -2689,10 +1913,9 @@ class LeagueOverlay(QMainWindow):
         
     def create_driver_row(self, driver_data):
         """Create a driver row widget with styling based on color style.
-
         Three color styles supported:
         1. Default: Black background, colored text, player gets gradient glow
-        2. Alternate: Colored background, black text, player gets white border
+        2. Alternate: Colored background, black text, player gets gradient glow
         3. Outline: Black background, colored border and text, player gets gradient glow
         """
         driver_color = self.get_driver_color(driver_data.get('driver_info', {}))
@@ -2909,27 +2132,7 @@ class LeagueOverlay(QMainWindow):
         return container_widget if container_widget else row_widget
         
     def show_context_menu(self, driver_data):
-        """Display right-click menu to assign driver to a division.
-
-        Purpose: Provides quick UI to change a driver's division without opening
-        settings or editing JSON files manually.
-
-        Why this exists: During a race, league admins can quickly assign new
-        drivers to divisions by right-clicking their name.
-
-        Flow:
-            1. User right-clicks any part of a driver row
-            2. Menu shows: Pro, ProAm, Am, Rookie, Default
-            3. User clicks division -> set_driver_division() -> saves to JSON
-            4. UI refreshes with new color
-
-        Args:
-            driver_data: Dict with 'driver_info' containing UserID and UserName
-
-        Assumptions:
-            - available_colors dict has all division names
-            - Called from driver row widgets' customContextMenuRequested signal
-        """
+        """Display right-click menu to assign driver to a division."""
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
@@ -2958,43 +2161,17 @@ class LeagueOverlay(QMainWindow):
         menu.exec(QCursor.pos())
         
     def update_status_label(self, text, color):
-        """Update the status message and color (thread-safe Qt slot).
-
-        Purpose: Display connection status and session type at top of overlay.
+        """Display connection status and session type at top of overlay.
         Examples: "Connecting...", "Connected - Live Data (Race)", "Update available"
-
-        Why this exists: Telemetry thread needs to communicate status to UI thread.
-        Qt requires slots to be called from signals for thread safety.
-
-        Args:
-            text: Status message to display
-            color: "green" (connected), "orange" (connecting), or hex like "#00FF00"
-
-        Thread safety: This is a Qt slot connected to self.signals.update_status,
-        so it's safe to call from the telemetry background thread.
-
-        Assumptions:
-            - status_label widget exists
-            - update_status_style() handles color setting
         """
         self.status_label.setText(text)
         self.update_status_style(color)
         
     # Mouse events for dragging the frameless window
     def mousePressEvent(self, event):
-        """Qt event handler: Mouse button pressed in window.
-
-        Purpose: Enable dragging the frameless window by its title bar.
-
+        """Enable dragging the frameless window by its title bar.
         Why this exists: With Qt.FramelessWindowHint, we lose the default OS
         window dragging. This reimplements it for the title bar area.
-
-        How it works: Stores the click position offset, used in mouseMoveEvent()
-        to calculate new window position while dragging.
-
-        Assumptions:
-            - Title bar height is 30 pixels
-            - Only left-click drags
         """
         if event.button() == Qt.LeftButton:
             # Check if in title bar for dragging
@@ -3003,71 +2180,21 @@ class LeagueOverlay(QMainWindow):
                 event.accept()
 
     def mouseMoveEvent(self, event):
-        """Qt event handler: Mouse moved while button held.
-
-        Purpose: Update window position during drag operation.
-
-        Why this exists: Completes the drag functionality started in mousePressEvent().
-
-        Assumptions:
-            - drag_position was set in mousePressEvent()
-            - Left button is still held
-        """
+        """Update window position during drag operation."""
         if event.buttons() == Qt.LeftButton:
             if not self.drag_position.isNull():
                 self.move(event.globalPosition().toPoint() - self.drag_position)
                 event.accept()
 
     def mouseReleaseEvent(self, event):
-        """Qt event handler: Mouse button released.
-
-        Purpose: End drag operation and save new window position to config.
-
-        Why this exists: Ensures window position is persisted immediately after
-        user moves the window, not just on app close (in case of crash).
-
-        Assumptions: Left button release ends drag
-        """
+        """End drag operation and save new window position to config."""
         self.drag_position = QPoint()
         # Save settings when user finishes moving/resizing
         if event.button() == Qt.LeftButton:
             self.save_settings()
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# SECTION 4: SETTINGS DIALOG (UI Component)
-# ═══════════════════════════════════════════════════════════════════════════
-#
-# Settings dialog for user preferences and configuration:
-# - SettingsDialog: Modal dialog for overlay configuration
-#
-# TO SPLIT: Move this section to ui_components.py (with Section 2 components)
-# ═══════════════════════════════════════════════════════════════════════════
-
 class SettingsDialog(QDialog):
-    """Modal settings dialog for configuring overlay appearance and behavior.
-
-    Purpose: Provides a user-friendly GUI for all configurable options without
-    editing JSON files or using command-line arguments.
-
-    Settings provided:
-        - Driver color config file (create new or load existing)
-        - Window opacity (0.10 to 1.00 in 0.05 increments)
-        - Refresh rate (0.25 to 5.0 seconds in 0.25 increments)
-        - Font size (Small/Medium/Large/Extra Large)
-        - Row color style (Default/Alternate/Outline)
-        - UI preferences (auto-hide headers, center names, bold rows)
-        - Division colors (customize Pro/ProAm/Am/Rookie colors)
-
-    Why this exists: Users shouldn't need to manually edit config files.
-    This provides safe, validated, live-preview access to all settings.
-
-    Features:
-        - Live opacity preview (changes as you drag slider)
-        - Cancel reverts opacity changes
-        - Reset to defaults button
-        - Shows update notification if new version available
-    """
+    """Modal settings dialog for configuring overlay appearance and behavior. Shows update link if new version available."""
     def __init__(self, parent):
         super().__init__(parent)
         self.parent_overlay = parent
@@ -3470,16 +2597,6 @@ class SettingsDialog(QDialog):
         
     def on_opacity_change(self, value):
         """Live preview of opacity changes as user drags slider.
-
-        Purpose: Lets user see exactly how transparent/opaque the overlay will be
-        before committing the change with "Apply Settings."
-
-        Why this exists: Opacity is hard to judge from a number. Live preview
-        lets users find the perfect transparency for their setup.
-
-        Args:
-            value: Slider value (2-20), divided by 20 to get 0.10-1.00 opacity
-
         Note: Changes are temporary until "Apply Settings" clicked. "Cancel"
         reverts to original_opacity stored in __init__.
         """
@@ -3488,27 +2605,7 @@ class SettingsDialog(QDialog):
         self.parent_overlay.update_all_backgrounds()
         
     def choose_color(self, division):
-        """Open color picker to customize a division's color.
-
-        Purpose: Allows leagues to customize division colors to match their
-        branding or preferences.
-
-        Why this exists: Default colors might not work for all leagues. Some
-        might want different colors for better visibility or aesthetics.
-
-        Args:
-            division: "Pro", "ProAm", "Am", or "Rookie"
-
-        Flow:
-            1. Opens Qt color picker dialog with current division color
-            2. If user selects new color, updates:
-               - available_colors dict
-               - Color button preview
-               - Hex code label
-            3. Changes saved when "Apply Settings" clicked
-
-        Note: Changes affect ALL drivers in that division immediately after apply.
-        """
+        """Open color picker to customize a division's color."""
         current_color = self.parent_overlay.available_colors[division]
         color = QColorDialog.getColor(QColor(current_color), self, f"Choose {division} Color")
 
@@ -3649,18 +2746,6 @@ class SettingsDialog(QDialog):
         self.parent_overlay.opacity = self.original_opacity
         self.parent_overlay.update_all_backgrounds()
         self.reject()
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# SECTION 5: APPLICATION ENTRY POINT
-# ═══════════════════════════════════════════════════════════════════════════
-#
-# Main function to start the application:
-# - main(): Initialize Qt application and show main window
-# - if __name__ == '__main__': Entry point when run as script
-#
-# TO SPLIT: Keep this in league_overlay.py (main file)
-# ═══════════════════════════════════════════════════════════════════════════
 
 def main():
     app = QApplication(sys.argv)
