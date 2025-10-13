@@ -2,16 +2,7 @@
 
 ## Overview
 
-BB's League Overlay - Real-time iRacing race position overlay
-
-This application provides a floating, semi-transparent overlay that shows:
-- Real-time race positions (updates before crossing start/finish line)
-- Division-based color coding (Pro, ProAm, Am, Rookie)
-- Live time gaps to cars ahead (within same division)
-- Division-specific filtering for spectators
-- Multi-class race support (always only show cars within same class)
-- Class refers to different types of cars (LMP2, GT3, GT4, etc), Divisions refers to groupings of drivers within the same class
-- Uses irsdk to read telemetry data from iRacing
+BB's League Overlay - Real-time iRacing race position overlay utilizing irsdk
 
 KEY CONCEPTS:
 1. REAL-TIME vs OFFICIAL POSITIONS
@@ -20,7 +11,7 @@ KEY CONCEPTS:
    - This overlay uses real-time during race, official after finish (and best lap time during practice or qualifying)
 
 2. DIVISION SYSTEM
-   - Drivers are assigned to divisions via league_divisions.json config file
+   - Drivers are assigned to divisions via league_divisions.json (or other loaded) config file
    - Each division has a color (customizable in settings)
    - Gaps are calculated within divisions (Pro only competes with Pro, etc.)
    - Right-click any driver to change their division
@@ -38,6 +29,10 @@ KEY CONCEPTS:
    - Three color styles: Default, Alternate, Outline
    - Adjustable opacity, refresh rate, and font sizes
    - Opacity setting affects background but text stays at full opacity
+
+5. OTHER NOTES
+   - Multi-class race support (always only show cars within same class)
+   - Class refers to different types of cars (LMP2, GT3, GT4, etc), Divisions refers to groupings of drivers within the same class
 
 CRITICAL iRACING SDK VARIABLES USED IN THIS APPLICATION
 
@@ -104,8 +99,7 @@ EDGE CASES & ASSUMPTIONS:
 4. Lap numbers can be -1 (car in pits, not on track yet)
 5. LapDistPct should be 0.0-1.0 but can exceed (treat as 0 if invalid)
 6. SessionState transitions: Racing(4) -> Checkered(5) -> CoolDown(6)
-7. ResultsPositions only populated AFTER checkered, not during racing
-8. Driver list is static per session (doesn't update if someone joins mid-race)
+7. ResultsPositions update each lap
 
 RACE FINISH STATE MACHINE
 
