@@ -889,7 +889,7 @@ class LeagueOverlay(QMainWindow):
                         self.ir.shutdown()
 
                 if self.race_state_tracker.is_checkered():
-                    time.sleep(0.125)  # refresh more often to track finish times
+                    time.sleep(0.05)  # refresh more often to track finish times
                 else:
                     time.sleep(self.refresh_rate)
 
