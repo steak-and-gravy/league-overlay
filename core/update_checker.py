@@ -6,8 +6,12 @@ It handles version comparison and error handling, making it easy to integrate in
 
 import json
 import urllib.request
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from packaging import version
+
+from config.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class UpdateChecker:
@@ -60,6 +64,11 @@ class UpdateChecker:
 
             update_available = version.parse(latest_version) > version.parse(self.current_version)
 
+            if update_available:
+                logger.info(f"Update available: {latest_version} (current: {self.current_version})")
+            else:
+                logger.info(f"No update available. Current version {self.current_version} is up to date")
+
             return {
                 'update_available': update_available,
                 'latest_version': latest_version,
@@ -67,6 +76,7 @@ class UpdateChecker:
                 'download_url': download_url
             }
         except Exception as e:
+            logger.warning(f"Failed to check for updates: {e}")
             return {
                 'update_available': False,
                 'latest_version': self.current_version,
