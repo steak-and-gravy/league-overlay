@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
-from config.constants import VERSION
+from config.constants import VERSION, UI_DIMENSIONS
 
 if TYPE_CHECKING:
     from league_overlay import LeagueOverlay
@@ -23,7 +23,7 @@ class SettingsDialog(QDialog):
         self.parent_overlay = parent
         self.setWindowTitle("BB's League Overlay - Settings")
         self.setModal(True)
-        self.setFixedSize(300, 705)
+        self.setFixedSize(UI_DIMENSIONS.SETTINGS_DIALOG_WIDTH, UI_DIMENSIONS.SETTINGS_DIALOG_HEIGHT)
 
         self.setup_ui()
         
@@ -200,7 +200,7 @@ class SettingsDialog(QDialog):
         color_style_row.addWidget(color_style_label)
 
         self.color_style_combo = QComboBox()
-        self.color_style_combo.addItems(["Default", "Alternate", "Outline"])
+        self.color_style_combo.addItems(["Default", "Alternate", "Outline", "Stream"])
         self.color_style_combo.setCurrentText(self.parent_overlay.row_color_style)
         self.color_style_combo.setStyleSheet("""
             QComboBox {
@@ -234,21 +234,34 @@ class SettingsDialog(QDialog):
         color_style_row.addWidget(self.color_style_combo)
         window_layout.addLayout(color_style_row)
 
-        # Checkboxes
+        # Checkboxes in 2x2 grid (left and right columns)
+        checkbox_row1 = QHBoxLayout()
+
         self.hide_headers_cb = QCheckBox("Auto-hide headers")
         self.hide_headers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.hide_headers_cb.setChecked(self.parent_overlay.hide_headers)
-        window_layout.addWidget(self.hide_headers_cb)
+        checkbox_row1.addWidget(self.hide_headers_cb)
 
         self.center_drivers_cb = QCheckBox("Center driver names")
         self.center_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.center_drivers_cb.setChecked(self.parent_overlay.center_drivers)
-        window_layout.addWidget(self.center_drivers_cb)
+        checkbox_row1.addWidget(self.center_drivers_cb)
+
+        window_layout.addLayout(checkbox_row1)
+
+        checkbox_row2 = QHBoxLayout()
 
         self.bold_drivers_cb = QCheckBox("Bold all driver rows")
         self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.bold_drivers_cb.setChecked(self.parent_overlay.bold_drivers)
-        window_layout.addWidget(self.bold_drivers_cb)
+        checkbox_row2.addWidget(self.bold_drivers_cb)
+
+        self.show_division_gap_cb = QCheckBox("Show division gap")
+        self.show_division_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_division_gap_cb.setChecked(self.parent_overlay.show_division_gap)
+        checkbox_row2.addWidget(self.show_division_gap_cb)
+
+        window_layout.addLayout(checkbox_row2)
 
         layout.addWidget(window_group)
         
@@ -279,7 +292,7 @@ class SettingsDialog(QDialog):
             color_row.addWidget(div_label)
             
             color_btn = QPushButton()
-            color_btn.setFixedSize(80, 30)
+            color_btn.setFixedSize(104, 30)  # 30% wider than original 80px
             color_btn.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {color};
@@ -530,6 +543,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.hide_headers = self.hide_headers_cb.isChecked()
             self.parent_overlay.center_drivers = self.center_drivers_cb.isChecked()
             self.parent_overlay.bold_drivers = self.bold_drivers_cb.isChecked()
+            self.parent_overlay.show_division_gap = self.show_division_gap_cb.isChecked()
             self.parent_overlay.font_size = self.font_size_combo.currentText()
             self.parent_overlay.row_color_style = self.color_style_combo.currentText()
 

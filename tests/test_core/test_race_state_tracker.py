@@ -13,43 +13,50 @@ Tests cover:
 import pytest
 from unittest.mock import Mock
 from core.race_state_tracker import RaceStateTracker
+from core.driver_state import DriverState
+
+
+@pytest.fixture
+def mock_ir():
+    """Create a mock iRacing SDK object."""
+    return Mock()
 
 
 class TestInitialState:
     """Test cases for initial tracker state."""
 
-    def test_initial_state_is_racing(self):
+    def test_initial_state_is_racing(self, mock_ir):
         """Test tracker starts in racing state."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         assert tracker.is_racing() is True
         assert tracker.is_checkered() is False
 
-    def test_initial_no_finished_drivers(self):
+    def test_initial_no_finished_drivers(self, mock_ir):
         """Test no drivers are finished initially."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         assert len(tracker.finished_drivers) == 0
         assert tracker.has_leader_finished() is False
 
-    def test_initial_leader_state(self):
+    def test_initial_leader_state(self, mock_ir):
         """Test initial leader tracking state."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         assert tracker.has_leader_finished() is False
 
 
 class TestCheckeredFlag:
     """Test cases for checkered flag state."""
 
-    def test_set_checkered_flag(self):
+    def test_set_checkered_flag(self, mock_ir):
         """Test setting checkered flag transitions state."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         assert tracker.is_checkered() is True
         assert tracker.is_racing() is False
 
-    def test_is_checkered_before_and_after(self):
+    def test_is_checkered_before_and_after(self, mock_ir):
         """Test is_checkered transitions correctly."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         assert tracker.is_checkered() is False
 
         tracker.set_checkered_flag()
@@ -59,9 +66,9 @@ class TestCheckeredFlag:
 class TestDriverFinish:
     """Test cases for marking drivers as finished."""
 
-    def test_mark_driver_finished(self):
+    def test_mark_driver_finished(self, mock_ir):
         """Test marking a driver as finished."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         tracker.mark_driver_finished(
@@ -75,9 +82,9 @@ class TestDriverFinish:
         assert tracker.get_finish_time(2) == 123.45
         assert 2 in tracker.finished_drivers
 
-    def test_mark_multiple_drivers_finished(self):
+    def test_mark_multiple_drivers_finished(self, mock_ir):
         """Test marking multiple drivers as finished."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         tracker.mark_driver_finished(2, 100.0, 1, 50)
@@ -89,9 +96,9 @@ class TestDriverFinish:
         assert tracker.is_driver_finished(3) is True
         assert tracker.is_driver_finished(4) is True
 
-    def test_mark_same_driver_twice_idempotent(self):
+    def test_mark_same_driver_twice_idempotent(self, mock_ir):
         """Test marking same driver twice doesn't duplicate."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         tracker.mark_driver_finished(2, 100.0, 1, 50)
@@ -101,32 +108,32 @@ class TestDriverFinish:
         # First time should be recorded
         assert tracker.get_finish_time(2) == 100.0
 
-    def test_is_driver_finished_for_unfinished(self):
+    def test_is_driver_finished_for_unfinished(self, mock_ir):
         """Test is_driver_finished returns False for unfinished drivers."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         assert tracker.is_driver_finished(99) is False
 
-    def test_get_finish_time_for_unfinished(self):
+    def test_get_finish_time_for_unfinished(self, mock_ir):
         """Test get_finish_time returns None for unfinished drivers."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         assert tracker.get_finish_time(99) is None
 
 
 class TestLeaderFinish:
     """Test cases for leader finish tracking."""
 
-    def test_set_leader_finished_flag(self):
+    def test_set_leader_finished_flag(self, mock_ir):
         """Test marking leader finished flag."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         tracker.set_leader_finished_flag()
 
         assert tracker.has_leader_finished() is True
 
-    def test_leader_finished_flag_only_sets_boolean(self):
+    def test_leader_finished_flag_only_sets_boolean(self, mock_ir):
         """Test set_leader_finished_flag only sets flag, doesn't mark driver finished."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         tracker.set_leader_finished_flag()
@@ -139,9 +146,9 @@ class TestLeaderFinish:
 class TestFinishGaps:
     """Test cases for finish gap calculations."""
 
-    def test_get_finish_gap_basic(self):
+    def test_get_finish_gap_basic(self, mock_ir):
         """Test basic finish gap calculation."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         tracker.mark_driver_finished(1, 100.0, 1, 50)
@@ -150,9 +157,9 @@ class TestFinishGaps:
         gap = tracker.get_finish_gap(car_ahead_idx=1, car_behind_idx=2)
         assert gap == 2.5
 
-    def test_get_finish_gap_multiple_drivers(self):
+    def test_get_finish_gap_multiple_drivers(self, mock_ir):
         """Test finish gaps with multiple drivers."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         tracker.mark_driver_finished(1, 100.0, 1, 50)
@@ -168,9 +175,9 @@ class TestFinishGaps:
         # Gap between P1 and P3
         assert tracker.get_finish_gap(1, 3) == 8.5
 
-    def test_get_finish_gap_unfinished_drivers(self):
+    def test_get_finish_gap_unfinished_drivers(self, mock_ir):
         """Test finish gap returns None for unfinished drivers."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         tracker.mark_driver_finished(1, 100.0, 1, 50)
@@ -179,9 +186,9 @@ class TestFinishGaps:
         gap = tracker.get_finish_gap(car_ahead_idx=1, car_behind_idx=2)
         assert gap is None
 
-    def test_get_finish_gap_both_unfinished(self):
+    def test_get_finish_gap_both_unfinished(self, mock_ir):
         """Test finish gap returns None when both drivers unfinished."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         gap = tracker.get_finish_gap(car_ahead_idx=1, car_behind_idx=2)
         assert gap is None
 
@@ -189,65 +196,76 @@ class TestFinishGaps:
 class TestSnapshots:
     """Test cases for snapshot management."""
 
-    def test_update_snapshot(self):
+    def test_update_snapshot(self, mock_ir):
         """Test creating and updating driver snapshot."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
 
-        snapshot_data = {
-            'position': 1,
-            'gap': None,
-            'laps_completed': 50,
-            'driver_info': {'UserName': 'Test Driver', 'CarNumber': '1'}
-        }
+        driver_state = DriverState(
+            car_idx=5,
+            driver_info={'UserName': 'Test Driver', 'CarNumber': '1'},
+            official_position=1,
+            current_lap=50
+        )
 
-        tracker.update_snapshot(car_idx=5, snapshot_data=snapshot_data)
+        tracker.update_snapshot(car_idx=5, driver_state=driver_state)
         retrieved = tracker.get_snapshot(car_idx=5)
 
-        assert retrieved == snapshot_data
+        assert retrieved == driver_state
+        assert retrieved.car_idx == 5
+        assert retrieved.official_position == 1
+        assert retrieved.current_lap == 50
 
-    def test_get_snapshot_nonexistent(self):
+    def test_get_snapshot_nonexistent(self, mock_ir):
         """Test getting snapshot for nonexistent driver returns None."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         assert tracker.get_snapshot(car_idx=99) is None
 
-    def test_update_snapshot_overwrites(self):
+    def test_update_snapshot_overwrites(self, mock_ir):
         """Test updating snapshot overwrites previous data."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
 
-        tracker.update_snapshot(5, {'position': 1})
-        tracker.update_snapshot(5, {'position': 2, 'gap': '1.5'})
+        state1 = DriverState(car_idx=5, official_position=1)
+        tracker.update_snapshot(5, state1)
+
+        state2 = DriverState(car_idx=5, official_position=2, gap='1.5')
+        tracker.update_snapshot(5, state2)
 
         retrieved = tracker.get_snapshot(5)
-        assert retrieved == {'position': 2, 'gap': '1.5'}
+        assert retrieved == state2
+        assert retrieved.official_position == 2
+        assert retrieved.gap == '1.5'
 
-    def test_mark_finished_updates_snapshot_position(self):
+    def test_mark_finished_updates_snapshot_position(self, mock_ir):
         """Test marking driver finished updates snapshot with official position."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         # Create snapshot first
-        snapshot = {'position': 2, 'driver_info': {'UserName': 'Driver 2'}}
-        tracker.update_snapshot(2, snapshot)
+        driver_state = DriverState(car_idx=2, official_position=2, driver_info={'UserName': 'Driver 2'})
+        tracker.update_snapshot(2, driver_state)
 
         # Mark as finished
         tracker.mark_driver_finished(2, 100.0, official_position=3, finish_lap=50)
 
-        # Snapshot should be updated with official position
+        # Snapshot should be updated with official position and marked as finished
         retrieved = tracker.get_snapshot(2)
-        assert retrieved['official_position'] == 3
+        assert retrieved.official_position == 3
+        assert retrieved.is_finished == True
+        assert retrieved.finish_time == 100.0
+        assert retrieved.finish_lap == 50
 
 
 class TestReset:
     """Test cases for reset functionality."""
 
-    def test_reset_clears_all_state(self):
+    def test_reset_clears_all_state(self, mock_ir):
         """Test reset clears all tracking data."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
         tracker.set_leader_finished_flag()
         tracker.mark_driver_finished(1, 100.0, 1, 50)
         tracker.mark_driver_finished(2, 102.5, 2, 50)
-        tracker.update_snapshot(2, {'position': 2})
+        tracker.update_snapshot(2, DriverState(car_idx=2, official_position=2))
 
         tracker.reset()
 
@@ -259,9 +277,9 @@ class TestReset:
         assert len(tracker.finish_times) == 0
         assert len(tracker.driver_snapshots) == 0
 
-    def test_reset_allows_new_race(self):
+    def test_reset_allows_new_race(self, mock_ir):
         """Test reset allows tracking new race from clean state."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
 
         # First race
         tracker.set_checkered_flag()
@@ -281,9 +299,9 @@ class TestReset:
 class TestRecalculateFinishGaps:
     """Test cases for division-based finish gap recalculation."""
 
-    def test_recalculate_basic(self):
+    def test_recalculate_basic(self, mock_ir):
         """Test basic division gap recalculation."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         # Create mock session with results
@@ -299,8 +317,8 @@ class TestRecalculateFinishGaps:
             return 'blue'
 
         # Create snapshots and mark as finished
-        tracker.update_snapshot(1, {'driver_info': {'UserName': 'Driver 1'}})
-        tracker.update_snapshot(2, {'driver_info': {'UserName': 'Driver 2'}})
+        tracker.update_snapshot(1, DriverState(car_idx=1, driver_info={'UserName': 'Driver 1'}))
+        tracker.update_snapshot(2, DriverState(car_idx=2, driver_info={'UserName': 'Driver 2'}))
 
         tracker.mark_driver_finished(1, 100.0, 1, 50)
         tracker.mark_driver_finished(2, 102.5, 2, 50)
@@ -312,12 +330,12 @@ class TestRecalculateFinishGaps:
         snap1 = tracker.get_snapshot(1)
         snap2 = tracker.get_snapshot(2)
 
-        assert snap1['official_position'] == 1
-        assert snap2['official_position'] == 2
+        assert snap1.official_position == 1
+        assert snap2.official_position == 2
 
-    def test_recalculate_different_divisions(self):
+    def test_recalculate_different_divisions(self, mock_ir):
         """Test gap recalculation with multiple divisions."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         current_session = {
@@ -335,10 +353,10 @@ class TestRecalculateFinishGaps:
             return 'blue' if car_num in ['1', '3'] else 'red'
 
         # Create snapshots
-        tracker.update_snapshot(1, {'driver_info': {'CarNumber': '1'}})
-        tracker.update_snapshot(2, {'driver_info': {'CarNumber': '2'}})
-        tracker.update_snapshot(3, {'driver_info': {'CarNumber': '3'}})
-        tracker.update_snapshot(4, {'driver_info': {'CarNumber': '4'}})
+        tracker.update_snapshot(1, DriverState(car_idx=1, driver_info={'CarNumber': '1'}))
+        tracker.update_snapshot(2, DriverState(car_idx=2, driver_info={'CarNumber': '2'}))
+        tracker.update_snapshot(3, DriverState(car_idx=3, driver_info={'CarNumber': '3'}))
+        tracker.update_snapshot(4, DriverState(car_idx=4, driver_info={'CarNumber': '4'}))
 
         # Mark all as finished
         tracker.mark_driver_finished(1, 100.0, 1, 50)
@@ -355,14 +373,14 @@ class TestRecalculateFinishGaps:
         # Car 4 (Am P2) should have gap to Car 2
 
         snap3 = tracker.get_snapshot(3)
-        assert snap3.get('finish_gap') == 5.0  # 105 - 100
+        assert snap3.finish_gap == 5.0  # 105 - 100
 
         snap4 = tracker.get_snapshot(4)
-        assert snap4.get('finish_gap') == 6.0  # 108 - 102
+        assert snap4.finish_gap == 6.0  # 108 - 102
 
-    def test_recalculate_with_lap_gaps(self):
+    def test_recalculate_with_lap_gaps(self, mock_ir):
         """Test gap recalculation includes lap gaps."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         current_session = {
@@ -375,8 +393,8 @@ class TestRecalculateFinishGaps:
         def get_color(driver_info):
             return 'blue'
 
-        tracker.update_snapshot(1, {'driver_info': {'UserName': 'D1'}})
-        tracker.update_snapshot(2, {'driver_info': {'UserName': 'D2'}})
+        tracker.update_snapshot(1, DriverState(car_idx=1, driver_info={'UserName': 'D1'}))
+        tracker.update_snapshot(2, DriverState(car_idx=2, driver_info={'UserName': 'D2'}))
 
         # Car 1 finishes on lap 50, Car 2 finishes on lap 48 (lapped)
         tracker.mark_driver_finished(1, 100.0, 1, finish_lap=50)
@@ -385,11 +403,11 @@ class TestRecalculateFinishGaps:
         tracker.recalculate_all_finish_gaps(current_session, get_color)
 
         snap2 = tracker.get_snapshot(2)
-        assert snap2.get('finish_lap_gap') == 2  # 50 - 48
+        assert snap2.finish_lap_gap == 2  # 50 - 48
 
-    def test_recalculate_handles_missing_session_data(self):
+    def test_recalculate_handles_missing_session_data(self, mock_ir):
         """Test recalculation handles missing session data gracefully."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         # Empty session
@@ -398,15 +416,15 @@ class TestRecalculateFinishGaps:
         def get_color(driver_info):
             return 'blue'
 
-        tracker.update_snapshot(1, {'driver_info': {'UserName': 'Driver 1'}})
+        tracker.update_snapshot(1, DriverState(car_idx=1, driver_info={'UserName': 'Driver 1'}))
         tracker.mark_driver_finished(1, 100.0, 1, 50)
 
         # Should not crash
         tracker.recalculate_all_finish_gaps(current_session, get_color)
 
-    def test_recalculate_handles_invalid_session_data(self):
+    def test_recalculate_handles_invalid_session_data(self, mock_ir):
         """Test recalculation handles invalid session data gracefully."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.set_checkered_flag()
 
         # Invalid session data
@@ -415,7 +433,7 @@ class TestRecalculateFinishGaps:
         def get_color(driver_info):
             return 'blue'
 
-        tracker.update_snapshot(1, {'driver_info': {'UserName': 'Driver 1'}})
+        tracker.update_snapshot(1, DriverState(car_idx=1, driver_info={'UserName': 'Driver 1'}))
         tracker.mark_driver_finished(1, 100.0, 1, 50)
 
         # Should not crash
@@ -425,9 +443,9 @@ class TestRecalculateFinishGaps:
 class TestEdgeCases:
     """Test edge cases and unusual scenarios."""
 
-    def test_mark_finished_before_checkered(self):
+    def test_mark_finished_before_checkered(self, mock_ir):
         """Test marking driver finished before checkered flag."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
 
         # Mark finished without checkered flag
         tracker.mark_driver_finished(1, 100.0, 1, 50)
@@ -435,23 +453,262 @@ class TestEdgeCases:
         # Should still work
         assert tracker.is_driver_finished(1) is True
 
-    def test_zero_finish_time(self):
+    def test_zero_finish_time(self, mock_ir):
         """Test handling zero finish time."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.mark_driver_finished(1, 0.0, 1, 50)
 
         assert tracker.get_finish_time(1) == 0.0
 
-    def test_negative_finish_time(self):
+    def test_negative_finish_time(self, mock_ir):
         """Test handling negative finish time (edge case)."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.mark_driver_finished(1, -100.0, 1, 50)
 
         assert tracker.get_finish_time(1) == -100.0
 
-    def test_large_car_indices(self):
+    def test_large_car_indices(self, mock_ir):
         """Test handling large car indices."""
-        tracker = RaceStateTracker()
+        tracker = RaceStateTracker(mock_ir)
         tracker.mark_driver_finished(9999, 100.0, 1, 50)
 
         assert tracker.is_driver_finished(9999) is True
+
+
+class TestFinishGapWithPositionSwaps:
+    """Test cases for finish gap calculation when positions swap at finish line.
+
+    Tests for bug fix (10/21/25): iRacing's ClassPosition can be inconsistent with
+    actual finish times when cars cross close together. Need to sort by finish_times
+    instead of official_position to avoid negative gaps.
+    """
+
+    def test_finish_gap_calculation_with_position_swap_at_finish(self, mock_ir):
+        """Test finish gap when two cars swap positions near finish line.
+
+        Scenario: Car B finishes first (SessionTime=1000.0) but iRacing initially
+        reports worse ClassPosition. Car A finishes second (SessionTime=1002.0)
+        but has better ClassPosition. Without the fix, this causes negative gaps.
+        """
+        tracker = RaceStateTracker(mock_ir)
+
+        # Create mock session with ResultsPositions (will be used in recalculate)
+        mock_session = {
+            'ResultsPositions': [
+                {'CarIdx': 10, 'ClassPosition': 0},  # Car A gets better position from iRacing
+                {'CarIdx': 11, 'ClassPosition': 1},  # Car B gets worse position from iRacing
+            ]
+        }
+
+        # Mock get_driver_color function (all same division for simplicity)
+        def mock_get_color(driver_info):
+            return '#FFFFFF'
+
+        # Car B finishes FIRST (SessionTime=1000.0) but reports as P2
+        tracker.mark_driver_finished(11, 1000.0, official_position=2, finish_lap=50)
+
+        # Create snapshot for car B
+        tracker.driver_snapshots[11] = DriverState(
+            car_idx=11,
+            driver_info={'UserName': 'Driver B'},
+            official_position=2
+        )
+
+        # Car A finishes SECOND (SessionTime=1002.0) but reports as P1
+        tracker.mark_driver_finished(10, 1002.0, official_position=1, finish_lap=50)
+
+        # Create snapshot for car A
+        tracker.driver_snapshots[10] = DriverState(
+            car_idx=10,
+            driver_info={'UserName': 'Driver A'},
+            official_position=1
+        )
+
+        # Recalculate gaps - this should sort by finish_times, not official_position
+        tracker.recalculate_all_finish_gaps(mock_session, mock_get_color)
+
+        # Car B finished first, should be division P1 (no gap)
+        assert tracker.driver_snapshots[11].finish_gap is None
+
+        # Car A finished second, should have +2.0s gap to car B (NOT negative!)
+        assert tracker.driver_snapshots[10].finish_gap is not None
+        finish_gap = tracker.driver_snapshots[10].finish_gap
+        assert finish_gap == pytest.approx(2.0, abs=0.01)
+        assert finish_gap > 0, "Gap should be positive when sorted by finish times"
+
+    def test_finish_gap_calculation_with_unstable_positions(self, mock_ir):
+        """Test finish gap when positions change after drivers finish.
+
+        Simulates real checkered flag behavior where ClassPosition continues
+        updating as more cars finish. Finish times should remain stable.
+        """
+        tracker = RaceStateTracker(mock_ir)
+
+        # Three cars finish in order A, B, C
+        tracker.mark_driver_finished(1, 1000.0, official_position=1, finish_lap=50)
+        tracker.mark_driver_finished(2, 1005.0, official_position=2, finish_lap=50)
+        tracker.mark_driver_finished(3, 1010.0, official_position=3, finish_lap=50)
+
+        # Create snapshots
+        for car_idx in [1, 2, 3]:
+            tracker.driver_snapshots[car_idx] = DriverState(
+                car_idx=car_idx,
+                driver_info={'UserName': f'Driver {car_idx}'},
+                official_position=car_idx
+            )
+
+        mock_session = {
+            'ResultsPositions': [
+                {'CarIdx': 1, 'ClassPosition': 0},
+                {'CarIdx': 2, 'ClassPosition': 1},
+                {'CarIdx': 3, 'ClassPosition': 2},
+            ]
+        }
+
+        def mock_get_color(driver_info):
+            return '#FF0000'
+
+        # First recalculation
+        tracker.recalculate_all_finish_gaps(mock_session, mock_get_color)
+
+        gap_2_first = tracker.driver_snapshots[2].finish_gap
+        gap_3_first = tracker.driver_snapshots[3].finish_gap
+
+        # Now simulate positions changing (Car 3 and Car 2 swap in official standings)
+        tracker.driver_snapshots[2].official_position = 3
+        tracker.driver_snapshots[3].official_position = 2
+
+        mock_session['ResultsPositions'] = [
+            {'CarIdx': 1, 'ClassPosition': 0},
+            {'CarIdx': 3, 'ClassPosition': 1},  # Swapped!
+            {'CarIdx': 2, 'ClassPosition': 2},  # Swapped!
+        ]
+
+        # Recalculate with new positions
+        tracker.recalculate_all_finish_gaps(mock_session, mock_get_color)
+
+        gap_2_second = tracker.driver_snapshots[2].finish_gap
+        gap_3_second = tracker.driver_snapshots[3].finish_gap
+
+        # Gaps should REMAIN THE SAME because finish_times don't change
+        assert gap_2_second == gap_2_first == pytest.approx(5.0, abs=0.01)
+        assert gap_3_second == gap_3_first == pytest.approx(5.0, abs=0.01)
+
+        # All gaps should be positive
+        assert gap_2_second > 0
+        assert gap_3_second > 0
+
+    def test_finished_with_divisions_sorting(self, mock_ir):
+        """Test that finished_with_divisions list is sorted for consistent search order.
+
+        Bug: finished_with_divisions was built from iterating a Set, so searching
+        for "car ahead" happened in random order even with correct division positions.
+        Fix: Sort finished_with_divisions by finish_times before Step 4.
+        """
+        tracker = RaceStateTracker(mock_ir)
+
+        # Create 5 cars in same division, finish in non-sequential car_idx order
+        # to simulate unordered set iteration
+        finish_order = [
+            (15, 1000.0, 1),  # Car 15 finishes first
+            (3, 1005.0, 2),   # Car 3 finishes second
+            (42, 1010.0, 3),  # Car 42 finishes third
+            (7, 1015.0, 4),   # Car 7 finishes fourth
+            (99, 1020.0, 5),  # Car 99 finishes fifth
+        ]
+
+        for car_idx, finish_time, position in finish_order:
+            tracker.mark_driver_finished(car_idx, finish_time, official_position=position, finish_lap=50)
+            tracker.driver_snapshots[car_idx] = DriverState(
+                car_idx=car_idx,
+                driver_info={'UserName': f'Driver {car_idx}'},
+                official_position=position
+            )
+
+        mock_session = {
+            'ResultsPositions': [
+                {'CarIdx': 15, 'ClassPosition': 0},
+                {'CarIdx': 3, 'ClassPosition': 1},
+                {'CarIdx': 42, 'ClassPosition': 2},
+                {'CarIdx': 7, 'ClassPosition': 3},
+                {'CarIdx': 99, 'ClassPosition': 4},
+            ]
+        }
+
+        def mock_get_color(driver_info):
+            return '#00FF00'
+
+        tracker.recalculate_all_finish_gaps(mock_session, mock_get_color)
+
+        # Verify gaps are calculated correctly in finish time order
+        # Car 15: division leader, no gap
+        assert tracker.driver_snapshots[15].finish_gap is None
+
+        # Car 3: +5s to car 15
+        assert tracker.driver_snapshots[3].finish_gap == pytest.approx(5.0, abs=0.01)
+
+        # Car 42: +5s to car 3
+        assert tracker.driver_snapshots[42].finish_gap == pytest.approx(5.0, abs=0.01)
+
+        # Car 7: +5s to car 42
+        assert tracker.driver_snapshots[7].finish_gap == pytest.approx(5.0, abs=0.01)
+
+        # Car 99: +5s to car 7
+        assert tracker.driver_snapshots[99].finish_gap == pytest.approx(5.0, abs=0.01)
+
+        # All gaps should be positive (no negative gaps from wrong search order)
+        for car_idx in [3, 42, 7, 99]:
+            assert tracker.driver_snapshots[car_idx].finish_gap > 0
+
+    def test_finish_gap_with_multiple_divisions(self, mock_ir):
+        """Test finish gap calculation with multiple divisions finishing interleaved.
+
+        Ensures division positions are calculated correctly per division when
+        cars from different divisions finish in alternating order.
+        """
+        tracker = RaceStateTracker(mock_ir)
+
+        # Two divisions (Red and Blue), finish in interleaved order
+        # Red: cars 1, 3, 5
+        # Blue: cars 2, 4, 6
+        finish_data = [
+            (1, 1000.0, 1, 'red'),   # Red P1
+            (2, 1005.0, 2, 'blue'),  # Blue P1
+            (3, 1010.0, 3, 'red'),   # Red P2
+            (4, 1015.0, 4, 'blue'),  # Blue P2
+            (5, 1020.0, 5, 'red'),   # Red P3
+            (6, 1025.0, 6, 'blue'),  # Blue P3
+        ]
+
+        for car_idx, finish_time, position, color in finish_data:
+            tracker.mark_driver_finished(car_idx, finish_time, official_position=position, finish_lap=50)
+            tracker.driver_snapshots[car_idx] = DriverState(
+                car_idx=car_idx,
+                driver_info={'UserName': f'Driver {car_idx}', 'color': color},
+                official_position=position
+            )
+
+        mock_session = {
+            'ResultsPositions': [
+                {'CarIdx': i[0], 'ClassPosition': i[2] - 1} for i in finish_data
+            ]
+        }
+
+        def mock_get_color(driver_info):
+            return driver_info.get('color', '#FFFFFF')
+
+        tracker.recalculate_all_finish_gaps(mock_session, mock_get_color)
+
+        # Red division gaps
+        assert tracker.driver_snapshots[1].finish_gap is None  # Leader
+        assert tracker.driver_snapshots[3].finish_gap == pytest.approx(10.0, abs=0.01)  # +10s to car 1
+        assert tracker.driver_snapshots[5].finish_gap == pytest.approx(10.0, abs=0.01)  # +10s to car 3
+
+        # Blue division gaps
+        assert tracker.driver_snapshots[2].finish_gap is None  # Leader
+        assert tracker.driver_snapshots[4].finish_gap == pytest.approx(10.0, abs=0.01)  # +10s to car 2
+        assert tracker.driver_snapshots[6].finish_gap == pytest.approx(10.0, abs=0.01)  # +10s to car 4
+
+        # All gaps positive
+        for car_idx in [3, 4, 5, 6]:
+            assert tracker.driver_snapshots[car_idx].finish_gap > 0

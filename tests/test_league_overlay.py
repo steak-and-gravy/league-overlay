@@ -33,7 +33,8 @@ class TestHandleTelemetryUpdate:
         overlay.telemetry_processor = Mock()
         overlay.telemetry_processor.current_session_num = None
         overlay.telemetry_processor.current_session_type = None
-        overlay.telemetry_processor.player_car_idx = None
+        overlay.telemetry_processor.position_calculator = Mock()
+        overlay.telemetry_processor.position_calculator.player_car_idx = None
 
         # Import the actual method and bind it to our mock
         # This requires reading the actual implementation
@@ -58,7 +59,7 @@ class TestHandleTelemetryUpdate:
 
             # Update race data and player info
             self.race_data = race_data
-            self.player_car_idx = self.telemetry_processor.player_car_idx
+            self.player_car_idx = self.telemetry_processor.position_calculator.player_car_idx
 
         # Bind the method to the mock
         overlay._handle_telemetry_update = _handle_telemetry_update.__get__(overlay)
@@ -87,7 +88,7 @@ class TestHandleTelemetryUpdate:
         # Processor reports first session
         mock_overlay.telemetry_processor.current_session_num = 0
         mock_overlay.telemetry_processor.current_session_type = 'Practice'
-        mock_overlay.telemetry_processor.player_car_idx = 5
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 5
 
         race_data = [{'position': 1, 'driver': 'Driver 1'}]
 
@@ -110,7 +111,7 @@ class TestHandleTelemetryUpdate:
         # Processor reports new session
         mock_overlay.telemetry_processor.current_session_num = 1
         mock_overlay.telemetry_processor.current_session_type = 'Qualify'
-        mock_overlay.telemetry_processor.player_car_idx = 5
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 5
 
         new_race_data = [{'new': 'data'}]
 
@@ -134,7 +135,7 @@ class TestHandleTelemetryUpdate:
         # Change to session 1 (same type)
         mock_overlay.telemetry_processor.current_session_num = 1
         mock_overlay.telemetry_processor.current_session_type = 'Practice'
-        mock_overlay.telemetry_processor.player_car_idx = 5
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 5
 
         new_race_data = [{'new': 'data'}]
         mock_overlay._handle_telemetry_update(new_race_data)
@@ -152,7 +153,7 @@ class TestHandleTelemetryUpdate:
         # Change to Race (same number)
         mock_overlay.telemetry_processor.current_session_num = 0
         mock_overlay.telemetry_processor.current_session_type = 'Race'
-        mock_overlay.telemetry_processor.player_car_idx = 5
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 5
 
         new_race_data = [{'new': 'data'}]
         mock_overlay._handle_telemetry_update(new_race_data)
@@ -170,7 +171,7 @@ class TestHandleTelemetryUpdate:
         # Same session in processor
         mock_overlay.telemetry_processor.current_session_num = 1
         mock_overlay.telemetry_processor.current_session_type = 'Race'
-        mock_overlay.telemetry_processor.player_car_idx = 5
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 5
 
         updated_race_data = [{'position': 2}]
         mock_overlay._handle_telemetry_update(updated_race_data)
@@ -183,7 +184,7 @@ class TestHandleTelemetryUpdate:
         """Test player_car_idx is synced from telemetry processor."""
         mock_overlay.telemetry_processor.current_session_num = 0
         mock_overlay.telemetry_processor.current_session_type = 'Race'
-        mock_overlay.telemetry_processor.player_car_idx = 42
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 42
 
         race_data = [{'position': 1}]
         mock_overlay._handle_telemetry_update(race_data)
@@ -198,7 +199,7 @@ class TestHandleTelemetryUpdate:
         mock_overlay.telemetry_processor.current_session_type = 'Race'
 
         # Player changes car
-        mock_overlay.telemetry_processor.player_car_idx = 20
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 20
 
         race_data = [{'position': 1}]
         mock_overlay._handle_telemetry_update(race_data)
@@ -209,7 +210,7 @@ class TestHandleTelemetryUpdate:
         """Test handling empty race data list."""
         mock_overlay.telemetry_processor.current_session_num = 0
         mock_overlay.telemetry_processor.current_session_type = 'Race'
-        mock_overlay.telemetry_processor.player_car_idx = 5
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 5
 
         # Empty list (no drivers yet)
         race_data = []
@@ -238,7 +239,7 @@ class TestHandleTelemetryUpdate:
         mock_overlay.current_session_type = 'Race'
         mock_overlay.telemetry_processor.current_session_num = 1
         mock_overlay.telemetry_processor.current_session_type = 'Race'
-        mock_overlay.telemetry_processor.player_car_idx = 5
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 5
 
         # First update
         data1 = [{'position': 1}]
@@ -257,7 +258,7 @@ class TestHandleTelemetryUpdate:
 
     def test_session_numbers_with_types(self, mock_overlay):
         """Test various session number/type combinations."""
-        mock_overlay.telemetry_processor.player_car_idx = 5
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 5
 
         # Practice session 0
         mock_overlay.telemetry_processor.current_session_num = 0
@@ -284,7 +285,7 @@ class TestHandleTelemetryUpdate:
         """Test handling race data with multiple drivers."""
         mock_overlay.telemetry_processor.current_session_num = 0
         mock_overlay.telemetry_processor.current_session_type = 'Race'
-        mock_overlay.telemetry_processor.player_car_idx = 5
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 5
 
         race_data = [
             {'position': 1, 'driver': 'Driver 1', 'car_idx': 1},
@@ -313,7 +314,8 @@ class TestSessionChangeEdgeCases:
         overlay.telemetry_processor = Mock()
         overlay.telemetry_processor.current_session_num = None
         overlay.telemetry_processor.current_session_type = None
-        overlay.telemetry_processor.player_car_idx = None
+        overlay.telemetry_processor.position_calculator = Mock()
+        overlay.telemetry_processor.position_calculator.player_car_idx = None
 
         def _handle_telemetry_update(self, race_data):
             if race_data is None:
@@ -327,7 +329,7 @@ class TestSessionChangeEdgeCases:
             if session_changed and self.current_session_num is not None:
                 self.race_data = []
             self.race_data = race_data
-            self.player_car_idx = self.telemetry_processor.player_car_idx
+            self.player_car_idx = self.telemetry_processor.position_calculator.player_car_idx
 
         overlay._handle_telemetry_update = _handle_telemetry_update.__get__(overlay)
         return overlay
@@ -342,7 +344,7 @@ class TestSessionChangeEdgeCases:
         # Change to None session (disconnect scenario)
         mock_overlay.telemetry_processor.current_session_num = None
         mock_overlay.telemetry_processor.current_session_type = None
-        mock_overlay.telemetry_processor.player_car_idx = None
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = None
 
         new_data = [{'new': 'data'}]
         mock_overlay._handle_telemetry_update(new_data)
@@ -353,7 +355,7 @@ class TestSessionChangeEdgeCases:
 
     def test_rapid_session_changes(self, mock_overlay):
         """Test handling rapid session changes."""
-        mock_overlay.telemetry_processor.player_car_idx = 5
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 5
 
         # Session 0
         mock_overlay.telemetry_processor.current_session_num = 0
@@ -384,7 +386,7 @@ class TestSessionChangeEdgeCases:
         # Same number, different type
         mock_overlay.telemetry_processor.current_session_num = 0
         mock_overlay.telemetry_processor.current_session_type = 'Open Qualify'
-        mock_overlay.telemetry_processor.player_car_idx = 5
+        mock_overlay.telemetry_processor.position_calculator.player_car_idx = 5
 
         new_data = [{'new': 'data'}]
         mock_overlay._handle_telemetry_update(new_data)

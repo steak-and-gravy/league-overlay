@@ -10,10 +10,10 @@ The iRacing League Overlay is a real-time race position display application buil
 ┌──────────────────────────────────────────────────────────┐
 │                    League Overlay (Qt UI)                │
 │                                                          │
-│  ┌────────────────────┐      ┌──────────────────────┐  │
-│  │  Settings Dialog   │      │  Driver Row Renderer │  │
-│  │   (UI Config)      │      │   (Display Logic)    │  │
-│  └────────────────────┘      └──────────────────────┘  │
+│  ┌────────────────────┐      ┌──────────────────────┐    │
+│  │  Settings Dialog   │      │  Driver Row Renderer │    │
+│  │   (UI Config)      │      │   (Display Logic)    │    │
+│  └────────────────────┘      └──────────────────────┘    │
 └──────────────────────────────────────────────────────────┘
                     │                       ▲
                     │                       │
@@ -21,10 +21,14 @@ The iRacing League Overlay is a real-time race position display application buil
 ┌──────────────────────────────────────────────────────────┐
 │              Telemetry Processor (Core)                  │
 │                                                          │
-│  ┌──────────────┐  ┌─────────────┐  ┌────────────────┐ │
-│  │ Gap          │  │ Race State  │  │ Division       │ │
-│  │ Calculator   │  │ Tracker     │  │ Manager        │ │
-│  └──────────────┘  └─────────────┘  └────────────────┘ │
+│  ┌──────────────┐  ┌─────────────┐  ┌────────────────┐   │
+│  │ Position     │  │ Race State  │  │ Division       │   │
+│  │ Calculator   │  │ Tracker     │  │ Manager        │   │
+│  └──────────────┘  └─────────────┘  └────────────────┘   │
+│  ┌──────────────┐  ┌─────────────┐                       │
+│  │ Gap          │  │ Division    │                       │
+│  │ Calculator   │  │ Filter      │                       │
+│  └──────────────┘  └─────────────┘                       │
 └──────────────────────────────────────────────────────────┘
                     │                       ▲
                     │                       │
@@ -129,6 +133,53 @@ Driver-to-division mapping and color management.
 - JSON-based config shared across league members
 - Logs driver assignment loads/saves and errors
 
+#### `division_filter.py`
+Division-based filtering of race data.
+
+**Class:**
+- `DivisionFilter`
+
+**Responsibilities:**
+- Apply division filters to race data
+- Cycle through filter modes (All Divisions / My Division / specific division)
+- Track filter state (player mode vs spectator mode)
+- Provide button state for UI display
+- Determine which divisions have active drivers
+
+**Purpose**: Encapsulate division filtering logic for cleaner separation from UI orchestration.
+
+**Dependencies**: `core.division_manager`, `config.constants`
+
+**Key Features:**
+- Player mode: toggles between "My Division" and "All Divisions"
+- Spectator mode: cycles through divisions with active drivers
+- Returns filtered race data lists
+- Provides button text and color for UI rendering
+- Resets filter state on session change
+
+#### `position_calculator.py`
+Calculates driver positions from iRacing telemetry.
+
+**Class:**
+- `PositionCalculator`
+
+**Responsibilities:**
+- Calculate real-time positions based on track position (lap + lap_distance_pct)
+- Get official positions from iRacing timing system
+- Identify player car and class
+- Find overall race leader (for multi-class finish tracking)
+- Filter to player's class for multi-class support
+
+**Purpose**: Extract position calculation logic from TelemetryProcessor for better separation of concerns.
+
+**Dependencies**: `irsdk`, `config.logging_config`
+
+**Key Features:**
+- Real-time positioning: continuous updates using lap + lap_distance_pct
+- Official positioning: start/finish line updates (for practice/qualifying)
+- Multi-class filtering: only show cars in player's class
+- Player identification: tracks player's car index and class ID
+
 #### `race_state_tracker.py`
 State machine for tracking race finish status.
 
@@ -140,10 +191,12 @@ State machine for tracking race finish status.
 - Mark individual drivers as finished
 - Store finish snapshots (position, gap, lap)
 - Recalculate division gaps after each finish
+- Handle finish tracking for entire race
+- Manage disconnected driver restoration
 
 **Purpose**: Handle the complex finish tracking where cars finish individually after the checkered flag.
 
-**Dependencies**: None
+**Dependencies**: `irsdk`, `config.constants`, `config.logging_config`
 
 **State Machine:**
 ```
@@ -156,6 +209,8 @@ Racing → Checkered Flag → Drivers Finishing Individually
 - Locks position/gap when driver crosses line after checkered
 - Recalculates division-based gaps after each finish
 - Stores snapshots for finished drivers
+- Handles disconnected drivers (restores from snapshots)
+- Manages finish tracking workflow (moved from TelemetryProcessor)
 
 #### `telemetry_processor.py`
 Main telemetry processing pipeline.
@@ -164,22 +219,26 @@ Main telemetry processing pipeline.
 - `TelemetryProcessor`
 
 **Responsibilities:**
-- Connect to iRacing SDK
-- Process raw telemetry data
-- Calculate real-time positions
-- Coordinate with GapCalculator, RaceStateTracker, DivisionManager
+- Orchestrate telemetry processing pipeline
+- Coordinate between PositionCalculator, RaceStateTracker, DivisionManager, GapCalculator
 - Handle session changes (using SessionID from WeekendInfo + session_type)
 - Separate finished and racing drivers to prevent position contamination
+- Calculate division positions
+- Manage driver snapshots for racing drivers
+- Build formatted race data for UI display
 
-**Purpose**: Orchestrate all telemetry processing and coordinate between core modules.
+**Purpose**: Orchestrate all telemetry processing and coordinate between core modules. Acts as a coordinator rather than implementing low-level logic.
 
 **Dependencies**:
 - `irsdk` (external)
+- `core.position_calculator`
 - `core.gap_calculator`
 - `core.race_state_tracker`
 - `core.division_manager`
 - `config.constants`
 - `config.logging_config`
+
+**Size**: 640 LOC (reduced from 962 LOC after position calculation extraction)
 
 **Logging:**
 - Logs session changes (Practice → Qualifying → Race)
@@ -367,10 +426,13 @@ Main application entry point and orchestration.
 - Coordinate auto-centering
 - Manage context menus
 - Handle session changes
+- Apply division filters to race data
 
 **Purpose**: Orchestrate all components and manage application lifecycle.
 
 **Dependencies**: All other modules
+
+**Size**: 1180 LOC (reduced from 1247 LOC after division filter extraction)
 
 **Threading Model:**
 - **Main Thread**: Qt UI event loop
@@ -544,7 +606,7 @@ Telemetry Thread                Main Thread
       │                              │
       ├─── Read irsdk data
       ├─── Process with              │
-      │    TelemetryProcessor         │
+      │    TelemetryProcessor        │
       │                              │
       ├─── Emit DataUpdateSignal ───>│
       │                              │
@@ -575,14 +637,13 @@ Telemetry Thread                Main Thread
 - **Location**: Same directory as executable
 - **Managed by**: `SettingsManager`
 - **Contents**: Window position, opacity, fonts, division colors, etc.
-- **Sharing**: Per-user (not shared)
 
 #### `LeagueOverlay.log` (Application Log)
 - **Format**: Plain text
 - **Location**: Same directory as executable
 - **Managed by**: `logging_config.setup_logging()`
 - **Contents**: Startup info, errors, state changes, version info
-- **Behavior**: Overwrites on each application launch (no rotation)
+- **Behavior**: 2 file rotation, appends on every execution
 - **Usage**: Debugging, user support, troubleshooting
 
 #### `League_Divisions.json` - Default (Driver Assignments)
@@ -609,20 +670,23 @@ Telemetry Thread                Main Thread
 
 ## Testing Architecture
 
-### Unit Tests (174 tests as of 10/17/25, ~97% coverage on core modules)
+### Unit Tests (308 tests as of 10/20/25, ~97% coverage on core modules)
 
 **Test Organization:**
 ```
 tests/
-├── conftest.py                    # Shared fixtures
-├── test_auto_center_controller.py # 27 tests
+├── conftest.py                         # Shared fixtures
+├── test_auto_center_controller.py      # 27 tests
 ├── test_config/
-│   └── test_settings_manager.py   # 36 tests
+│   ├── test_settings_manager.py        # 36 tests
+│   └── test_settings_validator.py      # 58 tests
 └── test_core/
-    ├── test_gap_calculator.py     # 36 tests
-    ├── test_division_manager.py   # 27 tests
-    └── test_race_state_tracker.py # 32 tests
-├── test_league_overlay.py         # 16 tests
+    ├── test_gap_calculator.py          # 36 tests
+    ├── test_division_manager.py        # 27 tests
+    ├── test_division_filter.py         # 29 tests
+    ├── test_position_calculator.py     # 26 tests
+    ├── test_race_state_tracker.py      # 32 tests
+    └── test_telemetry_processor.py     # 37 tests
 ```
 
 **Testing Principles:**
@@ -719,10 +783,3 @@ tests/
 ## Conclusion
 
 The iRacing League Overlay follows a clean, modular architecture with clear separation between configuration, business logic, and UI. This design makes the codebase testable, maintainable, and extensible.
-
-The refactoring from a monolithic 3,299-line file to a well-organized modular structure (with 67% reduction in main file size) demonstrates the value of architectural planning and iterative improvement.
-
-For more information, see:
-- [DESIGN.md](DESIGN.md) - Module-level documentation
-- [CLAUDE.md](CLAUDE.md) - AI assistance context
-- [TESTING_SUMMARY.md](TESTING_SUMMARY.md) - Testing details

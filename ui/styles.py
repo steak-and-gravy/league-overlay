@@ -148,3 +148,39 @@ class OutlineColorStyle(ColorStyleStrategy):
             'layout_margins': (3, 2, 3, 2),
             'layout_spacing': 0
         }
+
+
+class StreamColorStyle(ColorStyleStrategy):
+    """Stream color style: Red position background, division color car number, black driver name and gap."""
+
+    def get_styling(self, driver_data: Dict, is_player: bool, driver_color: str,
+                   parent: 'LeagueOverlay') -> Dict[str, Any]:
+        # Position: red background, white text
+        # Driver name: black background, white text
+        # Car number: division color background, white text
+        # Division position: division color background, white text
+        # Gap: black background, white text
+
+        if is_player:
+            bg_style = f"background: {parent.create_gradient_background(driver_color)};"
+        else:
+            bg_style = f"background-color: {parent.get_bg_color('#000000')};"
+
+        row_widget = QWidget()
+        row_widget.setStyleSheet(bg_style)
+
+        return {
+            'row_widget': row_widget,
+            'container_widget': None,
+            'text_color': "white",  # Default text color (driver name, gap)
+            'gap_color': "white",
+            'label_bg': parent.get_bg_color('#000000'),  # Default background (driver name, gap)
+            'label_border': '',
+            'layout_margins': (2, 2, 2, 2),
+            'layout_spacing': 2,
+            # Special styling for specific labels
+            'position_bg': parent.get_bg_color('#FF0000'),  # Red background for position
+            'position_color': "white",
+            'car_number_bg': parent.get_bg_color(driver_color),  # Division color for car number
+            'car_number_color': "white"  # White text for car number and div position
+        }
