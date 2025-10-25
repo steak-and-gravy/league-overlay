@@ -27,6 +27,7 @@ from config.constants import (
 )
 from config.settings import SettingsManager
 from config.logging_config import setup_logging, get_logger
+from core.driver_state import DriverState
 from core.gap_calculator import GapCalculator
 from core.division_manager import DivisionManager
 from core.division_filter import DivisionFilter
@@ -799,8 +800,8 @@ class LeagueOverlay(QMainWindow):
         user_id = driver_info.get('UserID', '')
         user_name = driver_info.get('UserName', '')
 
-        for driver_data in self.displayed_data:
-            data_info = driver_data.get('driver_info', {})
+        for driver in self.displayed_data:
+            data_info = driver.driver_info
             data_id = data_info.get('UserID', '')
             data_name = data_info.get('UserName', '')
 
@@ -965,7 +966,7 @@ class LeagueOverlay(QMainWindow):
     # - _calculate_live_race_gap, _calculate_practice_gap, reset_fields
     # The telemetry_loop above now delegates to telemetry_processor.process_telemetry()
 
-    def _handle_telemetry_update(self, race_data: Optional[List[Dict]]) -> None:
+    def _handle_telemetry_update(self, race_data: Optional[List[DriverState]]) -> None:
         """Handle telemetry update and sync state from processor.
 
         Extracted from telemetry_loop for testability. Updates race data,
@@ -1035,7 +1036,7 @@ class LeagueOverlay(QMainWindow):
                 self._last_emitted_data = current_data.copy()
                 self.signals.update_data.emit(current_data)
 
-    def _has_data_changed(self, new_data: List[Dict]) -> bool:
+    def _has_data_changed(self, new_data: List[DriverState]) -> bool:
         """Check if the new data is different from the last emitted data.
 
         Compares key fields that would affect display to avoid unnecessary
@@ -1070,7 +1071,7 @@ class LeagueOverlay(QMainWindow):
 
         return False
 
-    def _filter_by_division(self, race_data: List[Dict]) -> List[Dict]:
+    def _filter_by_division(self, race_data: List[DriverState]) -> List[DriverState]:
         """Filter race data based on division filter settings.
 
         Delegates to DivisionFilter for actual filtering logic.
@@ -1087,8 +1088,8 @@ class LeagueOverlay(QMainWindow):
         if self.race_state_tracker.is_checkered() and len(filtered_data) != len(race_data):
             logger.debug(f"FILTER - Applied division filter: {len(race_data)} -> {len(filtered_data)} drivers")
             logger.debug(f"FILTER - player_car_idx: {self.player_car_idx}")
-            filtered_indices = [d.get('car_idx') for d in filtered_data]
-            removed_indices = [d.get('car_idx') for d in race_data if d.get('car_idx') not in filtered_indices]
+            filtered_indices = [d.car_idx for d in filtered_data]
+            removed_indices = [d.car_idx for d in race_data if d.car_idx not in filtered_indices]
             logger.debug(f"FILTER - Removed car indices: {removed_indices}")
 
         return filtered_data
@@ -1207,7 +1208,7 @@ class LeagueOverlay(QMainWindow):
         except Exception as e:
             logger.error(f"GUI update error: {e}", exc_info=True)
             
-    def display_race_data(self, data):
+    def display_race_data(self, data: List[DriverState]):
         """Display race data (thread-safe slot)"""
         if not data:
             logger.debug("display_race_data called with empty data")
@@ -1216,7 +1217,7 @@ class LeagueOverlay(QMainWindow):
         # Debug logging for checkered flag issues
         if self.race_state_tracker.is_checkered():
             logger.debug(f"DISPLAY - Checkered flag active, displaying {len(data)} drivers")
-            driver_list = [f"P{d.get('position', '?')} {d.get('driver_name', 'Unknown')} (idx:{d.get('car_idx', '?')})" for d in data]
+            driver_list = [f"P{d.real_time_position or d.official_position} {d.driver_info.get('UserName', 'Unknown')} (idx:{d.car_idx})" for d in data]
             logger.debug(f"DISPLAY - Driver list: {driver_list}")
 
         # Clear existing widgets
@@ -1226,8 +1227,8 @@ class LeagueOverlay(QMainWindow):
                 item.widget().deleteLater()
 
         # Add new driver rows
-        for driver_data in data:
-            row = self.row_renderer.create_row(driver_data)
+        for driver in data:
+            row = self.row_renderer.create_row(driver)
             self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, row)
 
         # Auto-center on player
@@ -1236,7 +1237,7 @@ class LeagueOverlay(QMainWindow):
 
         self.displayed_data = data.copy()
     
-    def show_context_menu(self, driver_data):
+    def show_context_menu(self, driver: DriverState):
         """Display right-click menu to assign driver to a division."""
         menu = QMenu(self)
         menu.setStyleSheet(f"""
@@ -1253,7 +1254,7 @@ class LeagueOverlay(QMainWindow):
         menu.addAction("Change Division").setEnabled(False)
         menu.addSeparator()
 
-        driver_info = driver_data['driver_info'] if 'driver_info' in driver_data else {}
+        driver_info = driver.driver_info
 
         for division_name in self.available_colors.keys():
             action = menu.addAction(division_name)
@@ -1265,7 +1266,7 @@ class LeagueOverlay(QMainWindow):
         # Use cursor position directly to avoid coordinate mapping issues
         menu.exec(QCursor.pos())
         
-    def center_on_player(self, current_data):
+    def center_on_player(self, current_data: List[DriverState]):
         """Auto-center the scroll view on the player's position.
         This only activates if the user hasn't manually scrolled recently
         (see manual_scroll_timeout). Helps keep player visible during races
@@ -1276,8 +1277,8 @@ class LeagueOverlay(QMainWindow):
 
         # Find the player in the current display data
         player_index = None
-        for i, driver_data in enumerate(current_data):
-            if driver_data['car_idx'] == self.player_car_idx:
+        for i, driver in enumerate(current_data):
+            if driver.car_idx == self.player_car_idx:
                 player_index = i
                 break
 

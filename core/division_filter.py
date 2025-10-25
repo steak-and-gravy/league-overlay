@@ -16,6 +16,7 @@ Responsibilities:
 from typing import Dict, List, Optional, Callable
 from config.constants import UI_COLORS
 from core.division_manager import DivisionManager
+from core.driver_state import DriverState
 
 
 class DivisionFilter:
@@ -38,7 +39,7 @@ class DivisionFilter:
 
     def cycle_filter(
         self,
-        race_data: List[Dict],
+        race_data: List[DriverState],
         player_car_idx: Optional[int],
         get_driver_color_fn: Callable[[Dict], str]
     ) -> None:
@@ -54,7 +55,7 @@ class DivisionFilter:
             get_driver_color_fn: Function to get a driver's division color
         """
         player_on_track = player_car_idx is not None and any(
-            d['car_idx'] == player_car_idx for d in race_data
+            d.car_idx == player_car_idx for d in race_data
         )
 
         if player_on_track:
@@ -91,10 +92,10 @@ class DivisionFilter:
 
     def apply_filter(
         self,
-        race_data: List[Dict],
+        race_data: List[DriverState],
         player_car_idx: Optional[int],
         get_driver_color_fn: Callable[[Dict], str]
-    ) -> List[Dict]:
+    ) -> List[DriverState]:
         """Apply current filter to race data.
 
         Handles three filtering modes:
@@ -103,12 +104,12 @@ class DivisionFilter:
         3. Show all divisions (default)
 
         Args:
-            race_data: Full list of driver data to filter
+            race_data: Full list of DriverState objects to filter
             player_car_idx: Player's car index, or None if spectating
             get_driver_color_fn: Function to get a driver's division color
 
         Returns:
-            Filtered list of driver data
+            Filtered list of DriverState objects
         """
         if not race_data:
             return race_data
@@ -116,20 +117,20 @@ class DivisionFilter:
         # Filter to player's division only
         if self.show_only_my_division and player_car_idx is not None:
             player_color = None
-            for driver_data in race_data:
-                if driver_data['car_idx'] == player_car_idx:
-                    player_color = get_driver_color_fn(driver_data['driver_info'])
+            for driver in race_data:
+                if driver.car_idx == player_car_idx:
+                    player_color = get_driver_color_fn(driver.driver_info)
                     break
 
             if player_color:
-                return [d for d in race_data if get_driver_color_fn(d['driver_info']) == player_color]
+                return [d for d in race_data if get_driver_color_fn(d.driver_info) == player_color]
             return race_data
 
         # Filter to specific division (spectator mode)
         if self.current_division_filter is not None:
             division_color = self.division_manager.division_colors.get(self.current_division_filter)
             if division_color:
-                return [d for d in race_data if get_driver_color_fn(d['driver_info']) == division_color]
+                return [d for d in race_data if get_driver_color_fn(d.driver_info) == division_color]
             return race_data
 
         # No filter - show all
@@ -164,7 +165,7 @@ class DivisionFilter:
 
     def _get_divisions_with_drivers(
         self,
-        race_data: List[Dict],
+        race_data: List[DriverState],
         get_driver_color_fn: Callable[[Dict], str]
     ) -> set:
         """Get set of division names that have active drivers in the session.
@@ -177,8 +178,8 @@ class DivisionFilter:
             Set of division names with active drivers
         """
         divisions_with_drivers = set()
-        for driver_data in race_data:
-            driver_color = get_driver_color_fn(driver_data['driver_info'])
+        for driver in race_data:
+            driver_color = get_driver_color_fn(driver.driver_info)
             for div_name, div_color in self.division_manager.division_colors.items():
                 if div_color == driver_color and div_name not in ["Default", "All"]:
                     divisions_with_drivers.add(div_name)

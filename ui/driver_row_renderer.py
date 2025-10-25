@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QWidget, QLabel, QGridLayout, QSizePolicy
 from PySide6.QtCore import Qt
 
 from config.constants import COLUMN_LAYOUT
+from core.driver_state import DriverState
 from .styles import DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, StreamColorStyle
 
 if TYPE_CHECKING:
@@ -29,21 +30,18 @@ class DriverRowRenderer:
         """
         self.parent = parent
 
-    def create_row(self, driver_data: Dict) -> QWidget:
+    def create_row(self, driver: DriverState) -> QWidget:
         """Create a driver row widget using the configured color style.
 
         Args:
-            driver_data: Dictionary containing driver information
+            driver: DriverState object containing driver information
 
         Returns:
             QWidget representing the driver row
         """
-        driver_color = self.parent.get_driver_color(driver_data.get('driver_info', {}))
-        is_player = driver_data.get('is_player', False)
-
         # Get color style
         style = self.STYLES.get(self.parent.row_color_style, self.STYLES["Default"])
-        styling = style.get_styling(driver_data, is_player, driver_color, self.parent)
+        styling = style.get_styling(driver, self.parent)
 
         # Extract styling components
         row_widget = styling['row_widget']
@@ -75,35 +73,35 @@ class DriverRowRenderer:
         layout.setColumnStretch(4, COLUMN_LAYOUT.GAP)
 
         # Determine font weight
-        font_weight = "bold" if is_player or self.parent.bold_drivers else "normal"
+        font_weight = "bold" if driver.is_player or self.parent.bold_drivers else "normal"
 
         # Create labels (pass styling for special styles like Stream)
         # Column positions depend on style
         car_col = 3 if is_stream_style else 2
         name_col = 2 if is_stream_style else 3
 
-        self._create_position_label(layout, driver_data, text_color, label_bg, label_border, font_weight, styling)
-        self._create_division_position_label(layout, driver_data, text_color, label_bg, label_border, font_weight, styling)
-        self._create_car_number_label(layout, driver_data, text_color, label_bg, label_border, font_weight, styling, car_col)
-        self._create_driver_name_label(layout, driver_data, text_color, label_bg, label_border, font_weight, name_col)
-        self._create_gap_label(layout, driver_data, gap_color, label_bg, label_border, font_weight)
+        self._create_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling)
+        self._create_division_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling)
+        self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_col)
+        self._create_driver_name_label(layout, driver, text_color, label_bg, label_border, font_weight, name_col)
+        self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight)
 
         # Set context menu for row widget
         row_widget.setContextMenuPolicy(Qt.CustomContextMenu)
         row_widget.customContextMenuRequested.connect(
-            lambda pos, dd=driver_data: self.parent.show_context_menu(dd)
+            lambda pos, d=driver: self.parent.show_context_menu(d)
         )
 
         # Set context menu for container if it exists
         if container_widget:
             container_widget.setContextMenuPolicy(Qt.CustomContextMenu)
             container_widget.customContextMenuRequested.connect(
-                lambda pos, dd=driver_data: self.parent.show_context_menu(dd)
+                lambda pos, d=driver: self.parent.show_context_menu(d)
             )
 
         return container_widget if container_widget else row_widget
 
-    def _create_position_label(self, layout: QGridLayout, driver_data: Dict, text_color: str,
+    def _create_position_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                label_bg: str, label_border: str, font_weight: str, styling: Dict = None) -> None:
         """Create position label."""
         # Check for special position styling (for Stream style)
@@ -127,7 +125,7 @@ class DriverRowRenderer:
         )
         layout.addWidget(pos_label, 0, 0)
 
-    def _create_division_position_label(self, layout: QGridLayout, driver_data: Dict, text_color: str,
+    def _create_division_position_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                        label_bg: str, label_border: str, font_weight: str, styling: Dict = None) -> None:
         """Create division position label."""
         # Check for special division position styling (same as car number for Stream style)
@@ -151,7 +149,7 @@ class DriverRowRenderer:
         )
         layout.addWidget(div_pos_label, 0, 1)
 
-    def _create_car_number_label(self, layout: QGridLayout, driver_data: Dict, text_color: str,
+    def _create_car_number_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                  label_bg: str, label_border: str, font_weight: str, styling: Dict = None, column: int = 2) -> None:
         """Create car number label."""
         # Check for special car number styling (for Stream style)
@@ -175,7 +173,7 @@ class DriverRowRenderer:
         )
         layout.addWidget(car_label, 0, column)
 
-    def _create_driver_name_label(self, layout: QGridLayout, driver_data: Dict, text_color: str,
+    def _create_driver_name_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                   label_bg: str, label_border: str, font_weight: str, column: int = 3) -> None:
         """Create driver name label."""
         name_align = Qt.AlignCenter if self.parent.center_drivers else Qt.AlignLeft
@@ -199,7 +197,7 @@ class DriverRowRenderer:
         )
         layout.addWidget(name_label, 0, column)
 
-    def _create_gap_label(self, layout: QGridLayout, driver_data: Dict, gap_color: str,
+    def _create_gap_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                          label_bg: str, label_border: str, font_weight: str) -> None:
         """Create gap label."""
         from config.logging_config import get_logger
