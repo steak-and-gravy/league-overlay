@@ -5,9 +5,6 @@ __pycache__/
 *.so
 .Python
 
-# Local AI-Assist
-CLAUDE.md
-
 # Virtual environments
 venv/
 env/

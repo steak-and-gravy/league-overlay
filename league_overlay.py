@@ -634,7 +634,7 @@ class LeagueOverlay(QMainWindow):
         2. Player spectating: Cycle through each division (Pro -> ProAm -> Am -> Rookie -> All)
         """
         # Cycle to next filter state
-        self.division_filter.cycle_filter(self.race_data, self.player_car_idx, self.get_driver_color)
+        self.division_filter.cycle_filter(self.race_data, self.player_car_idx)
 
         # Get button state from filter
         button_state = self.division_filter.get_button_state()
@@ -661,7 +661,7 @@ class LeagueOverlay(QMainWindow):
         # Immediately apply the filter and update UI
         # Force update even if data unchanged (filter criteria changed)
         if self.race_data:
-            current_data = self.division_filter.apply_filter(self.race_data, self.player_car_idx, self.get_driver_color)
+            current_data = self.division_filter.apply_filter(self.race_data, self.player_car_idx)
             self._last_emitted_data = current_data.copy()
             self.signals.update_data.emit(current_data)
         
@@ -931,7 +931,6 @@ class LeagueOverlay(QMainWindow):
                     if self.ir.is_connected and self.ir.is_initialized:
                         # Delegate to TelemetryProcessor
                         race_data = self.telemetry_processor.process_telemetry(
-                            get_driver_color_fn=self.get_driver_color,
                             show_division_gap=self.show_division_gap
                         )
 
@@ -1082,7 +1081,7 @@ class LeagueOverlay(QMainWindow):
         Returns:
             Filtered list of driver data
         """
-        filtered_data = self.division_filter.apply_filter(race_data, self.player_car_idx, self.get_driver_color)
+        filtered_data = self.division_filter.apply_filter(race_data, self.player_car_idx)
 
         # Debug logging for checkered flag issues
         if self.race_state_tracker.is_checkered() and len(filtered_data) != len(race_data):

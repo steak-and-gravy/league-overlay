@@ -94,6 +94,29 @@ Logging configuration and setup.
 
 ### Layer 2: Core Business Logic (`core/`)
 
+#### `driver_state.py`
+Unified data structure for driver information during a session.
+
+**Class:**
+- `DriverState` (dataclass)
+
+**Purpose**: Single source of truth for all driver data during a race session. Replaces dict-based driver data with a type-safe dataclass.
+
+**Dependencies**: None
+
+**Key Features:**
+- Dataclass with type hints for all fields
+- Computed properties: `car_number`, `driver_name`, `car_class_id`, `total_track_position`
+- Direct fields: `car_idx`, `driver_info`, `official_position`, `real_time_position`, `division_position`, `division_name`, `division_color`, `gap`, `is_player`, `is_disconnected`, etc.
+- Used throughout the codebase as the primary driver data container
+- Eliminates the need for intermediate dicts and parallel data structures
+
+**Design Benefits:**
+- Type safety: IDE autocomplete and type checking
+- Performance: No dict lookups, direct attribute access
+- Clarity: Explicit fields vs. arbitrary dict keys
+- Consistency: Single data structure used everywhere
+
 #### `gap_calculator.py`
 Pure functions for calculating and formatting time/lap gaps.
 
@@ -140,7 +163,7 @@ Division-based filtering of race data.
 - `DivisionFilter`
 
 **Responsibilities:**
-- Apply division filters to race data
+- Apply division filters to race data (List[DriverState])
 - Cycle through filter modes (All Divisions / My Division / specific division)
 - Track filter state (player mode vs spectator mode)
 - Provide button state for UI display
@@ -148,14 +171,15 @@ Division-based filtering of race data.
 
 **Purpose**: Encapsulate division filtering logic for cleaner separation from UI orchestration.
 
-**Dependencies**: `core.division_manager`, `config.constants`
+**Dependencies**: `core.division_manager`, `core.driver_state`, `config.constants`
 
 **Key Features:**
 - Player mode: toggles between "My Division" and "All Divisions"
 - Spectator mode: cycles through divisions with active drivers
-- Returns filtered race data lists
+- Returns filtered List[DriverState]
 - Provides button text and color for UI rendering
 - Resets filter state on session change
+- Works directly with DriverState objects (no intermediate dicts)
 
 #### `position_calculator.py`
 Calculates driver positions from iRacing telemetry.
@@ -169,10 +193,11 @@ Calculates driver positions from iRacing telemetry.
 - Identify player car and class
 - Find overall race leader (for multi-class finish tracking)
 - Filter to player's class for multi-class support
+- Create and return DriverState objects with position data
 
-**Purpose**: Extract position calculation logic from TelemetryProcessor for better separation of concerns.
+**Purpose**: Extract position calculation logic from TelemetryProcessor for better separation of concerns. Returns DriverState objects as the primary data structure.
 
-**Dependencies**: `irsdk`, `config.logging_config`
+**Dependencies**: `irsdk`, `core.driver_state`, `config.logging_config`
 
 **Key Features:**
 - Real-time positioning: continuous updates using lap + lap_distance_pct
@@ -189,14 +214,14 @@ State machine for tracking race finish status.
 **Responsibilities:**
 - Track checkered flag state
 - Mark individual drivers as finished
-- Store finish snapshots (position, gap, lap)
+- Store finish snapshots (DriverState objects)
 - Recalculate division gaps after each finish
 - Handle finish tracking for entire race
 - Manage disconnected driver restoration
 
-**Purpose**: Handle the complex finish tracking where cars finish individually after the checkered flag.
+**Purpose**: Handle the complex finish tracking where cars finish individually after the checkered flag. Stores and manages DriverState snapshots.
 
-**Dependencies**: `irsdk`, `config.constants`, `config.logging_config`
+**Dependencies**: `irsdk`, `core.driver_state`, `config.constants`, `config.logging_config`
 
 **State Machine:**
 ```
@@ -208,9 +233,10 @@ Racing → Checkered Flag → Drivers Finishing Individually
 **Key Features:**
 - Locks position/gap when driver crosses line after checkered
 - Recalculates division-based gaps after each finish
-- Stores snapshots for finished drivers
-- Handles disconnected drivers (restores from snapshots)
+- Stores DriverState snapshots for finished drivers
+- Handles disconnected drivers (restores from DriverState snapshots)
 - Manages finish tracking workflow (moved from TelemetryProcessor)
+- Works directly with DriverState objects (no intermediate dicts)
 
 #### `telemetry_processor.py`
 Main telemetry processing pipeline.
@@ -223,14 +249,15 @@ Main telemetry processing pipeline.
 - Coordinate between PositionCalculator, RaceStateTracker, DivisionManager, GapCalculator
 - Handle session changes (using SessionID from WeekendInfo + session_type)
 - Separate finished and racing drivers to prevent position contamination
-- Calculate division positions
+- Calculate division positions (sets DriverState.division_position directly)
 - Manage driver snapshots for racing drivers
-- Build formatted race data for UI display
+- Return List[DriverState] for UI display
 
-**Purpose**: Orchestrate all telemetry processing and coordinate between core modules. Acts as a coordinator rather than implementing low-level logic.
+**Purpose**: Orchestrate all telemetry processing and coordinate between core modules. Acts as a coordinator rather than implementing low-level logic. Works exclusively with DriverState objects.
 
 **Dependencies**:
 - `irsdk` (external)
+- `core.driver_state`
 - `core.position_calculator`
 - `core.gap_calculator`
 - `core.race_state_tracker`
@@ -253,22 +280,25 @@ iRacing SDK Data
 Parse Session Info
     │
     ▼
-Calculate Real-Time Positions (lap + lap_distance_pct)
+PositionCalculator: Calculate positions → List[DriverState]
     │
     ▼
 Filter to Player's Class
     │
     ▼
-Apply Division Colors (DivisionManager)
+Set Division Info (DivisionManager) on each DriverState
     │
     ▼
-Calculate Gaps (GapCalculator)
+Calculate Division Positions (sets DriverState.division_position)
     │
     ▼
-Handle Finish State (RaceStateTracker)
+Calculate Gaps (GapCalculator) → sets DriverState.gap
     │
     ▼
-Return Sorted Race Data
+Handle Finish State (RaceStateTracker) → manages DriverState snapshots
+    │
+    ▼
+Return Sorted List[DriverState]
 ```
 
 **Session Change Detection:**
@@ -333,15 +363,17 @@ Renders driver rows in the UI.
 - `DriverRowRenderer`
 
 **Responsibilities:**
-- Create QLabel widgets for each driver data field
+- Create QLabel widgets for each DriverState field
 - Apply color styles
 - Handle layout and spacing
 - Support different font sizes
+- Extract data from DriverState objects using attribute access
 
-**Purpose**: Separate UI rendering logic from main application.
+**Purpose**: Separate UI rendering logic from main application. Works with DriverState objects.
 
 **Dependencies**:
 - `PySide6`
+- `core.driver_state`
 - `ui.styles`
 - `config.constants`
 
@@ -422,13 +454,13 @@ Main application entry point and orchestration.
 - Initialize all modules
 - Manage Qt main window
 - Run telemetry loop in background thread
-- Handle UI updates via signals
+- Handle UI updates via signals (receives List[DriverState])
 - Coordinate auto-centering
-- Manage context menus
+- Manage context menus (DriverState context menus)
 - Handle session changes
-- Apply division filters to race data
+- Apply division filters to race data (List[DriverState])
 
-**Purpose**: Orchestrate all components and manage application lifecycle.
+**Purpose**: Orchestrate all components and manage application lifecycle. Works with DriverState objects from telemetry processor.
 
 **Dependencies**: All other modules
 
@@ -506,7 +538,7 @@ UI displays initial grid
 TelemetryProcessor reads live data every 0.5-2.0s
     │
     ▼
-Calculate positions using (lap + lap_distance_pct)
+PositionCalculator: Calculate positions → List[DriverState]
     │
     ▼
 Filter to player's class (multi-class support)
@@ -515,19 +547,20 @@ Filter to player's class (multi-class support)
 Sort by position
     │
     ▼
-For each driver:
-    ├─> Get division (DivisionManager)
-    ├─> Calculate gap to car ahead in same division (GapCalculator)
-    └─> Apply division color
+For each DriverState:
+    ├─> Set division_name and division_color (DivisionManager)
+    ├─> Calculate and set division_position
+    ├─> Calculate and set gap (GapCalculator)
+    └─> Set is_player flag
     │
     ▼
-Emit signal with race_data list
+Emit signal with List[DriverState]
     │
     ▼
 UI thread receives signal
     │
     ▼
-DriverRowRenderer creates/updates widgets
+DriverRowRenderer creates/updates widgets (reads DriverState attributes)
     │
     ▼
 AutoCenterController determines if should scroll
@@ -552,8 +585,8 @@ RaceStateTracker.set_leader_finished()
     ▼
 For each following car crossing line:
     ├─> RaceStateTracker.mark_driver_finished()
-    ├─> Store finish snapshot (position, gap, lap)
-    ├─> Recalculate division gaps
+    ├─> Store finish snapshot (DriverState with locked position, gap, lap)
+    ├─> Recalculate division gaps (updates DriverState.finish_gap)
     └─> Lock display for that driver
     │
     ▼
@@ -759,6 +792,22 @@ tests/
 - iRacing SDK read can be slow
 - Allows independent update rates (telemetry vs UI)
 - Qt signals provide clean thread communication
+
+### Why DriverState Dataclass Instead of Dicts?
+- **Type Safety**: IDE autocomplete and type checking catch bugs at development time
+- **Performance**: Direct attribute access is faster than dict lookups
+- **Clarity**: Explicit fields (`driver.car_number`) vs. arbitrary keys (`driver['car_number']`)
+- **Consistency**: Single data structure used everywhere eliminates parallel data structures
+- **Maintainability**: Changes to driver data structure are compile-time checked
+- **Properties**: Computed properties (like `total_track_position`) encapsulate logic
+- **Eliminated ~120 lines**: Removed redundant intermediate dicts and parameter passing
+
+**Migration Benefits:**
+- Eliminated `get_driver_color_fn` parameter (9 method signatures simplified)
+- Removed `all_drivers_with_colors` parallel list (~40 lines)
+- Removed temporary dicts in gap calculations (~30 lines)
+- Methods now modify DriverState directly instead of returning intermediate dicts
+- All 319 tests still passing after migration
 
 ---
 
