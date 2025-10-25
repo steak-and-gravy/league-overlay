@@ -229,28 +229,6 @@ class LeagueOverlay(QMainWindow):
             return self.font_sizes.get(self.font_size, self.font_sizes["Medium"]).get(element_type, 3)
         return self.font_sizes.get(self.font_size, self.font_sizes["Medium"]).get(element_type, "9pt")
 
-    def blend_color_with_black(self, color_hex, amount=0.15):
-        """Blend a division color with black to create a subtle tinted background."""
-        # Remove the # if present
-        color_hex = color_hex.lstrip('#')
-
-        # Convert hex to RGB
-        r = int(color_hex[0:2], 16)
-        g = int(color_hex[2:4], 16)
-        b = int(color_hex[4:6], 16)
-
-        # Blend with black (reduce intensity)
-        r = int(r * amount)
-        g = int(g * amount)
-        b = int(b * amount)
-
-        return f"#{r:02x}{g:02x}{b:02x}"
-
-    def create_gradient_background(self, color_hex):
-        """Create a horizontal gradient that creates a subtle "glow" effect for player row."""
-        tinted = self.blend_color_with_black(color_hex, 0.25)
-        return f"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {tinted}, stop:0.5 {UI_COLORS.GRADIENT_BLACK}, stop:1 {tinted})"
-
     def update_all_backgrounds(self):
         """Refresh all UI backgrounds, fonts, and styling after settings change.
         Assumptions:
@@ -782,7 +760,11 @@ class LeagueOverlay(QMainWindow):
             
 
     def set_driver_division(self, driver_info: Dict[str, str], division_name: str) -> None:
-        """Assign a driver to a division - delegates to DivisionManager."""
+        """Assign a driver to a division - delegates to DivisionManager.
+
+        The telemetry processor will pick up the new division assignment
+        on the next update cycle and refresh the UI automatically.
+        """
         # Delegate to DivisionManager for assignment logic
         self.division_manager.set_driver_division(driver_info, division_name)
 
@@ -792,32 +774,6 @@ class LeagueOverlay(QMainWindow):
         # Save configuration
         self.division_manager.save_config()
 
-        # Refresh UI to show new color
-        self.update_driver_row_color(driver_info)
-        
-    def update_driver_row_color(self, driver_info):
-        """Update driver row color"""
-        user_id = driver_info.get('UserID', '')
-        user_name = driver_info.get('UserName', '')
-
-        for driver in self.displayed_data:
-            data_info = driver.driver_info
-            data_id = data_info.get('UserID', '')
-            data_name = data_info.get('UserName', '')
-
-            if (user_id and data_id == user_id) or (user_name and data_name == user_name):
-                # Trigger full refresh (force update even if data unchanged)
-                self._last_emitted_data = []
-                self.signals.update_data.emit(self.displayed_data.copy())
-                break
-                
-    def get_driver_color(self, driver_info):
-        """Get color for driver"""
-        division_name = self.division_manager.get_driver_division(driver_info)
-        if division_name:
-            return self.available_colors.get(division_name, self.available_colors["Default"])
-        return self.available_colors["Default"]
-        
     def refresh_driver_colors(self):
         """Refresh all driver colors"""
         self.driver_colors = self.load_color_config()
