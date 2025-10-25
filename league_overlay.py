@@ -816,17 +816,15 @@ class LeagueOverlay(QMainWindow):
             self.show_top_elements()
             
     def hide_top_elements(self):
-        """Hide title bar and status label"""
+        """Hide title bar"""
         if self.top_elements_visible:
             self.title_bar.hide()
-            self.status_label.hide()
             self.top_elements_visible = False
             
     def show_top_elements(self):
-        """Show title bar and status label"""
+        """Show title bar"""
         if not self.top_elements_visible:
             self.title_bar.show()
-            self.status_label.show()
             self.top_elements_visible = True
             
     def enterEvent(self, event):
