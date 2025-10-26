@@ -1065,19 +1065,30 @@ class LeagueOverlay(QMainWindow):
                                 session_time_total = current_session.get('SessionTime', 'unlimited')
                                 if session_time_total != 'unlimited' and session_time_total not in [0, '0']:
                                     try:
-                                        total_seconds = float(session_time_total.replace(' sec', ''))
-                                        total_minutes = int(total_seconds // 60)
-                                        total_secs = int(total_seconds % 60)
-                                        status_text = f"{state_name} - {total_minutes}:{total_secs:02d}"
+                                        total_seconds_val = int(float(session_time_total.replace(' sec', '')))
+                                        hours = total_seconds_val // 3600
+                                        minutes = (total_seconds_val % 3600) // 60
+                                        seconds = total_seconds_val % 60
+
+                                        if hours > 0:
+                                            status_text = f"{state_name} - {hours}:{minutes:02d}:{seconds:02d}"
+                                        else:
+                                            status_text = f"{state_name} - {minutes}:{seconds:02d}"
                                     except (ValueError, TypeError, AttributeError):
                                         status_text = state_name
                                 else:
                                     status_text = state_name
                             elif session_time_remain is not None and session_time_remain > 0:
                                 # During active session, show remaining time
-                                minutes = int(session_time_remain // 60)
-                                seconds = int(session_time_remain % 60)
-                                status_text = f"{state_name} - {minutes}:{seconds:02d}"
+                                total_seconds = int(session_time_remain)
+                                hours = total_seconds // 3600
+                                minutes = (total_seconds % 3600) // 60
+                                seconds = total_seconds % 60
+
+                                if hours > 0:
+                                    status_text = f"{state_name} - {hours}:{minutes:02d}:{seconds:02d}"
+                                else:
+                                    status_text = f"{state_name} - {minutes}:{seconds:02d}"
                             else:
                                 status_text = state_name
 
