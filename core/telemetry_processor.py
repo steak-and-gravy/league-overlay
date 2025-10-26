@@ -260,7 +260,6 @@ class TelemetryProcessor:
                                 finish_time = result.get('Time', -1)
                                 if finish_time >= 0:
                                     # Driver has finished but wasn't marked by lap tracking - mark them now
-                                    logger.debug(f"TELEMETRY_DIV_POS - Car {car_idx} found in ResultsPositions with finish_time={finish_time}, marking as finished")
                                     # Mark as finished using ResultsPositions data
                                     finish_position = result.get('ClassPosition', 0)
                                     finish_lap = result.get('LapsComplete', 0)
@@ -271,7 +270,6 @@ class TelemetryProcessor:
 
                 # If we marked any new drivers as finished, recalculate all finish gaps
                 if newly_marked:
-                    logger.debug(f"TELEMETRY_DIV_POS - Recalculating finish gaps for {len(newly_marked)} newly marked drivers: {newly_marked}")
                     self.race_state_tracker.recalculate_all_finish_gaps(current_session, get_driver_color_fn)
 
         racing_drivers = [d for d in active_drivers if d['car_idx'] not in finished_car_idxs]
@@ -291,8 +289,6 @@ class TelemetryProcessor:
         # Calculate division positions for finished drivers from official results
         if current_session and finished_car_idxs:
             results = current_session.get('ResultsPositions', [])
-            logger.debug(f"TELEMETRY_DIV_POS - Processing {len(finished_car_idxs)} finished drivers")
-            logger.debug(f"TELEMETRY_DIV_POS - ResultsPositions has {len(results)} entries")
 
             # Group finished drivers by division color
             finished_by_color = {}
@@ -308,7 +304,6 @@ class TelemetryProcessor:
                         if result.get('CarIdx') == driver['car_idx']:
                             # ClassPosition is 0-indexed, convert to 1-indexed
                             official_class_position = result.get('ClassPosition', -1) + 1
-                            logger.debug(f"TELEMETRY_DIV_POS - Car {driver['car_idx']}: ClassPosition from results = {result.get('ClassPosition')} → official_class_position = {official_class_position}")
                             break
 
                     if official_class_position and official_class_position > 0:
@@ -316,19 +311,13 @@ class TelemetryProcessor:
                             'car_idx': driver['car_idx'],
                             'official_class_position': official_class_position
                         })
-                    else:
-                        logger.debug(f"TELEMETRY_DIV_POS - Car {driver['car_idx']}: No valid ClassPosition found in results!")
 
             # For each finished driver, use their ClassPosition directly as division position
             # This preserves the correct position even for lapped cars and when drivers disconnect
             for color, drivers_in_color in finished_by_color.items():
-                logger.debug(f"TELEMETRY_DIV_POS - Division {color}: {len(drivers_in_color)} finished drivers")
                 for driver_info in drivers_in_color:
                     # Use ClassPosition directly (preserves lapped car positions like P11, P12, not 4, 5)
                     division_positions[driver_info['car_idx']] = driver_info['official_class_position']
-                    logger.debug(f"TELEMETRY_DIV_POS - Car {driver_info['car_idx']}: ClassPosition={driver_info['official_class_position']} → division_position={driver_info['official_class_position']}")
-
-            logger.debug(f"TELEMETRY_DIV_POS - Final division_positions for finished drivers: {division_positions}")
 
         # Calculate division positions for racing drivers (unchanged logic)
         for color in set(get_driver_color_fn(d['driver_info']) for d in racing_drivers):
@@ -461,8 +450,6 @@ class TelemetryProcessor:
         if show_division_gap:
             # Division leader shows "Leader"
             if current_color_position == 1:
-                if car_idx in [26, 30, 42]:
-                    logger.debug(f"GAP_CALC - Car {car_idx}: Showing LEADER because current_color_position={current_color_position}")
                 return GapCalculator.format_gap_display(is_leader=True)
         else:
             # Overall leader shows "Leader"
@@ -471,20 +458,17 @@ class TelemetryProcessor:
 
         # Finished driver - use stored finish gap (only for division mode)
         if self.race_state_tracker.is_driver_finished(car_idx):
-            logger.debug(f"FINISH_GAP - Car {car_idx} is_driver_finished=True, show_division_gap={show_division_gap}, driver keys: {driver.keys()}")
             if show_division_gap:
                 # Division mode: use pre-calculated division-based finish gaps
                 driver_state = self.race_state_tracker.get_snapshot(car_idx)
                 if driver_state and (driver_state.finish_gap is not None or driver_state.finish_lap_gap is not None):
                     finish_gap_seconds = driver_state.finish_gap
                     finish_lap_gap = driver_state.finish_lap_gap or 0
-                    logger.debug(f"FINISH_GAP - Car {car_idx} has finish_gap={finish_gap_seconds}, finish_lap_gap={finish_lap_gap}")
                     return GapCalculator.format_gap_display(time_gap=finish_gap_seconds, lap_gap=finish_lap_gap)
 
                 # No finish gap data - this can happen when a car finishes before the division leader
                 # (e.g., in multi-class, GT3 P2 finishes before GT3 P1 because overall leader already finished)
                 # In this case, calculate a live gap to the racing car ahead in the same division
-                logger.debug(f"FINISH_GAP - Car {car_idx} snapshot has no finish_gap data (division_position={current_color_position}), checking for racing car ahead")
 
                 # If not division leader, try to find racing car ahead in same division
                 if current_color_position > 1:
@@ -508,20 +492,16 @@ class TelemetryProcessor:
 
                     if car_ahead_idx is not None and not self.race_state_tracker.is_driver_finished(car_ahead_idx):
                         # Car ahead is still racing - calculate live gap
-                        logger.debug(f"FINISH_GAP - Car {car_idx} found racing car ahead (car {car_ahead_idx}), calculating live gap")
                         return self._calculate_live_race_gap(driver, current_driver_color, active_drivers,
                                                             position_key, live_data, current_session,
                                                             get_driver_color_fn, show_division_gap)
 
-                logger.debug(f"FINISH_GAP - Car {car_idx} no finish_gap and no racing car ahead, returning empty string")
                 return ""
             else:
                 # Overall mode: calculate gap to car directly ahead in overall standings
                 # Find car directly ahead by official position
                 current_position = driver.get('official_position', driver.get(position_key, 999))
-                logger.debug(f"FINISH_GAP - Car {car_idx} overall mode: current_position={current_position}, position_key={position_key}")
                 if current_position == 1:
-                    logger.debug(f"FINISH_GAP - Car {car_idx} showing LEADER because current_position==1")
                     return GapCalculator.format_gap_display(is_leader=True)
 
                 # Find the car in position current_position - 1
@@ -532,11 +512,9 @@ class TelemetryProcessor:
                         car_ahead_idx = temp_driver['car_idx']
                         break
 
-                logger.debug(f"FINISH_GAP - Car {car_idx} looking for car_ahead at position {current_position - 1}, found car_ahead_idx={car_ahead_idx}")
                 if car_ahead_idx is not None:
                     # Calculate gap using finish times
                     finish_gap_seconds = self.race_state_tracker.get_finish_gap(car_ahead_idx, car_idx)
-                    logger.debug(f"FINISH_GAP - Car {car_idx} get_finish_gap({car_ahead_idx}, {car_idx}) returned {finish_gap_seconds}")
 
                     # Log negative gaps for debugging position swap issues
                     if finish_gap_seconds is not None and finish_gap_seconds < 0:
@@ -551,7 +529,6 @@ class TelemetryProcessor:
                         current_car_lap = self.race_state_tracker.finish_laps.get(car_idx, 0)
                         lap_gap = car_ahead_lap - current_car_lap
                         return GapCalculator.format_gap_display(time_gap=finish_gap_seconds, lap_gap=lap_gap if lap_gap > 0 else 0)
-                logger.debug(f"FINISH_GAP - Car {car_idx} no valid gap data, returning empty string")
                 return ""
 
         # Live racing - calculate real-time gap
@@ -738,23 +715,13 @@ class TelemetryProcessor:
             List of race data dicts or None if processing failed
         """
         try:
-            # Debug logging for checkered flag
-            if self.race_state_tracker.is_checkered():
-                logger.debug("PROCESS_TELEMETRY - Started processing")
-
             # Get session info
             session_info = self._get_session_info()
             if not session_info:
-                if self.race_state_tracker.is_checkered():
-                    logger.debug("PROCESS_TELEMETRY - session_info is None, returning None")
                 return None
 
             drivers, session_data, is_race = session_info
             current_session = session_data['current_session']
-
-            # Debug logging for checkered flag
-            if self.race_state_tracker.is_checkered():
-                logger.debug(f"PROCESS_TELEMETRY - Got session info: {len(drivers)} drivers, is_race={is_race}")
 
             # Handle session changes
             if self._detect_session_change(session_data):
@@ -768,8 +735,6 @@ class TelemetryProcessor:
 
             live_data = self.ir
             if not live_data:
-                if self.race_state_tracker.is_checkered():
-                    logger.debug("PROCESS_TELEMETRY - live_data is None, returning None")
                 return None
 
             # Process positions (different logic for race vs practice/qualifying)
@@ -780,16 +745,8 @@ class TelemetryProcessor:
                     self.position_calculator.get_overall_race_leader_idx
                 )
 
-                # Debug logging for checkered flag
-                if self.race_state_tracker.is_checkered():
-                    logger.debug("PROCESS_TELEMETRY - Finish status updated")
-
                 active_drivers = self.position_calculator.calculate_real_time_positions(drivers)
                 position_key = 'real_time_position'
-
-                # Debug logging for checkered flag
-                if self.race_state_tracker.is_checkered():
-                    logger.debug(f"PROCESS_TELEMETRY - Got {len(active_drivers) if active_drivers else 0} active drivers from position calculator")
 
                 if active_drivers:
                     # Update snapshots for active drivers
@@ -872,10 +829,6 @@ class TelemetryProcessor:
                 current_driver_color = get_driver_color_fn(driver_info)
                 current_color_position = division_positions.get(car_idx, position)
 
-                # Debug logging for Leader bug investigation
-                if car_idx in [26, 30, 42]:
-                    logger.debug(f"GAP_CALC - Car {car_idx}: position={position}, division_positions.get={division_positions.get(car_idx, 'NOT_FOUND')}, current_color_position={current_color_position}")
-
                 # Calculate gap using helper method
                 gap = self._calculate_gap(
                     driver, current_color_position, current_driver_color,
@@ -899,10 +852,6 @@ class TelemetryProcessor:
                 race_data.append(race_entry)
 
             race_data.sort(key=lambda x: x['position'])
-
-            # Debug logging for checkered flag
-            if self.race_state_tracker.is_checkered():
-                logger.debug(f"PROCESS_TELEMETRY - Returning {len(race_data)} drivers")
 
             return race_data
 
