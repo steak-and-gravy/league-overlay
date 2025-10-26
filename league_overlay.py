@@ -115,20 +115,7 @@ class LeagueOverlay(QMainWindow):
         self.settings_manager = SettingsManager(FILE_CONFIG.SETTINGS_FILE)
         self.settings = self.settings_manager.load()
 
-        # Apply loaded settings to instance variables
-        # (These are maintained for backward compatibility with existing code)
-        self.opacity = self.settings.opacity
-        self.width = self.settings.width
-        self.height = self.settings.height
-        self.x = self.settings.x
-        self.y = self.settings.y
-        self.hide_headers = self.settings.hide_headers
-        self.center_drivers = self.settings.center_drivers
-        self.bold_drivers = self.settings.bold_drivers
-        self.show_division_gap = self.settings.show_division_gap
-        self.font_size = self.settings.font_size
-        self.row_color_style = self.settings.row_color_style
-        self.refresh_rate = self.settings.refresh_rate
+        # Color config file (defaults if not specified in settings)
         self.color_config_file = self.settings.league_config or "league_divisions.json"
 
         # User preferences not in settings (runtime state)
@@ -206,7 +193,7 @@ class LeagueOverlay(QMainWindow):
             r = int(base_color[1:3], 16)
             g = int(base_color[3:5], 16)
             b = int(base_color[5:7], 16)
-            return f"rgba({r}, {g}, {b}, {self.opacity})"
+            return f"rgba({r}, {g}, {b}, {self.settings.opacity})"
         return base_color
 
     def get_font_size(self, element_type):
@@ -215,15 +202,14 @@ class LeagueOverlay(QMainWindow):
         when user changes font size setting (Small/Medium/Large/Extra Large).
         """
         if element_type == "spacing":
-            return self.font_sizes.get(self.font_size, self.font_sizes["Medium"]).get(element_type, 3)
-        return self.font_sizes.get(self.font_size, self.font_sizes["Medium"]).get(element_type, "9pt")
+            return self.font_sizes.get(self.settings.font_size, self.font_sizes["Medium"]).get(element_type, 3)
+        return self.font_sizes.get(self.settings.font_size, self.font_sizes["Medium"]).get(element_type, "9pt")
 
     def update_all_backgrounds(self):
         """Refresh all UI backgrounds, fonts, and styling after settings change.
-        Assumptions:
-            - self.opacity and self.font_size are already updated with new values
+
+        Note: Settings are accessed via self.settings object.
         """
-        # TODO: set opacity and font_size here for consistency then update comment above
         if hasattr(self, 'main_widget'):
             self.main_widget.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.BACKGROUND_BLACK)};")
         if hasattr(self, 'title_bar'):
@@ -314,7 +300,7 @@ class LeagueOverlay(QMainWindow):
         """Setup the main user interface"""
         # Window setup
         self.setWindowTitle("BB's League Overlay")
-        self.setGeometry(self.x, self.y, self.width, self.height)
+        self.setGeometry(self.settings.x, self.settings.y, self.settings.width, self.settings.height)
 
         # Frameless but stay on top
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -537,7 +523,7 @@ class LeagueOverlay(QMainWindow):
         self.header_layout.setColumnStretch(4, COLUMN_LAYOUT.GAP)
 
         # Set gap header based on show_division_gap setting
-        gap_header = "Div Gap" if self.show_division_gap else "Gap"
+        gap_header = "Div Gap" if self.settings.show_division_gap else "Gap"
 
         # Set header labels based on style
         if is_stream_style:
@@ -568,7 +554,7 @@ class LeagueOverlay(QMainWindow):
         if gap_label_widget:
             gap_label = gap_label_widget.widget()
             if gap_label:
-                gap_header = "Div Gap" if self.show_division_gap else "Gap"
+                gap_header = "Div Gap" if self.settings.show_division_gap else "Gap"
                 gap_label.setText(gap_header)
 
     def show_version_on_startup(self):
@@ -650,22 +636,8 @@ class LeagueOverlay(QMainWindow):
             )
 
     def load_settings(self):
-        """Load user preferences from disk and apply to instance variables."""
+        """Load user preferences from disk."""
         self.settings = self.settings_manager.load()
-
-        # Apply settings to instance variables
-        self.opacity = self.settings.opacity
-        self.width = self.settings.width
-        self.height = self.settings.height
-        self.x = self.settings.x
-        self.y = self.settings.y
-        self.hide_headers = self.settings.hide_headers
-        self.center_drivers = self.settings.center_drivers
-        self.bold_drivers = self.settings.bold_drivers
-        self.show_division_gap = self.settings.show_division_gap
-        self.font_size = self.settings.font_size
-        self.row_color_style = self.settings.row_color_style
-        self.refresh_rate = self.settings.refresh_rate
 
         # Handle league config file if specified
         if self.settings.league_config and os.path.exists(self.settings.league_config):
@@ -676,23 +648,15 @@ class LeagueOverlay(QMainWindow):
 
     def save_settings(self):
         """Persist current settings - delegates to SettingsManager."""
-        # Update settings object with current values
+        # Update settings object with current window geometry and config
         self.settings.league_config = self.color_config_file
         self.settings.division_colors = self.division_manager.division_colors
         self.settings.x = self.geometry().x()
         self.settings.y = self.geometry().y()
         self.settings.height = self.geometry().height()
         self.settings.width = self.geometry().width()
-        self.settings.opacity = self.opacity
-        self.settings.refresh_rate = self.refresh_rate
-        self.settings.hide_headers = self.hide_headers
-        self.settings.center_drivers = self.center_drivers
-        self.settings.bold_drivers = self.bold_drivers
-        self.settings.show_division_gap = self.show_division_gap
-        self.settings.font_size = self.font_size
-        self.settings.row_color_style = self.row_color_style
 
-        # Delegate to settings manager
+        # Delegate to settings manager (all other settings already in self.settings)
         self.settings_manager.save(self.settings)
             
 
@@ -738,9 +702,9 @@ class LeagueOverlay(QMainWindow):
         """Open settings dialog"""
         dialog = SettingsDialog(self)
         result = dialog.exec()
-        
+
         # After settings closed, update auto-hide behavior
-        if self.hide_headers:
+        if self.settings.hide_headers:
             if not self.hasFocus():
                 self.hide_top_elements()
         else:
@@ -760,7 +724,7 @@ class LeagueOverlay(QMainWindow):
             
     def enterEvent(self, event):
         """Mouse entered window"""
-        if self.hide_headers:
+        if self.settings.hide_headers:
             # Cancel hide timer if active
             if self.hide_timer:
                 self.killTimer(self.hide_timer)
@@ -770,7 +734,7 @@ class LeagueOverlay(QMainWindow):
 
     def leaveEvent(self, event):
         """Mouse left window"""
-        if self.hide_headers:
+        if self.settings.hide_headers:
             # Start hide timer
             if self.hide_timer:
                 self.killTimer(self.hide_timer)
@@ -794,7 +758,7 @@ class LeagueOverlay(QMainWindow):
         if self.hide_timer and event.timerId() == self.hide_timer:
             self.killTimer(self.hide_timer)
             self.hide_timer = None
-            if self.hide_headers:
+            if self.settings.hide_headers:
                 self.hide_top_elements()
         
     def close_application(self):
@@ -816,7 +780,7 @@ class LeagueOverlay(QMainWindow):
                     if self.ir.is_connected and self.ir.is_initialized:
                         # Delegate to TelemetryProcessor
                         race_data = self.telemetry_processor.process_telemetry(
-                            show_division_gap=self.show_division_gap
+                            show_division_gap=self.settings.show_division_gap
                         )
 
                         # Handle the telemetry update (session sync, data update)
@@ -829,7 +793,7 @@ class LeagueOverlay(QMainWindow):
                 if self.race_state_tracker.is_checkered():
                     time.sleep(TIMING.CHECKERED_REFRESH)  # refresh more often to track finish times
                 else:
-                    time.sleep(self.refresh_rate)
+                    time.sleep(self.settings.refresh_rate)
 
             except Exception as e:
                 logger.error(f"Telemetry error: {e}", exc_info=True)
@@ -886,12 +850,12 @@ class LeagueOverlay(QMainWindow):
             # Check if data changed structurally
             data_changed = self._has_data_changed(current_data)
 
-            # During checkered flag: Force update every 5 cycles to refresh gaps (5 × 0.1s = 0.5s)
+            # During checkered flag: Force update every N cycles to refresh gaps
             # During normal racing: Always update (gaps trigger immediate updates)
             force_update = False
             if self.race_state_tracker.is_checkered():
                 self._update_counter += 1
-                force_update = self._update_counter >= 5
+                force_update = self._update_counter >= TIMING.CHECKERED_UPDATE_CYCLE_COUNT
                 if force_update:
                     self._update_counter = 0
             else:
@@ -967,6 +931,153 @@ class LeagueOverlay(QMainWindow):
             # Stop the timer since auto-center is now re-engaged
             self.auto_center_timer.stop()
 
+    def _should_show_connection_message(self) -> bool:
+        """Check if we should still show initial connection message.
+
+        Returns:
+            True if within CONNECTION_MESSAGE_DURATION of initial connection
+        """
+        return (self.connection_time and
+                (time.time() - self.connection_time) < TIMING.CONNECTION_MESSAGE_DURATION)
+
+    def _get_session_state_name(self, session_type: str, session_state: int) -> str:
+        """Map session type and state to display name.
+
+        Args:
+            session_type: Type of session ("Race", "Practice", "Qualifying", etc.)
+            session_state: iRacing session state (0-6)
+                0=Invalid, 1=GetInCar, 2=Warmup, 3=ParadeLaps,
+                4=Racing, 5=Checkered, 6=CoolDown
+
+        Returns:
+            Human-readable state name
+        """
+        if session_type != "Race":
+            return session_type
+
+        state_map = {
+            2: "Warmup",
+            3: "Pacing",
+            5: "Checkered",
+            6: "Cool Down"
+        }
+
+        return state_map.get(session_state, "Race")
+
+    def _format_time_duration(self, total_seconds: int) -> str:
+        """Format time duration as H:MM:SS or M:SS.
+
+        Args:
+            total_seconds: Total seconds to format
+
+        Returns:
+            Formatted time string
+        """
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+
+        if hours > 0:
+            return f"{hours}:{minutes:02d}:{seconds:02d}"
+        else:
+            return f"{minutes}:{seconds:02d}"
+
+    def _format_lap_based_status(self, state_name: str, session_state: int,
+                                 session_laps_total: str) -> str:
+        """Format status text for lap-based sessions.
+
+        Args:
+            state_name: Display name of the session state
+            session_state: iRacing session state (0-6)
+            session_laps_total: Total laps scheduled
+
+        Returns:
+            Formatted status text
+        """
+        try:
+            laps_total = int(session_laps_total)
+            try:
+                race_laps = self.ir['RaceLaps']
+            except (KeyError, TypeError):
+                race_laps = 0
+
+            # During pacing (negative laps) or before race starts
+            if race_laps <= 0 or session_state in [2, 3]:
+                # Show total laps scheduled
+                return f"{state_name} - {laps_total} Lap{'s' if laps_total != 1 else ''}"
+            else:
+                # During racing, show current/total
+                current_lap = race_laps
+                return f"{state_name} - Lap {current_lap}/{laps_total}"
+        except (ValueError, TypeError):
+            return state_name
+
+    def _format_time_based_status(self, state_name: str, session_state: int,
+                                  current_session: Dict) -> str:
+        """Format status text for time-based sessions.
+
+        Args:
+            state_name: Display name of the session state
+            session_state: iRacing session state (0-6)
+            current_session: Current session data
+
+        Returns:
+            Formatted status text
+        """
+        session_time_remain = self.ir['SessionTimeRemain']
+
+        # During pacing or warmup, show scheduled session time
+        if session_state in [2, 3]:
+            session_time_total = current_session.get('SessionTime', 'unlimited')
+            if session_time_total != 'unlimited' and session_time_total not in [0, '0']:
+                try:
+                    total_seconds_val = int(float(session_time_total.replace(' sec', '')))
+                    return f"{state_name} - {self._format_time_duration(total_seconds_val)}"
+                except (ValueError, TypeError, AttributeError):
+                    return state_name
+            else:
+                return state_name
+        elif session_time_remain is not None and session_time_remain > 0:
+            # During active session, show remaining time
+            total_seconds = int(session_time_remain)
+            return f"{state_name} - {self._format_time_duration(total_seconds)}"
+        else:
+            return state_name
+
+    def _get_session_status_text(self) -> str:
+        """Get formatted session status text based on current session info.
+
+        Returns:
+            Formatted status string (e.g., "Race - Lap 5/20", "Practice - 5:30")
+        """
+        try:
+            session_info = self.ir['SessionInfo']
+            current_session = session_info['Sessions'][self.ir['SessionNum']]
+            session_type = current_session['SessionType']
+
+            # Get session state with fallback
+            try:
+                session_state = self.ir['SessionState']
+            except (KeyError, TypeError):
+                session_state = 4  # Default to Racing
+
+            # Map session state to display name
+            state_name = self._get_session_state_name(session_type, session_state)
+
+            # Check if session is lap-based or time-based
+            session_laps_total = current_session.get('SessionLaps', 'unlimited')
+            is_lap_based = (session_laps_total != 'unlimited' and
+                           session_laps_total not in [0, '0'])
+
+            if is_lap_based:
+                return self._format_lap_based_status(state_name, session_state, session_laps_total)
+            else:
+                return self._format_time_based_status(state_name, session_state, current_session)
+
+        except (KeyError, TypeError, IndexError, AttributeError) as e:
+            logger.debug(f"Status display error: {e}")
+            return "Connected - Live Data"
+
     def update_gui(self):
         """Update GUI status (called by timer).
 
@@ -975,105 +1086,22 @@ class LeagueOverlay(QMainWindow):
         and division filter button clicks.
         """
         try:
+            # Skip GUI updates during startup grace period
             if time.time() - self.startup_time < TIMING.STARTUP_GRACE_PERIOD:
                 return
 
-            if self.is_connected:
-                # Show initial connection message for 5 seconds
-                if self.connection_time and (time.time() - self.connection_time) < 5.0:
-                    self.signals.update_status.emit("Connected - Live Race Data", 'green')
-                else:
-                    # After 5 seconds, show session type and time/lap info
-                    try:
-                        session_info = self.ir['SessionInfo']
-                        current_session = session_info['Sessions'][self.ir['SessionNum']]
-                        session_type = current_session['SessionType']
-
-                        # Get session state (0=Invalid, 1=GetInCar, 2=Warmup, 3=ParadeLaps, 4=Racing, 5=Checkered, 6=CoolDown)
-                        try:
-                            session_state = self.ir['SessionState']
-                        except (KeyError, TypeError):
-                            session_state = 4
-
-                        # Determine display state
-                        state_name = session_type  # Default to session type
-                        if session_type == "Race":
-                            if session_state == 2:
-                                state_name = "Warmup"
-                            elif session_state == 3:
-                                state_name = "Pacing"
-                            elif session_state == 5:
-                                state_name = "Checkered"
-                            elif session_state == 6:
-                                state_name = "Cool Down"
-                            # else session_state == 4 (Racing), keep "Race"
-
-                        # Check if session is lap-based or time-based
-                        session_laps_total = current_session.get('SessionLaps', 'unlimited')
-                        is_lap_based = session_laps_total != 'unlimited' and session_laps_total not in [0, '0']
-
-                        if is_lap_based:
-                            # Lap-based session
-                            try:
-                                laps_total = int(session_laps_total)
-                                try:
-                                    race_laps = self.ir['RaceLaps']
-                                except (KeyError, TypeError):
-                                    race_laps = 0
-
-                                # During pacing (negative laps) or before race starts
-                                if race_laps <= 0 or session_state in [2, 3]:
-                                    # Show total laps scheduled
-                                    status_text = f"{state_name} - {laps_total} Lap{'s' if laps_total != 1 else ''}"
-                                else:
-                                    # During racing, show current/total
-                                    current_lap = race_laps
-                                    status_text = f"{state_name} - Lap {current_lap}/{laps_total}"
-                            except (ValueError, TypeError):
-                                status_text = state_name
-                        else:
-                            # Time-based session
-                            session_time_remain = self.ir['SessionTimeRemain']
-
-                            # During pacing or warmup, show scheduled session time
-                            if session_state in [2, 3]:
-                                session_time_total = current_session.get('SessionTime', 'unlimited')
-                                if session_time_total != 'unlimited' and session_time_total not in [0, '0']:
-                                    try:
-                                        total_seconds_val = int(float(session_time_total.replace(' sec', '')))
-                                        hours = total_seconds_val // 3600
-                                        minutes = (total_seconds_val % 3600) // 60
-                                        seconds = total_seconds_val % 60
-
-                                        if hours > 0:
-                                            status_text = f"{state_name} - {hours}:{minutes:02d}:{seconds:02d}"
-                                        else:
-                                            status_text = f"{state_name} - {minutes}:{seconds:02d}"
-                                    except (ValueError, TypeError, AttributeError):
-                                        status_text = state_name
-                                else:
-                                    status_text = state_name
-                            elif session_time_remain is not None and session_time_remain > 0:
-                                # During active session, show remaining time
-                                total_seconds = int(session_time_remain)
-                                hours = total_seconds // 3600
-                                minutes = (total_seconds % 3600) // 60
-                                seconds = total_seconds % 60
-
-                                if hours > 0:
-                                    status_text = f"{state_name} - {hours}:{minutes:02d}:{seconds:02d}"
-                                else:
-                                    status_text = f"{state_name} - {minutes}:{seconds:02d}"
-                            else:
-                                status_text = state_name
-
-                    except (KeyError, TypeError, IndexError, AttributeError) as e:
-                        logger.debug(f"Status display error: {e}")
-                        status_text = "Connected - Live Data"
-
-                    self.signals.update_status.emit(status_text, 'green')
-            else:
+            if not self.is_connected:
                 self.signals.update_status.emit("Connecting to iRacing...", 'orange')
+                return
+
+            # Show initial connection message for a few seconds
+            if self._should_show_connection_message():
+                self.signals.update_status.emit("Connected - Live Race Data", 'green')
+                return
+
+            # Show detailed session status
+            status_text = self._get_session_status_text()
+            self.signals.update_status.emit(status_text, 'green')
 
         except Exception as e:
             logger.error(f"GUI update error: {e}", exc_info=True)

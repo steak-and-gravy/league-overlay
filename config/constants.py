@@ -46,12 +46,15 @@ class ColumnLayout:
 
 @dataclass(frozen=True)
 class Timing:
-    """Additional timing constants."""
+    """Timing and refresh rate constants."""
     AUTO_CENTER_CHECK_INTERVAL: int = 1000  # milliseconds
     STARTUP_GRACE_PERIOD: float = 3.0  # seconds
     AUTO_HIDE_DELAY: int = 500  # milliseconds
     UPDATE_CHECK_DELAY: float = 1.0  # seconds
     CHECKERED_REFRESH: float = 0.1  # seconds (10 Hz - fast finish tracking, throttled UI updates)
+    CONNECTION_MESSAGE_DURATION: float = 5.0  # seconds - how long to show "Connected" message
+    CHECKERED_UPDATE_CYCLE_COUNT: int = 5  # Force UI update every 5 cycles during checkered flag
+    DEFAULT_LAP_TIME_FALLBACK: float = 90.0  # seconds - fallback lap time when no data available
 
 
 @dataclass(frozen=True)
