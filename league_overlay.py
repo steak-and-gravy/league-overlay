@@ -14,7 +14,6 @@ This application provides a floating, semi-transparent overlay that shows:
 import sys
 import threading
 import time
-import json
 import os
 import re
 from typing import Dict, List, Optional
@@ -583,18 +582,14 @@ class LeagueOverlay(QMainWindow):
         if self.update_check_done:
             return
         time.sleep(TIMING.UPDATE_CHECK_DELAY)
-        result = self.check_for_updates()
+        result = self.update_checker.check_for_update()
         self.update_check_done = True
-        
+
         if result.get('update_available'):
             self.latest_version = result['latest_version']
             msg = f"Update available: v{result['latest_version']}"
             self.signals.update_status.emit(msg, '#00FF00')
-            
-    def check_for_updates(self):
-        """Check GitHub for updates using the UpdateChecker."""
-        return self.update_checker.check_for_update()
-            
+
     def toggle_division_filter(self):
         """Toggle division filter - cycles through different division views.
         Two modes:
@@ -653,45 +648,7 @@ class LeagueOverlay(QMainWindow):
                 rect.width() - self.size_grip.width(),
                 rect.height() - self.size_grip.height()
             )
-        
-    def load_color_config(self):
-        """Load the driver-to-division mapping from JSON config file.
-        Returns:
-            Dict with 'drivers' key containing list of driver entries:
-            {'drivers': [
-                {'id': '12345', 'name': 'John Doe', 'division': 'Pro'},
-                ...
-            ]}
-        """
-        if os.path.exists(self.color_config_file):
-            try:
-                with open(self.color_config_file, 'r') as f:
-                    data = json.load(f)
-                    
-                    if isinstance(data, dict):
-                        if 'drivers' in data:
-                            return data
-                        else:
-                            # Migrate old format
-                            migrated = {'drivers': []}
-                            for key, division in data.items():
-                                entry = {'division': division}
-                                if key.isdigit():
-                                    entry['id'] = key
-                                    entry['name'] = ''
-                                else:
-                                    entry['name'] = key
-                                migrated['drivers'].append(entry)
-                            
-                            with open(self.color_config_file, 'w') as f:
-                                json.dump(migrated, f, indent=2)
-                            return migrated
-                    elif isinstance(data, list):
-                        return {'drivers': []}
-            except Exception as e:
-                logger.error(f"Error loading color config: {e}", exc_info=True)
-        return {'drivers': []}
-        
+
     def load_settings(self):
         """Load user preferences from disk and apply to instance variables."""
         self.settings = self.settings_manager.load()
