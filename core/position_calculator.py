@@ -149,7 +149,6 @@ class PositionCalculator:
             if car_idx_class_position[car_idx] == 0:
                 continue
 
-            # O(1) lookup instead of O(n) loop
             driver_info = drivers.get(car_idx)
 
             if not driver_info:

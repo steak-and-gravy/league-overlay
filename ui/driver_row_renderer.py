@@ -108,7 +108,7 @@ class DriverRowRenderer:
         pos_color = styling.get('position_color', text_color) if styling else text_color
         pos_bg = styling.get('position_bg', label_bg) if styling else label_bg
 
-        pos_label = QLabel(str(driver_data.get('position', '')))
+        pos_label = QLabel(str(driver.real_time_position if driver.real_time_position else ''))
         pos_label.setStyleSheet(f"""
             QLabel {{
                 color: {pos_color};
@@ -121,7 +121,7 @@ class DriverRowRenderer:
         pos_label.setAlignment(Qt.AlignCenter)
         pos_label.setContextMenuPolicy(Qt.CustomContextMenu)
         pos_label.customContextMenuRequested.connect(
-            lambda pos, dd=driver_data: self.parent.show_context_menu(dd)
+            lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(pos_label, 0, 0)
 
@@ -132,7 +132,7 @@ class DriverRowRenderer:
         div_pos_color = styling.get('car_number_color', text_color) if styling else text_color
         div_pos_bg = styling.get('car_number_bg', label_bg) if styling else label_bg
 
-        div_pos_label = QLabel(str(driver_data.get('division_position', '')))
+        div_pos_label = QLabel(str(driver.division_position if driver.division_position else ''))
         div_pos_label.setStyleSheet(f"""
             QLabel {{
                 color: {div_pos_color};
@@ -145,7 +145,7 @@ class DriverRowRenderer:
         div_pos_label.setAlignment(Qt.AlignCenter)
         div_pos_label.setContextMenuPolicy(Qt.CustomContextMenu)
         div_pos_label.customContextMenuRequested.connect(
-            lambda pos, dd=driver_data: self.parent.show_context_menu(dd)
+            lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(div_pos_label, 0, 1)
 
@@ -156,7 +156,7 @@ class DriverRowRenderer:
         car_color = styling.get('car_number_color', text_color) if styling else text_color
         car_bg = styling.get('car_number_bg', label_bg) if styling else label_bg
 
-        car_label = QLabel(str(driver_data.get('car_number', '')))
+        car_label = QLabel(str(driver.car_number))
         car_label.setStyleSheet(f"""
             QLabel {{
                 color: {car_color};
@@ -169,7 +169,7 @@ class DriverRowRenderer:
         car_label.setAlignment(Qt.AlignCenter)
         car_label.setContextMenuPolicy(Qt.CustomContextMenu)
         car_label.customContextMenuRequested.connect(
-            lambda pos, dd=driver_data: self.parent.show_context_menu(dd)
+            lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(car_label, 0, column)
 
@@ -177,7 +177,7 @@ class DriverRowRenderer:
                                   label_bg: str, label_border: str, font_weight: str, column: int = 3) -> None:
         """Create driver name label."""
         name_align = Qt.AlignCenter if self.parent.center_drivers else Qt.AlignLeft
-        name_label = QLabel(driver_data.get('driver_name', ''))
+        name_label = QLabel(driver.driver_name)
         name_label.setStyleSheet(f"""
             QLabel {{
                 color: {text_color};
@@ -193,7 +193,7 @@ class DriverRowRenderer:
         name_label.setWordWrap(False)
         name_label.setContextMenuPolicy(Qt.CustomContextMenu)
         name_label.customContextMenuRequested.connect(
-            lambda pos, dd=driver_data: self.parent.show_context_menu(dd)
+            lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(name_label, 0, column)
 
@@ -203,15 +203,14 @@ class DriverRowRenderer:
         from config.logging_config import get_logger
         logger = get_logger(__name__)
 
-        gap_value = driver_data.get('gap', '')
+        gap_value = driver.gap
 
         # Log gap values for critical positions or when gap is "Leader"
-        position = driver_data.get('position', -1)
-        car_idx = driver_data.get('car_idx', -1)
+        position = driver.real_time_position or -1
         if position in [1, 2, 3, 9, 10] or gap_value == "Leader":
-            logger.info(f"UI_GAP - Car {car_idx} (P{position}): gap_value='{gap_value}', "
-                       f"car_number={driver_data.get('car_number', '?')}, "
-                       f"driver_name={driver_data.get('driver_name', '?')}")
+            logger.info(f"UI_GAP - Car {driver.car_idx} (P{position}): gap_value='{gap_value}', "
+                       f"car_number={driver.car_number}, "
+                       f"driver_name={driver.driver_name}")
 
         gap_label = QLabel(gap_value)
         gap_label.setStyleSheet(f"""
@@ -226,6 +225,6 @@ class DriverRowRenderer:
         gap_label.setAlignment(Qt.AlignCenter)
         gap_label.setContextMenuPolicy(Qt.CustomContextMenu)
         gap_label.customContextMenuRequested.connect(
-            lambda pos, dd=driver_data: self.parent.show_context_menu(dd)
+            lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(gap_label, 0, 4)
