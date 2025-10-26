@@ -8,6 +8,7 @@ overwriting the log file on each application launch.
 import logging
 import sys
 from pathlib import Path
+from logging.handlers import RotatingFileHandler
 
 
 def setup_logging(log_level=logging.INFO):
@@ -30,10 +31,13 @@ def setup_logging(log_level=logging.INFO):
 
     log_file = app_dir / "LeagueOverlay.log"
 
-    # Create file handler (mode='w' overwrites on each launch)
-    file_handler = logging.FileHandler(
+    # Create rotating file handler with 25MB limit (safety against runaway logging)
+    # backupCount=1 keeps 1 backup, rotates continuously (max 50MB total: 25MB * 2 files)
+    file_handler = RotatingFileHandler(
         log_file,
-        mode='w',
+        mode='a',  # RotatingFileHandler uses append mode
+        maxBytes=25 * 1024 * 1024,  # 25MB
+        backupCount=1,
         encoding='utf-8'
     )
 

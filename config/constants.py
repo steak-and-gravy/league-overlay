@@ -5,7 +5,53 @@ from typing import Dict, Any
 
 
 # Application version
-VERSION = "0.9.7.6"
+VERSION = "0.9.7.7"
+
+
+@dataclass(frozen=True)
+class UIColors:
+    """Color palette for the overlay UI."""
+    BACKGROUND_BLACK: str = '#000000'
+    HEADER_DARK_GRAY: str = '#333333'
+    SCROLLBAR_GRAY: str = '#222222'
+    BUTTON_GRAY: str = '#555555'
+    BUTTON_HOVER_GRAY: str = '#666666'
+    GRADIENT_BLACK: str = '#1a1a1a'
+    CLOSE_BUTTON_RED: str = '#cc0000'
+    CLOSE_BUTTON_HOVER_RED: str = '#ff0000'
+    DIVISION_HIGHLIGHT_GREEN: str = '#0FC436'
+
+
+@dataclass(frozen=True)
+class UIDimensions:
+    """UI element dimensions."""
+    WINDOW_MIN_WIDTH: int = 250
+    WINDOW_MIN_HEIGHT: int = 200
+    TITLE_BAR_HEIGHT: int = 30
+    SIZE_GRIP_SIZE: int = 20
+    CLOSE_BUTTON_WIDTH: int = 25
+    SETTINGS_DIALOG_WIDTH: int = 310
+    SETTINGS_DIALOG_HEIGHT: int = 705
+
+
+@dataclass(frozen=True)
+class ColumnLayout:
+    """Column stretch factors for driver list."""
+    POS: int = 11
+    DIV_POS: int = 11
+    CAR_NUM: int = 13
+    DRIVER_NAME: int = 46
+    GAP: int = 19
+
+
+@dataclass(frozen=True)
+class Timing:
+    """Additional timing constants."""
+    AUTO_CENTER_CHECK_INTERVAL: int = 1000  # milliseconds
+    STARTUP_GRACE_PERIOD: float = 3.0  # seconds
+    AUTO_HIDE_DELAY: int = 500  # milliseconds
+    UPDATE_CHECK_DELAY: float = 1.0  # seconds
+    CHECKERED_REFRESH: float = 0.1  # seconds (10 Hz - fast finish tracking, throttled UI updates)
 
 
 @dataclass(frozen=True)
@@ -90,6 +136,10 @@ class TelemetryConfig:
 
 
 # Global configuration instances
+UI_COLORS = UIColors()
+UI_DIMENSIONS = UIDimensions()
+COLUMN_LAYOUT = ColumnLayout()
+TIMING = Timing()
 UI_CONFIG = UIConfig()
 FILE_CONFIG = FileConfig()
 TELEMETRY_CONFIG = TelemetryConfig()

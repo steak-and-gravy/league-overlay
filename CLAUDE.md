@@ -1,0 +1,277 @@
+# iRacing League Overlay - Context for AI Assistance
+
+Real-time iRacing race position overlay with division-based racing.
+
+## Project Structure
+```
+/Volumes/shared/
+├── config/              # Settings and constants
+│   ├── constants.py     # UIConfig, FileConfig, TelemetryConfig
+│   ├── settings.py      # AppSettings, SettingsManager
+│   └── logging_config.py # Logging setup and configuration
+├── core/                # Business logic
+│   ├── position_calculator.py # Position calculation (227 lines)
+│   ├── gap_calculator.py      # Time/lap gap calculations
+│   ├── division_manager.py    # Driver-to-division mapping
+│   ├── division_filter.py     # Division filtering logic (185 lines)
+│   ├── race_state_tracker.py  # Finish state machine (345 lines)
+│   ├── telemetry_processor.py # Main telemetry orchestration (640 lines)
+│   └── update_checker.py      # GitHub update checking
+├── ui/                  # UI components
+│   ├── driver_row_renderer.py    # Row widget creation
+│   ├── settings_dialog.py        # Settings UI
+│   ├── styles.py                 # Color strategies (Default/Alternate/Outline/Stream)
+│   ├── widgets.py                # Custom Qt widgets
+│   └── auto_center_controller.py # Auto-scrolling controller
+├── league_overlay.py    # Main application (1180 lines, down from 3,299)
+└── LeagueOverlay.log    # Application log (overwrites on each run)
+```
+
+## Key Concepts
+
+### 0. IRSDK DATA ACCESS (IMPORTANT!)
+
+**CRITICAL: Different objects have different access patterns!**
+
+#### `live_data` / `self.ir` (irsdk.IRSDK object)
+- This is the iRacing SDK connection object - NOT a regular Python dict
+- irsdk.IRSDK implements `__getitem__` but NOT `__contains__` or `.get()`
+- **ALWAYS use try/except for optional fields**: Use try/except to handle missing fields
+- **NEVER use .get()**: `self.ir.get('SessionState', default)` ✗ (AttributeError: 'IRSDK' object has no attribute 'get')
+- **NEVER use 'in' operator**: `'SessionState' in self.ir` may not work reliably
+- This is a wrapper around iRacing's memory-mapped data
+- Common fields: `'CarIdxLap'`, `'CarIdxLapDistPct'`, `'CarIdxClassPosition'`, `'SessionState'`, `'SessionNum'`, `'SessionTime'`, `'RaceLaps'`, `'SessionTimeRemain'`
+- Session info is nested: `self.ir['SessionInfo']['Sessions'][session_num]`
+- Weekend info: `self.ir['WeekendInfo']['SessionID']`
+
+**Common Pattern for Optional Fields with Defaults:**
+```python
+# CORRECT - Use try/except for optional fields
+try:
+    session_state = self.ir['SessionState']
+except (KeyError, TypeError):
+    session_state = 4
+
+try:
+    race_laps = self.ir['RaceLaps']
+except (KeyError, TypeError):
+    race_laps = 0
+
+# WRONG - .get() does not exist on IRSDK objects
+session_state = self.ir.get('SessionState', 4)  # ❌ AttributeError!
+
+# WRONG - 'in' operator may not work reliably
+session_state = self.ir['SessionState'] if 'SessionState' in self.ir else 4  # ❌ May fail!
+```
+
+#### `DriverState` (dataclass from core/driver_state.py)
+- This is a **dataclass** created by TelemetryProcessor for each driver
+- **Use attribute access**: `driver.position`, `driver.car_number`, `driver.gap` ✓
+- **Never use dict access**: `driver['position']` ✗ (TypeError: DriverState is not subscriptable)
+- Key attributes:
+  - Direct fields: `car_idx`, `driver_info`, `official_position`, `real_time_position`, `division_position`, `division_name`, `division_color`, `gap`, `is_player`, `is_disconnected`, etc.
+  - Computed properties: `car_number`, `driver_name`, `car_class_id`, `total_track_position`
+- See `core/driver_state.py` for complete list of fields and properties
+
+#### `driver_info` (dict from iRacing API)
+- This is a regular Python dict from iRacing's DriverInfo (stored inside DriverState)
+- **CAN use .get() safely**: `driver_info.get('UserName', '')` ✓
+- Contains: `UserID`, `UserName`, `CarNumber`, `CarClassID`, etc.
+- **Prefer using DriverState properties** instead of accessing driver_info directly:
+  - Use `driver.car_number` instead of `driver.driver_info.get('CarNumber')`
+  - Use `driver.driver_name` instead of `driver.driver_info.get('UserName')`
+  - Use `driver.car_class_id` instead of `driver.driver_info.get('CarClassID')`
+
+**Summary**: Only `irsdk.IRSDK` objects (like `self.ir` and `live_data`) require bracket notation with try/except. DriverState uses attribute/property access. Regular dicts use `.get()` safely.
+
+### 1. REAL-TIME POSITIONING
+- **Official**: Updates at start/finish line only (iRacing default)
+- **Real-time**: Continuous updates using `lap + lap_distance_pct`
+- **Usage**: Real-time during race, official after finish, best lap during practice/qualifying
+
+### 2. DIVISION SYSTEM
+- Drivers assigned to divisions via JSON config (Pro, ProAm, Am, Rookie)
+- Each division has customizable color
+- Gaps calculated within divisions only
+- Right-click driver to change division
+- Managed by `core/division_manager.py`
+
+### 3. FINISH TRACKING (State Machine)
+- Checkered flag waves when leader approaches line, but race continues
+- Tracks each car completing their finish lap individually
+- Locks position + gap when each car crosses line after checkered
+- Implemented in `core/race_state_tracker.py`
+- **NEW**: Finish tracking methods moved from TelemetryProcessor to RaceStateTracker for better cohesion
+
+**Snapshots and Disconnected Drivers:**
+- Active drivers come from `PositionCalculator.calculate_real_time_positions()` as DriverState objects with full data including `total_track_position`
+- Disconnected drivers are restored from snapshots via `RaceStateTracker.handle_disconnected_drivers()`
+- Snapshots store DriverState objects - use attribute access with fallbacks for safety
+- Example: `racing_drivers.sort(key=lambda x: x.total_track_position or 0, reverse=True)`
+
+### 4. MULTI-CLASS SUPPORT
+- **Class** = Car types (LMP2, GT3, GT4, etc.)
+- **Division** = Driver groupings within same class
+- Overlay filters to player's class automatically
+
+## Common Tasks
+
+### Adding New Feature
+1. Identify which module (config/core/ui)
+2. Make changes in appropriate module
+3. Update league_overlay.py orchestration if needed
+
+### Modifying Telemetry Logic
+- **Position calculation**: `core/position_calculator.py`
+- **Finish tracking**: `core/race_state_tracker.py`
+- **Gap calculation**: `core/gap_calculator.py`
+- **Division filtering**: `core/division_filter.py`
+- **Orchestration**: `core/telemetry_processor.py` (coordinates the above)
+
+### UI Changes
+- Driver rows: `ui/driver_row_renderer.py`
+- Settings: `ui/settings_dialog.py`
+- Colors/styles: `ui/styles.py`
+
+### Configuration Changes
+- Constants: `config/constants.py`
+- Settings persistence: `config/settings.py`
+
+### Debugging with Logs
+- Log file: `LeagueOverlay.log` (same directory as executable)
+- Overwrites on each application launch
+- Contains startup info, exceptions with full tracebacks, state changes
+- Useful for troubleshooting user issues - ask for this file
+
+## Important Notes for AI
+
+### Critical Coding Patterns
+
+#### Data Access Patterns by Object Type
+See "IRSDK DATA ACCESS" section above for complete details. Quick reference:
+
+- **irsdk objects** (`self.ir`, `live_data`): Use bracket notation ONLY with try/except
+  ```python
+  car_idx_lap = live_data['CarIdxLap']  # ✓
+  ```
+
+- **DriverState objects** (`driver`, items in `race_data`/`active_drivers`): Use attribute/property access
+  ```python
+  position = driver.real_time_position  # ✓
+  car_number = driver.car_number  # ✓ (computed property)
+  driver_name = driver.driver_name  # ✓ (computed property)
+  ```
+
+- **Regular dicts** (`driver_info`): Use `.get()` safely (but prefer DriverState properties when available)
+  ```python
+  driver_name = driver_info.get('UserName', '')  # ✓ but prefer driver.driver_name
+  ```
+
+#### Qt Signal Lambda Functions
+When connecting Qt signals that pass arguments (like `customContextMenuRequested`), always explicitly include the signal's parameter in the lambda signature, even if you don't use it:
+
+**Correct:**
+```python
+widget.customContextMenuRequested.connect(
+    lambda pos, d=driver: self.parent.show_context_menu(d)
+)
+```
+
+**Incorrect:**
+```python
+widget.customContextMenuRequested.connect(
+    lambda d=driver: self.parent.show_context_menu(d)  # ❌ Missing 'pos' parameter
+)
+```
+
+**Reason**: Qt signals like `customContextMenuRequested` pass a `QPoint` as their first argument. If you don't explicitly accept it in your lambda signature, the QPoint gets passed to your function instead of your intended data, causing `TypeError`.
+
+#### Lambda Closure Best Practices
+Always capture data **by value** in lambda closures to avoid stale reference issues:
+
+**Correct:**
+```python
+lambda pos, d=driver: self.parent.show_context_menu(d)  # d captured by value
+```
+
+**Incorrect:**
+```python
+lambda pos: self.parent.show_context_menu(driver)  # driver captured by reference
+```
+
+**Reason**: When widgets are recreated frequently, capturing by reference can lead to the lambda referencing deleted or wrong data.
+
+### Code Organization
+- Code is modularized - avoid suggesting changes that revert to monolithic structure
+- Always check if functionality exists in a module before suggesting new code
+- Single responsibility: each module has one clear purpose
+
+### Key Design Patterns
+- Dependency injection (AutoCenterController accepts time_func)
+- Static methods for pure functions (GapCalculator)
+- Clear separation: UI doesn't know about Core internals
+
+### Threading
+- Telemetry runs in background thread
+- Uses Qt signals for thread-safe UI updates
+- Never block UI thread with telemetry operations
+
+### Configuration
+- Division config is JSON-based and shared across league members
+- Settings saved to LeagueOverlay.config
+- Division colors customizable per league
+
+### Logging
+- Logging is implemented using Python's `logging` module
+- All modules use `get_logger(__name__)` from `config.logging_config`
+- Logs include: startup info, version, errors with tracebacks, state changes
+- **Log Rotation**: Uses `RotatingFileHandler` with 1MB max size, keeps 1 backup (2MB total max)
+- **Log Level**: Default is INFO, set to DEBUG for detailed telemetry/gap calculation debugging
+- Logs persist across app launches (appends until rotation)
+
+### Session Tracking
+- Uses `SessionID` from `WeekendInfo` (not `SessionNum`) combined with `session_type`
+- `SessionNum` is just an array index and resets for each session type
+- `SessionID` is unique per event and persists across reconnects
+- Change detection: `telemetry_processor.py` `_detect_session_change()`
+
+## Quick Reference Docs
+
+- **Architecture details**: `ARCHITECTURE.md`
+
+## Testing
+
+The project includes comprehensive test coverage with **319 tests** across multiple test suites:
+
+### Test Organization
+```
+tests/
+├── test_core/                    # Core business logic tests
+│   ├── test_race_state_tracker.py    # Finish tracking, multi-class, snapshots
+│   ├── test_telemetry_processor.py   # Driver separation, session tracking, overall gap mode
+│   ├── test_gap_calculator.py        # Gap calculations
+│   ├── test_position_calculator.py   # Position logic
+│   └── test_division_manager.py      # Division management
+├── test_ui/                      # UI component tests
+│   ├── test_driver_row_renderer.py
+│   └── test_widgets.py
+└── conftest.py                   # Shared fixtures
+
+```
+
+### Running Tests
+```bash
+# Run all tests
+pytest
+
+# Run specific test suite
+pytest tests/test_core/test_race_state_tracker.py
+
+# Run with coverage
+pytest --cov=core --cov=ui --cov-report=html
+
+# Run specific test class
+pytest tests/test_core/test_race_state_tracker.py::TestFinishGapWithPositionSwaps
+```
+
+For additional testing details, see `PHASE_6_TESTING_AND_DOCUMENTATION.md`
