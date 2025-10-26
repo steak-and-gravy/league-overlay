@@ -1220,12 +1220,9 @@ class LeagueOverlay(QMainWindow):
                 self.move(event.globalPosition().toPoint() - self.drag_position)
                 event.accept()
 
-    def mouseReleaseEvent(self, event):
-        """End drag operation and save new window position to config."""
+    def mouseReleaseEvent(self, _event):
+        """End drag operation."""
         self.drag_position = QPoint()
-        # Save settings when user finishes moving/resizing
-        if event.button() == Qt.LeftButton:
-            self.save_settings()
 
 
 def main():
