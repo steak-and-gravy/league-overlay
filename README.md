@@ -33,6 +33,7 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - Row color style (Default, Alternate, Outline, Stream)
 - Refresh rate
 - Division colors
+- Log level (DEBUG, INFO, WARNING, ERROR)
 
 ---
 

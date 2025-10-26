@@ -68,6 +68,7 @@ Application settings persistence and validation.
 
 **Key Features:**
 - Validates opacity (0.1-1.0), refresh rate (0.25-5.0), dimensions (200-2000)
+- Validates font_size, row_color_style, log_level (enum values)
 - Gracefully handles missing/corrupt settings files
 - Automatic defaults for missing fields
 - Logs settings load/save operations and errors
@@ -76,7 +77,7 @@ Application settings persistence and validation.
 Logging configuration and setup.
 
 **Functions:**
-- `setup_logging()` - Initialize logging to LeagueOverlay.log
+- `setup_logging(log_level)` - Initialize logging to LeagueOverlay.log with specified level
 - `get_logger(name)` - Get a logger instance for a module
 
 **Purpose**: Centralized logging configuration for the entire application.
@@ -85,7 +86,8 @@ Logging configuration and setup.
 
 **Key Features:**
 - Logs to `LeagueOverlay.log` in same directory as executable
-- Overwrites log file on each launch (no rotation)
+- Rotating file handler with 25MB max size, 1 backup
+- Log level configurable via AppSettings (default: INFO)
 - Works with both compiled exe (Nuitka) and script mode
 - Simple format: `timestamp - module - level - message`
 - Used by all modules for consistent logging
