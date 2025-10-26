@@ -199,11 +199,6 @@ class LeagueOverlay(QMainWindow):
         # Focus tracking for auto-hide
         self.hide_timer = None
         self.setMouseTracking(True)
-        
-        # Initial state for auto-hide
-        if self.hide_headers:
-            # Don't hide on startup, let user see the interface first
-            pass
 
     def get_bg_color(self, base_color):
         """Convert a hex color to RGBA format with current window opacity."""
