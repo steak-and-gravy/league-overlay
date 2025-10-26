@@ -7,6 +7,7 @@ from typing import Optional, Dict
 
 from .constants import UI_CONFIG, FILE_CONFIG, TELEMETRY_CONFIG
 from .logging_config import get_logger
+from .settings_validator import SettingsValidator
 
 logger = get_logger(__name__)
 
@@ -31,6 +32,7 @@ class AppSettings:
     hide_headers: bool = False
     center_drivers: bool = False
     bold_drivers: bool = True
+    show_division_gap: bool = True
 
     # Configuration files
     league_config: Optional[str] = None
@@ -54,36 +56,42 @@ class SettingsManager:
             settings_file: Path to the settings JSON file
         """
         self.settings_file = settings_file
+        self.validator = SettingsValidator()
 
     def load(self) -> AppSettings:
-        """Load settings from file, return defaults if not found or invalid.
+        """Load settings from file with comprehensive validation.
+
+        This method loads settings from JSON, validates and coerces each field
+        using SettingsValidator, and returns a fully validated AppSettings
+        instance. Invalid values are replaced with sensible defaults.
 
         Returns:
             AppSettings instance with loaded or default values
         """
         if not os.path.exists(self.settings_file):
+            logger.info(f"Settings file {self.settings_file} not found, using defaults")
             return AppSettings()
 
         try:
             with open(self.settings_file, 'r') as f:
                 data = json.load(f)
 
-            # Extract known settings fields, ignoring unknown fields
-            settings_dict = {}
-            for field in AppSettings.__dataclass_fields__:
-                if field in data:
-                    settings_dict[field] = data[field]
+            logger.info(f"Settings loaded from {self.settings_file}")
 
-            logger.info(f"Settings loaded successfully from {self.settings_file}")
-            return self.validate(AppSettings(**settings_dict))
+            # Validate and coerce all fields using validator
+            validated_dict = self.validator.validate_and_coerce(data)
 
-        except (json.JSONDecodeError, TypeError, ValueError) as e:
-            logger.warning(f"Settings load error: {e}, using defaults", exc_info=True)
-            print(f"Settings load error: {e}, using defaults")
+            # Create AppSettings with validated data
+            settings = AppSettings(**validated_dict)
+
+            logger.info("Settings validation completed successfully")
+            return settings
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Settings file is corrupted JSON: {e}, using defaults", exc_info=True)
             return AppSettings()
         except Exception as e:
             logger.error(f"Unexpected settings error: {e}, using defaults", exc_info=True)
-            print(f"Unexpected settings error: {e}, using defaults")
             return AppSettings()
 
     def save(self, settings: AppSettings) -> None:
@@ -106,6 +114,7 @@ class SettingsManager:
                 'hide_headers': settings.hide_headers,
                 'center_drivers': settings.center_drivers,
                 'bold_drivers': settings.bold_drivers,
+                'show_division_gap': settings.show_division_gap,
                 'font_size': settings.font_size,
                 'row_color_style': settings.row_color_style
             }
@@ -117,41 +126,42 @@ class SettingsManager:
 
         except IOError as e:
             logger.error(f"Failed to save settings: {e}", exc_info=True)
-            print(f"Failed to save settings: {e}")
         except Exception as e:
             logger.error(f"Unexpected save error: {e}", exc_info=True)
-            print(f"Unexpected save error: {e}")
 
     def validate(self, settings: AppSettings) -> AppSettings:
-        """Validate and clamp settings to valid ranges.
+        """Validate an existing AppSettings instance.
+
+        This method is provided for backward compatibility with tests
+        and manual validation. During normal load() operations, validation
+        happens automatically via SettingsValidator.
 
         Args:
             settings: AppSettings instance to validate
 
         Returns:
-            Validated AppSettings instance with clamped values
+            New AppSettings instance with validated values
         """
-        # Clamp opacity to valid range [0.1, 1.0]
-        settings.opacity = max(0.1, min(1.0, settings.opacity))
+        # Convert to dict
+        settings_dict = {
+            'league_config': settings.league_config,
+            'division_colors': settings.division_colors,
+            'x': settings.x,
+            'y': settings.y,
+            'width': settings.width,
+            'height': settings.height,
+            'opacity': settings.opacity,
+            'refresh_rate': settings.refresh_rate,
+            'hide_headers': settings.hide_headers,
+            'center_drivers': settings.center_drivers,
+            'bold_drivers': settings.bold_drivers,
+            'show_division_gap': settings.show_division_gap,
+            'font_size': settings.font_size,
+            'row_color_style': settings.row_color_style
+        }
 
-        # Clamp refresh rate to valid range [0.25, 5.0]
-        settings.refresh_rate = max(
-            TELEMETRY_CONFIG.MIN_REFRESH_RATE,
-            min(TELEMETRY_CONFIG.MAX_REFRESH_RATE, settings.refresh_rate)
-        )
+        # Validate using validator
+        validated_dict = self.validator.validate_and_coerce(settings_dict)
 
-        # Validate font size
-        valid_font_sizes = ["Small", "Medium", "Large", "Extra Large"]
-        if settings.font_size not in valid_font_sizes:
-            settings.font_size = "Medium"
-
-        # Validate row color style
-        valid_color_styles = ["Default", "Alternate", "Outline"]
-        if settings.row_color_style not in valid_color_styles:
-            settings.row_color_style = "Default"
-
-        # Clamp window dimensions to reasonable values
-        settings.width = max(200, min(2000, settings.width))
-        settings.height = max(200, min(2000, settings.height))
-
-        return settings
+        # Return new AppSettings with validated values
+        return AppSettings(**validated_dict)

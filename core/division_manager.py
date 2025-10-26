@@ -40,7 +40,6 @@ class DivisionManager:
                         self.driver_colors = {'drivers': []}
             except (json.JSONDecodeError, IOError) as e:
                 logger.error(f"Error loading division config: {e}", exc_info=True)
-                print(f"Error loading division config: {e}")
                 self.driver_colors = {'drivers': []}
         else:
             self.driver_colors = {'drivers': []}
@@ -55,7 +54,6 @@ class DivisionManager:
                     self.division_colors.update(division_colors)
             except (json.JSONDecodeError, IOError) as e:
                 logger.error(f"Error loading division colors: {e}", exc_info=True)
-                print(f"Error loading division colors: {e}")
                 self.division_colors = UI_CONFIG.DEFAULT_COLORS.copy()
         else:
             self.division_colors = UI_CONFIG.DEFAULT_COLORS.copy()
@@ -68,7 +66,6 @@ class DivisionManager:
             logger.debug(f"Saved division config to {self.config_file}")
         except IOError as e:
             logger.error(f"Error saving division config: {e}", exc_info=True)
-            print(f"Error saving division config: {e}")
 
     def get_driver_division(self, driver_info: Dict[str, str]) -> Optional[str]:
         """Get the division assigned to a driver.

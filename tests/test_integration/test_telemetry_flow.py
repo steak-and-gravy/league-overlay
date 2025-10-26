@@ -248,9 +248,9 @@ class TestTelemetryProcessingPipeline:
         processor.process_telemetry(get_driver_color_fn)
 
         # Check session info is captured
-        assert processor.current_session_num == 0
+        assert processor.current_session_id is not None
         assert processor.current_session_type == 'Race'
-        assert processor.player_car_idx == 5
+        assert processor.position_calculator.player_car_idx == 5
 
 
 @pytest.mark.skip(reason="Integration tests need substantial refactoring - mock SDK data structure doesn't match current TelemetryProcessor expectations")
