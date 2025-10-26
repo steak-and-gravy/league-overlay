@@ -234,6 +234,47 @@ class SettingsDialog(QDialog):
         color_style_row.addWidget(self.color_style_combo)
         window_layout.addLayout(color_style_row)
 
+        # Log level selector
+        log_level_row = QHBoxLayout()
+        log_level_label = QLabel("Log Level:")
+        log_level_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 100px;")
+        log_level_row.addWidget(log_level_label)
+
+        self.log_level_combo = QComboBox()
+        self.log_level_combo.addItems(["DEBUG", "INFO", "WARNING", "ERROR"])
+        self.log_level_combo.setCurrentText(self.parent_overlay.settings.log_level)
+        self.log_level_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #404040;
+                color: white;
+                border: 1px solid #555555;
+                padding: 4px 8px;
+                font-size: 9pt;
+            }
+            QComboBox:hover {
+                background-color: #505050;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 20px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 6px solid white;
+                margin-right: 6px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #404040;
+                color: white;
+                selection-background-color: #505050;
+                border: 1px solid #555555;
+            }
+        """)
+        log_level_row.addWidget(self.log_level_combo)
+        window_layout.addLayout(log_level_row)
+
         # Checkboxes in 2x2 grid (left and right columns)
         checkbox_row1 = QHBoxLayout()
 
@@ -510,6 +551,7 @@ class SettingsDialog(QDialog):
             self.bold_drivers_cb.setChecked(True)
             self.font_size_combo.setCurrentText("Medium")
             self.color_style_combo.setCurrentText("Default")
+            self.log_level_combo.setCurrentText("INFO")
             
             default_colors = {
                 "Pro": "#FF8C00",
@@ -546,6 +588,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.show_division_gap = self.show_division_gap_cb.isChecked()
             self.parent_overlay.font_size = self.font_size_combo.currentText()
             self.parent_overlay.row_color_style = self.color_style_combo.currentText()
+            self.parent_overlay.settings.log_level = self.log_level_combo.currentText()
 
             self.parent_overlay.update_all_backgrounds()
 

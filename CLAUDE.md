@@ -139,9 +139,10 @@ session_state = self.ir['SessionState'] if 'SessionState' in self.ir else 4  # â
 
 ### Debugging with Logs
 - Log file: `LeagueOverlay.log` (same directory as executable)
-- Overwrites on each application launch
+- Appends with rotation (25MB max per file, 1 backup)
 - Contains startup info, exceptions with full tracebacks, state changes
 - Useful for troubleshooting user issues - ask for this file
+- **Tip**: Enable DEBUG log level in Settings for detailed troubleshooting
 
 ## Important Notes for AI
 
@@ -225,8 +226,12 @@ lambda pos: self.parent.show_context_menu(driver)  # driver captured by referenc
 - Logging is implemented using Python's `logging` module
 - All modules use `get_logger(__name__)` from `config.logging_config`
 - Logs include: startup info, version, errors with tracebacks, state changes
-- **Log Rotation**: Uses `RotatingFileHandler` with 1MB max size, keeps 1 backup (2MB total max)
-- **Log Level**: Default is INFO, set to DEBUG for detailed telemetry/gap calculation debugging
+- **Log Rotation**: Uses `RotatingFileHandler` with 25MB max size, keeps 1 backup (50MB total max)
+- **Log Level**: User-configurable via Settings dialog (DEBUG, INFO, WARNING, ERROR)
+  - Default: INFO (balanced verbosity)
+  - DEBUG: Detailed telemetry/gap calculation debugging
+  - WARNING/ERROR: Quieter logs for production use
+  - Takes effect on next app restart
 - Logs persist across app launches (appends until rotation)
 
 ### Session Tracking

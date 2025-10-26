@@ -1237,11 +1237,27 @@ class LeagueOverlay(QMainWindow):
 
 
 def main():
-    # Setup logging first
+    # Load settings first to get log level
     import logging
-    log_file_path = setup_logging(log_level=logging.DEBUG)
+    from config.settings import SettingsManager
+
+    settings_manager = SettingsManager()
+    settings = settings_manager.load()
+
+    # Map string log level to logging constant
+    log_level_map = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR
+    }
+    log_level = log_level_map.get(settings.log_level, logging.INFO)
+
+    # Setup logging with user's configured level
+    log_file_path = setup_logging(log_level=log_level)
     logger.info("="*60)
     logger.info(f"BB's League Overlay v{VERSION} - Starting")
+    logger.info(f"Log level: {settings.log_level}")
     logger.info("="*60)
 
     app = QApplication(sys.argv)
