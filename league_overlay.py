@@ -819,10 +819,6 @@ class LeagueOverlay(QMainWindow):
                             show_division_gap=self.show_division_gap
                         )
 
-                        # Debug logging for checkered flag
-                        if self.race_state_tracker.is_checkered():
-                            logger.debug(f"TELEMETRY LOOP - Got race_data: {race_data is not None}, count: {len(race_data) if race_data else 0}")
-
                         # Handle the telemetry update (session sync, data update)
                         self._handle_telemetry_update(race_data)
                     else:
@@ -859,13 +855,7 @@ class LeagueOverlay(QMainWindow):
         Args:
             race_data: Processed race data from TelemetryProcessor, or None if unavailable
         """
-        # Debug logging for checkered flag
-        if self.race_state_tracker.is_checkered():
-            logger.debug(f"HANDLE_UPDATE - Entered _handle_telemetry_update, race_data is None: {race_data is None}")
-
         if race_data is None:
-            if self.race_state_tracker.is_checkered():
-                logger.debug("HANDLE_UPDATE - race_data is None during checkered flag! Returning early.")
             return
 
         # Detect session change by comparing with processor's session info
@@ -892,13 +882,6 @@ class LeagueOverlay(QMainWindow):
         # Only update if data has actually changed to avoid redundant widget rebuilds
         if race_data:
             current_data = self._filter_by_division(race_data)
-
-            # Debug logging for checkered flag issues
-            if self.race_state_tracker.is_checkered():
-                logger.debug(f"CHECKERED FLAG - Race data count: {len(race_data)}, Filtered data count: {len(current_data)}")
-                logger.debug(f"CHECKERED FLAG - Filter state: show_only_my_division={self.division_filter.show_only_my_division}, current_division_filter={self.division_filter.current_division_filter}")
-                if len(current_data) != len(race_data):
-                    logger.debug(f"CHECKERED FLAG - Data was filtered! Original: {len(race_data)} -> Filtered: {len(current_data)}")
 
             # Check if data changed structurally
             data_changed = self._has_data_changed(current_data)
@@ -938,19 +921,21 @@ class LeagueOverlay(QMainWindow):
         # Compare key fields for each driver
         for new_driver, old_driver in zip(new_data, self._last_emitted_data):
             # Check fields that affect display structure (NOT gap - it changes constantly)
-            if (new_driver.get('car_idx') != old_driver.get('car_idx') or
-                new_driver.get('position') != old_driver.get('position') or
-                new_driver.get('division_position') != old_driver.get('division_position') or
-                new_driver.get('car_number') != old_driver.get('car_number') or
-                new_driver.get('driver_name') != old_driver.get('driver_name') or
-                new_driver.get('is_player') != old_driver.get('is_player')):
+            # Use attribute access for DriverState objects
+            new_position = new_driver.real_time_position if new_driver.real_time_position else new_driver.official_position
+            old_position = old_driver.real_time_position if old_driver.real_time_position else old_driver.official_position
+
+            if (new_driver.car_idx != old_driver.car_idx or
+                new_position != old_position or
+                new_driver.division_position != old_driver.division_position or
+                new_driver.car_number != old_driver.car_number or
+                new_driver.driver_name != old_driver.driver_name or
+                new_driver.is_player != old_driver.is_player):
                 return True
 
             # Check if driver division changed (affects color)
-            new_info = new_driver.get('driver_info', {})
-            old_info = old_driver.get('driver_info', {})
-            if (new_info.get('UserID') != old_info.get('UserID') or
-                new_info.get('UserName') != old_info.get('UserName')):
+            if (new_driver.driver_info.get('UserID') != old_driver.driver_info.get('UserID') or
+                new_driver.driver_info.get('UserName') != old_driver.driver_info.get('UserName')):
                 return True
 
         return False
@@ -966,17 +951,7 @@ class LeagueOverlay(QMainWindow):
         Returns:
             Filtered list of driver data
         """
-        filtered_data = self.division_filter.apply_filter(race_data, self.player_car_idx)
-
-        # Debug logging for checkered flag issues
-        if self.race_state_tracker.is_checkered() and len(filtered_data) != len(race_data):
-            logger.debug(f"FILTER - Applied division filter: {len(race_data)} -> {len(filtered_data)} drivers")
-            logger.debug(f"FILTER - player_car_idx: {self.player_car_idx}")
-            filtered_indices = [d.car_idx for d in filtered_data]
-            removed_indices = [d.car_idx for d in race_data if d.car_idx not in filtered_indices]
-            logger.debug(f"FILTER - Removed car indices: {removed_indices}")
-
-        return filtered_data
+        return self.division_filter.apply_filter(race_data, self.player_car_idx)
 
     def check_auto_center(self):
         """Check if auto-center timeout has elapsed and re-engage if needed.
@@ -1106,14 +1081,7 @@ class LeagueOverlay(QMainWindow):
     def display_race_data(self, data: List[DriverState]):
         """Display race data (thread-safe slot)"""
         if not data:
-            logger.debug("display_race_data called with empty data")
             return
-
-        # Debug logging for checkered flag issues
-        if self.race_state_tracker.is_checkered():
-            logger.debug(f"DISPLAY - Checkered flag active, displaying {len(data)} drivers")
-            driver_list = [f"P{d.real_time_position or d.official_position} {d.driver_info.get('UserName', 'Unknown')} (idx:{d.car_idx})" for d in data]
-            logger.debug(f"DISPLAY - Driver list: {driver_list}")
 
         # Clear existing widgets
         while self.scroll_layout.count() > 1:

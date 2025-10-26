@@ -200,19 +200,7 @@ class DriverRowRenderer:
     def _create_gap_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                          label_bg: str, label_border: str, font_weight: str) -> None:
         """Create gap label."""
-        from config.logging_config import get_logger
-        logger = get_logger(__name__)
-
-        gap_value = driver.gap
-
-        # Log gap values for critical positions or when gap is "Leader"
-        position = driver.real_time_position or -1
-        if position in [1, 2, 3, 9, 10] or gap_value == "Leader":
-            logger.info(f"UI_GAP - Car {driver.car_idx} (P{position}): gap_value='{gap_value}', "
-                       f"car_number={driver.car_number}, "
-                       f"driver_name={driver.driver_name}")
-
-        gap_label = QLabel(gap_value)
+        gap_label = QLabel(driver.gap)
         gap_label.setStyleSheet(f"""
             QLabel {{
                 color: {gap_color};

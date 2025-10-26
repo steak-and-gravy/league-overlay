@@ -164,21 +164,3 @@ class DriverState:
         self.is_finished = True
         self.finish_time = finish_time
         self.finish_lap = finish_lap
-
-    def to_ui_dict(self) -> Dict:
-        """Convert to dictionary format expected by UI.
-
-        Returns:
-            Dict with keys: position, division_position, car_number, driver_name,
-                           driver_info, gap, car_idx, is_player
-        """
-        return {
-            'position': self.real_time_position if not self.is_finished else self.official_position,
-            'division_position': self.division_position,
-            'car_number': self.car_number,
-            'driver_name': self.driver_name,
-            'driver_info': self.driver_info,
-            'gap': self.gap,
-            'car_idx': self.car_idx,
-            'is_player': self.is_player,
-        }
