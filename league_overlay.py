@@ -169,11 +169,6 @@ class LeagueOverlay(QMainWindow):
         self.update_check_done: bool = False
         self.latest_version: Optional[str] = None
 
-        # Legacy compatibility - keep references for backward compatibility
-        # These delegate to the helper classes
-        self.driver_colors = self.division_manager.driver_colors
-        self.available_colors = self.division_manager.division_colors
-
         self.race_data = []  # Unfiltered - all drivers from telemetry
         self.displayed_data = []  # Filtered - what's currently shown in UI
         self._last_emitted_data = []  # Track last data sent to UI to avoid redundant updates
@@ -703,11 +698,7 @@ class LeagueOverlay(QMainWindow):
         return {'drivers': []}
         
     def load_settings(self):
-        """Load user preferences - delegates to SettingsManager.
-
-        This method is kept for backward compatibility but now delegates
-        to the SettingsManager for all persistence logic.
-        """
+        """Load user preferences from disk and apply to instance variables."""
         self.settings = self.settings_manager.load()
 
         # Apply settings to instance variables
@@ -727,21 +718,15 @@ class LeagueOverlay(QMainWindow):
         # Handle league config file if specified
         if self.settings.league_config and os.path.exists(self.settings.league_config):
             self.color_config_file = self.settings.league_config
-            self.driver_colors = self.load_color_config()
 
             # Reload DivisionManager with custom config
             self.division_manager = DivisionManager(self.settings.league_config)
-            self.available_colors = self.division_manager.division_colors
 
     def save_settings(self):
-        """Persist current settings - delegates to SettingsManager.
-
-        This method is kept for backward compatibility but now delegates
-        to the SettingsManager for all persistence logic.
-        """
+        """Persist current settings - delegates to SettingsManager."""
         # Update settings object with current values
         self.settings.league_config = self.color_config_file
-        self.settings.division_colors = self.available_colors
+        self.settings.division_colors = self.division_manager.division_colors
         self.settings.x = self.geometry().x()
         self.settings.y = self.geometry().y()
         self.settings.height = self.geometry().height()
@@ -768,15 +753,11 @@ class LeagueOverlay(QMainWindow):
         # Delegate to DivisionManager for assignment logic
         self.division_manager.set_driver_division(driver_info, division_name)
 
-        # Update legacy self.driver_colors reference for backward compatibility
-        self.driver_colors = self.division_manager.driver_colors
-
         # Save configuration
         self.division_manager.save_config()
 
     def refresh_driver_colors(self):
         """Refresh all driver colors"""
-        self.driver_colors = self.load_color_config()
         if self.displayed_data:
             # Force update even if data unchanged (colors changed)
             self._last_emitted_data = []
@@ -793,11 +774,9 @@ class LeagueOverlay(QMainWindow):
             config_file_path: Path to the new division config JSON file
         """
         self.color_config_file = config_file_path
-        self.driver_colors = self.load_color_config()
 
         # Reload DivisionManager with the new config file
         self.division_manager = DivisionManager(config_file_path)
-        self.available_colors = self.division_manager.division_colors
 
         # Refresh the UI to show new colors (reset change tracking to force update)
         self._last_emitted_data = []
@@ -1209,7 +1188,7 @@ class LeagueOverlay(QMainWindow):
 
         driver_info = driver.driver_info
 
-        for division_name in self.available_colors.keys():
+        for division_name in self.division_manager.division_colors.keys():
             action = menu.addAction(division_name)
             action.triggered.connect(
                 lambda checked, d=division_name, info=driver_info:

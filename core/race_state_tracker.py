@@ -363,7 +363,7 @@ class RaceStateTracker:
                     if driver_class_id != self.player_car_class_id:
                         continue
 
-                # Create dict for backward compatibility with active_drivers list
+                # Create dict for PositionCalculator's expected format
                 disconnected_driver = {
                     'car_idx': driver_state.car_idx,
                     'driver_info': driver_state.driver_info,

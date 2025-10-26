@@ -724,63 +724,6 @@ class TelemetryProcessor:
         return ""
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # DRIVER STATE CONVERSION (Gradual Migration Layer)
-    # ═══════════════════════════════════════════════════════════════════════════
-
-    def _convert_to_driver_states(self, active_drivers: List[Dict], get_driver_color_fn: Callable) -> Dict[int, DriverState]:
-        """Convert legacy active_drivers list to DriverState dict.
-
-        This is a temporary conversion layer during migration. Eventually,
-        PositionCalculator will return DriverState objects directly.
-
-        Args:
-            active_drivers: Legacy list of driver dicts from PositionCalculator
-            get_driver_color_fn: Function to get driver's division color
-
-        Returns:
-            Dict mapping car_idx to DriverState
-        """
-        driver_states = {}
-
-        for driver_dict in active_drivers:
-            car_idx = driver_dict['car_idx']
-            driver_info = driver_dict['driver_info']
-
-            # Get division info
-            division_name = self.division_manager.get_driver_division(driver_info)
-            division_color = get_driver_color_fn(driver_info)
-
-            # Create DriverState
-            state = DriverState(
-                car_idx=car_idx,
-                driver_info=driver_info,
-                division_name=division_name,
-                division_color=division_color,
-                current_lap=driver_dict.get('current_lap', 0),
-                lap_pct=driver_dict.get('lap_pct', 0.0),
-                official_position=driver_dict.get('official_position', 0),
-                real_time_position=driver_dict.get('real_time_position', 0),
-            )
-
-            driver_states[car_idx] = state
-
-        return driver_states
-
-    def _convert_from_driver_states(self, driver_states: Dict[int, DriverState]) -> List[Dict]:
-        """Convert DriverState dict back to legacy list format for UI.
-
-        This is a temporary conversion layer during migration. Eventually,
-        the UI will consume DriverState objects directly.
-
-        Args:
-            driver_states: Dict mapping car_idx to DriverState
-
-        Returns:
-            List of driver dicts in legacy format for UI
-        """
-        return [state.to_ui_dict() for state in driver_states.values()]
-
-    # ═══════════════════════════════════════════════════════════════════════════
     # MAIN PROCESSING METHOD
     # ═══════════════════════════════════════════════════════════════════════════
 
