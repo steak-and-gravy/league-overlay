@@ -40,7 +40,7 @@ class DriverRowRenderer:
             QWidget representing the driver row
         """
         # Get color style
-        style = self.STYLES.get(self.parent.row_color_style, self.STYLES["Default"])
+        style = self.STYLES.get(self.parent.settings.row_color_style, self.STYLES["Default"])
         styling = style.get_styling(driver, self.parent)
 
         # Extract styling components
@@ -57,7 +57,7 @@ class DriverRowRenderer:
         layout.setSpacing(styling['layout_spacing'])
 
         # Determine if we're using Stream style (which swaps car number and driver name positions)
-        is_stream_style = self.parent.row_color_style == "Stream"
+        is_stream_style = self.parent.settings.row_color_style == "Stream"
 
         # Set column stretches
         layout.setColumnStretch(0, COLUMN_LAYOUT.POS)
@@ -73,7 +73,7 @@ class DriverRowRenderer:
         layout.setColumnStretch(4, COLUMN_LAYOUT.GAP)
 
         # Determine font weight
-        font_weight = "bold" if driver.is_player or self.parent.bold_drivers else "normal"
+        font_weight = "bold" if driver.is_player or self.parent.settings.bold_drivers else "normal"
 
         # Create labels (pass styling for special styles like Stream)
         # Column positions depend on style
@@ -176,7 +176,7 @@ class DriverRowRenderer:
     def _create_driver_name_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                   label_bg: str, label_border: str, font_weight: str, column: int = 3) -> None:
         """Create driver name label."""
-        name_align = Qt.AlignCenter if self.parent.center_drivers else Qt.AlignLeft
+        name_align = Qt.AlignCenter if self.parent.settings.center_drivers else Qt.AlignLeft
         name_label = QLabel(driver.driver_name)
         name_label.setStyleSheet(f"""
             QLabel {{

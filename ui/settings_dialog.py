@@ -119,10 +119,10 @@ class SettingsDialog(QDialog):
         self.opacity_slider.setMaximum(20)  # 1.00
         self.opacity_slider.setSingleStep(1)  # 0.05 increment
         self.opacity_slider.setPageStep(1)
-        self.opacity_slider.setValue(int(self.parent_overlay.opacity * 20))
+        self.opacity_slider.setValue(int(self.parent_overlay.settings.opacity * 20))
         opacity_row.addWidget(self.opacity_slider)
-        
-        self.opacity_value_label = QLabel(f"{self.parent_overlay.opacity:.2f}")
+
+        self.opacity_value_label = QLabel(f"{self.parent_overlay.settings.opacity:.2f}")
         self.opacity_value_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 35px;")
         self.opacity_slider.valueChanged.connect(
             lambda v: self.opacity_value_label.setText(f"{v/20:.2f}")
@@ -141,10 +141,10 @@ class SettingsDialog(QDialog):
         self.refresh_slider.setMaximum(20)  # 5.0 seconds
         self.refresh_slider.setSingleStep(1)  # 0.25 increment
         self.refresh_slider.setPageStep(1)
-        self.refresh_slider.setValue(int(self.parent_overlay.refresh_rate * 4))
+        self.refresh_slider.setValue(int(self.parent_overlay.settings.refresh_rate * 4))
         refresh_row.addWidget(self.refresh_slider)
-        
-        self.refresh_value_label = QLabel(f"{self.parent_overlay.refresh_rate:.2f}")
+
+        self.refresh_value_label = QLabel(f"{self.parent_overlay.settings.refresh_rate:.2f}")
         self.refresh_value_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 35px;")
         self.refresh_slider.valueChanged.connect(
             lambda v: self.refresh_value_label.setText(f"{v/4:.2f}")
@@ -160,7 +160,7 @@ class SettingsDialog(QDialog):
 
         self.font_size_combo = QComboBox()
         self.font_size_combo.addItems(["Small", "Medium", "Large", "Extra Large"])
-        self.font_size_combo.setCurrentText(self.parent_overlay.font_size)
+        self.font_size_combo.setCurrentText(self.parent_overlay.settings.font_size)
         self.font_size_combo.setStyleSheet("""
             QComboBox {
                 background-color: #404040;
@@ -201,7 +201,7 @@ class SettingsDialog(QDialog):
 
         self.color_style_combo = QComboBox()
         self.color_style_combo.addItems(["Default", "Alternate", "Outline", "Stream"])
-        self.color_style_combo.setCurrentText(self.parent_overlay.row_color_style)
+        self.color_style_combo.setCurrentText(self.parent_overlay.settings.row_color_style)
         self.color_style_combo.setStyleSheet("""
             QComboBox {
                 background-color: #404040;
@@ -280,12 +280,12 @@ class SettingsDialog(QDialog):
 
         self.hide_headers_cb = QCheckBox("Auto-hide headers")
         self.hide_headers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.hide_headers_cb.setChecked(self.parent_overlay.hide_headers)
+        self.hide_headers_cb.setChecked(self.parent_overlay.settings.hide_headers)
         checkbox_row1.addWidget(self.hide_headers_cb)
 
         self.center_drivers_cb = QCheckBox("Center driver names")
         self.center_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.center_drivers_cb.setChecked(self.parent_overlay.center_drivers)
+        self.center_drivers_cb.setChecked(self.parent_overlay.settings.center_drivers)
         checkbox_row1.addWidget(self.center_drivers_cb)
 
         window_layout.addLayout(checkbox_row1)
@@ -294,12 +294,12 @@ class SettingsDialog(QDialog):
 
         self.bold_drivers_cb = QCheckBox("Bold all driver rows")
         self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.bold_drivers_cb.setChecked(self.parent_overlay.bold_drivers)
+        self.bold_drivers_cb.setChecked(self.parent_overlay.settings.bold_drivers)
         checkbox_row2.addWidget(self.bold_drivers_cb)
 
         self.show_division_gap_cb = QCheckBox("Show division gap")
         self.show_division_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_division_gap_cb.setChecked(self.parent_overlay.show_division_gap)
+        self.show_division_gap_cb.setChecked(self.parent_overlay.settings.show_division_gap)
         checkbox_row2.addWidget(self.show_division_gap_cb)
 
         window_layout.addLayout(checkbox_row2)
@@ -574,20 +574,20 @@ class SettingsDialog(QDialog):
                     """)
                     self.color_value_labels[division].setText(color)
             
-            self.parent_overlay.opacity = 0.5
+            self.parent_overlay.settings.opacity = 0.5
             self.parent_overlay.update_all_backgrounds()
 
     def apply_settings(self):
         """Apply all settings"""
         try:
-            self.parent_overlay.opacity = self.opacity_slider.value() / 20.0
-            self.parent_overlay.refresh_rate = self.refresh_slider.value() / 4.0  # Changed from /10 to /4
-            self.parent_overlay.hide_headers = self.hide_headers_cb.isChecked()
-            self.parent_overlay.center_drivers = self.center_drivers_cb.isChecked()
-            self.parent_overlay.bold_drivers = self.bold_drivers_cb.isChecked()
-            self.parent_overlay.show_division_gap = self.show_division_gap_cb.isChecked()
-            self.parent_overlay.font_size = self.font_size_combo.currentText()
-            self.parent_overlay.row_color_style = self.color_style_combo.currentText()
+            self.parent_overlay.settings.opacity = self.opacity_slider.value() / 20.0
+            self.parent_overlay.settings.refresh_rate = self.refresh_slider.value() / 4.0
+            self.parent_overlay.settings.hide_headers = self.hide_headers_cb.isChecked()
+            self.parent_overlay.settings.center_drivers = self.center_drivers_cb.isChecked()
+            self.parent_overlay.settings.bold_drivers = self.bold_drivers_cb.isChecked()
+            self.parent_overlay.settings.show_division_gap = self.show_division_gap_cb.isChecked()
+            self.parent_overlay.settings.font_size = self.font_size_combo.currentText()
+            self.parent_overlay.settings.row_color_style = self.color_style_combo.currentText()
             self.parent_overlay.settings.log_level = self.log_level_combo.currentText()
 
             self.parent_overlay.update_all_backgrounds()

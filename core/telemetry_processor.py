@@ -28,7 +28,7 @@ duplicates in the overall standings. Prevents stale track data contamination.
 from typing import Dict, List, Optional, Tuple, Any, Callable
 import irsdk
 
-from config.constants import TELEMETRY_CONFIG
+from config.constants import TELEMETRY_CONFIG, TIMING
 from config.logging_config import get_logger
 from core.gap_calculator import GapCalculator
 from core.division_manager import DivisionManager
@@ -176,14 +176,14 @@ class TelemetryProcessor:
     def get_fastest_lap_time(self, current_session: Dict) -> float:
         """Find the fastest lap time in the session for gap estimation.
 
-        Why 90 seconds: Fallback for when no laps recorded yet (session start).
-        90s is a reasonable default that won't cause divide-by-zero or absurd gaps.
+        Uses DEFAULT_LAP_TIME_FALLBACK when no laps recorded yet (session start).
+        This prevents divide-by-zero and provides reasonable gap estimates.
 
         Args:
             current_session: Current session data
 
         Returns:
-            Fastest lap time in seconds (default 90.0)
+            Fastest lap time in seconds (default from TIMING.DEFAULT_LAP_TIME_FALLBACK)
         """
         fastest_time = float('inf')
 
@@ -194,19 +194,19 @@ class TelemetryProcessor:
                 if 0 < best_lap < fastest_time:
                     fastest_time = best_lap
 
-        return fastest_time if fastest_time != float('inf') else 90
+        return fastest_time if fastest_time != float('inf') else TIMING.DEFAULT_LAP_TIME_FALLBACK
 
     def get_best_lap_from_session_info(self, current_session: Dict, car_idx: int) -> float:
         """Look up a specific car's fastest lap time from session results.
 
-        Why 90 seconds: Same reason as get_fastest_lap_time() - safe fallback.
+        Uses DEFAULT_LAP_TIME_FALLBACK as safe fallback when no data available.
 
         Args:
             current_session: Current session data
             car_idx: Car index to look up
 
         Returns:
-            Best lap time in seconds (default 90.0)
+            Best lap time in seconds (default from TIMING.DEFAULT_LAP_TIME_FALLBACK)
         """
         try:
             if 'ResultsPositions' in current_session:
@@ -215,7 +215,7 @@ class TelemetryProcessor:
                         return driver['FastestTime']
         except (KeyError, TypeError, IndexError):
             pass
-        return 90
+        return TIMING.DEFAULT_LAP_TIME_FALLBACK
 
     # ═══════════════════════════════════════════════════════════════════════════
     # DIVISION POSITION CALCULATION
