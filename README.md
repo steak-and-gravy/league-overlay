@@ -112,7 +112,7 @@ This project uses a modular architecture with clear separation of concerns:
 
 For detailed technical documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-For AI-Assisted development, see [CLAUDE.md] (CLAUDE.md) for project context.
+For AI-Assisted development, see [CLAUDE.md](CLAUDE.md) for project context.
 
 ---
 
