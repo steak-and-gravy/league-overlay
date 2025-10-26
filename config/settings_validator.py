@@ -136,6 +136,12 @@ class SettingsValidator:
             default="Default",
             field_name='row_color_style'
         )
+        validated['log_level'] = self.coerce_enum(
+            data.get('log_level'),
+            valid_values=["DEBUG", "INFO", "WARNING", "ERROR"],
+            default="INFO",
+            field_name='log_level'
+        )
 
         # Dict field (division colors)
         validated['division_colors'] = self.coerce_division_colors(

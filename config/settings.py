@@ -33,6 +33,7 @@ class AppSettings:
     center_drivers: bool = False
     bold_drivers: bool = True
     show_division_gap: bool = True
+    log_level: str = "INFO"
 
     # Configuration files
     league_config: Optional[str] = None
@@ -116,7 +117,8 @@ class SettingsManager:
                 'bold_drivers': settings.bold_drivers,
                 'show_division_gap': settings.show_division_gap,
                 'font_size': settings.font_size,
-                'row_color_style': settings.row_color_style
+                'row_color_style': settings.row_color_style,
+                'log_level': settings.log_level
             }
 
             with open(self.settings_file, 'w') as f:
@@ -157,7 +159,8 @@ class SettingsManager:
             'bold_drivers': settings.bold_drivers,
             'show_division_gap': settings.show_division_gap,
             'font_size': settings.font_size,
-            'row_color_style': settings.row_color_style
+            'row_color_style': settings.row_color_style,
+            'log_level': settings.log_level
         }
 
         # Validate using validator
