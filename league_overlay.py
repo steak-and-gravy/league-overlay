@@ -506,9 +506,9 @@ class LeagueOverlay(QMainWindow):
         # Add padding on right to account for scrollbar (6px scrollbar + 5px margin)
         self.header_layout.setContentsMargins(5, 2, 11, 2)
         self.header_layout.setSpacing(2)
-        
+
         # Column proportions - adjust based on style
-        is_stream_style = self.row_color_style == "Stream"
+        is_stream_style = self.settings.row_color_style == "Stream"
 
         self.header_layout.setColumnStretch(0, COLUMN_LAYOUT.POS)
         self.header_layout.setColumnStretch(1, COLUMN_LAYOUT.DIV_POS)
@@ -583,7 +583,11 @@ class LeagueOverlay(QMainWindow):
         2. Player spectating: Cycle through each division (Pro -> ProAm -> Am -> Rookie -> All)
         """
         # Cycle to next filter state
-        self.division_filter.cycle_filter(self.race_data, self.player_car_idx)
+        self.division_filter.cycle_filter(
+            self.race_data,
+            self.player_car_idx,
+            self.division_manager.get_driver_color
+        )
 
         # Get button state from filter
         button_state = self.division_filter.get_button_state()
@@ -610,7 +614,11 @@ class LeagueOverlay(QMainWindow):
         # Immediately apply the filter and update UI
         # Force update even if data unchanged (filter criteria changed)
         if self.race_data:
-            current_data = self.division_filter.apply_filter(self.race_data, self.player_car_idx)
+            current_data = self.division_filter.apply_filter(
+                self.race_data,
+                self.player_car_idx,
+                self.division_manager.get_driver_color
+            )
             self._last_emitted_data = current_data.copy()
             self.signals.update_data.emit(current_data)
         
@@ -780,6 +788,7 @@ class LeagueOverlay(QMainWindow):
                     if self.ir.is_connected and self.ir.is_initialized:
                         # Delegate to TelemetryProcessor
                         race_data = self.telemetry_processor.process_telemetry(
+                            get_driver_color_fn=self.division_manager.get_driver_color,
                             show_division_gap=self.settings.show_division_gap
                         )
 
@@ -915,7 +924,11 @@ class LeagueOverlay(QMainWindow):
         Returns:
             Filtered list of driver data
         """
-        return self.division_filter.apply_filter(race_data, self.player_car_idx)
+        return self.division_filter.apply_filter(
+            race_data,
+            self.player_car_idx,
+            self.division_manager.get_driver_color
+        )
 
     def check_auto_center(self):
         """Check if auto-center timeout has elapsed and re-engage if needed.
