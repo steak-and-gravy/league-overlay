@@ -151,3 +151,18 @@ class DivisionManager:
         if division and division in self.division_colors:
             return self.division_colors[division]
         return self.division_colors.get("Default", "#FFFFFF")
+
+    def get_driver_color(self, driver_info: Dict[str, str]) -> str:
+        """Get the color for a driver based on their division assignment.
+
+        This is a convenience method that combines get_driver_division and
+        get_division_color into a single call.
+
+        Args:
+            driver_info: Dictionary containing driver information (UserID, UserName)
+
+        Returns:
+            Hex color string for the driver's division (default "#FFFFFF" if unassigned)
+        """
+        division = self.get_driver_division(driver_info)
+        return self.get_division_color(division)

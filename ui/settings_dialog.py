@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
 from config.constants import VERSION, UI_DIMENSIONS
+from config.logging_config import set_log_level
 
 if TYPE_CHECKING:
     from league_overlay import LeagueOverlay
@@ -320,10 +321,10 @@ class SettingsDialog(QDialog):
         self.color_value_labels = {}
         
         for division in ["Pro", "ProAm", "Am", "Rookie"]:
-            if division not in self.parent_overlay.available_colors:
+            if division not in self.parent_overlay.division_manager.division_colors:
                 continue
-                
-            color = self.parent_overlay.available_colors[division]
+
+            color = self.parent_overlay.division_manager.division_colors[division]
             
             color_row = QHBoxLayout()
             color_row.setSpacing(5)
@@ -471,12 +472,12 @@ class SettingsDialog(QDialog):
         
     def choose_color(self, division):
         """Open color picker to customize a division's color."""
-        current_color = self.parent_overlay.available_colors[division]
+        current_color = self.parent_overlay.division_manager.division_colors[division]
         color = QColorDialog.getColor(QColor(current_color), self, f"Choose {division} Color")
 
         if color.isValid():
             new_color = color.name()
-            self.parent_overlay.available_colors[division] = new_color
+            self.parent_overlay.division_manager.division_colors[division] = new_color
             self.color_buttons[division].setStyleSheet(f"""
                 QPushButton {{
                     background-color: {new_color};
@@ -562,7 +563,7 @@ class SettingsDialog(QDialog):
             
             for division, color in default_colors.items():
                 if division in self.color_buttons:
-                    self.parent_overlay.available_colors[division] = color
+                    self.parent_overlay.division_manager.division_colors[division] = color
                     self.color_buttons[division].setStyleSheet(f"""
                         QPushButton {{
                             background-color: {color};
@@ -588,7 +589,12 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_division_gap = self.show_division_gap_cb.isChecked()
             self.parent_overlay.settings.font_size = self.font_size_combo.currentText()
             self.parent_overlay.settings.row_color_style = self.color_style_combo.currentText()
-            self.parent_overlay.settings.log_level = self.log_level_combo.currentText()
+
+            # Apply log level change immediately
+            new_log_level = self.log_level_combo.currentText()
+            if new_log_level != self.parent_overlay.settings.log_level:
+                set_log_level(new_log_level)
+            self.parent_overlay.settings.log_level = new_log_level
 
             self.parent_overlay.update_all_backgrounds()
 

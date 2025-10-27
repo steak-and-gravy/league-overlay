@@ -72,3 +72,35 @@ def get_logger(name):
         logging.Logger: Configured logger instance
     """
     return logging.getLogger(name)
+
+
+def set_log_level(level_name):
+    """
+    Dynamically change the log level for the entire application.
+
+    Args:
+        level_name: Log level as string ("DEBUG", "INFO", "WARNING", "ERROR")
+    """
+    # Convert string to logging level constant
+    level_map = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR
+    }
+
+    level = level_map.get(level_name.upper(), logging.INFO)
+
+    # Get root logger
+    root_logger = logging.getLogger()
+    old_level = root_logger.level
+    old_level_name = logging.getLevelName(old_level)
+
+    # Log the change at WARNING level BEFORE changing (so it's visible with old level)
+    # and temporarily force the log by setting level to DEBUG if needed
+    min_level = min(old_level, logging.WARNING)
+    root_logger.setLevel(min_level)
+    root_logger.warning(f"Log level changed from {old_level_name} to {level_name}")
+
+    # Now set the new level
+    root_logger.setLevel(level)

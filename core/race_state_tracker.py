@@ -376,8 +376,4 @@ class RaceStateTracker:
 
                 # Only show disconnected drivers if they have a valid position or race is ongoing
                 if self.ir['SessionState'] < 5 or driver_state.official_position >= 0:
-                    # Log when critical positions (P1, P2, P10) are added back as disconnected
-                    if driver_state.official_position in [1, 2, 10]:
-                        logger.info(f"DISCONNECTED_READD - Adding car {car_idx} (P{driver_state.official_position}) back to active_drivers as disconnected. "
-                                   f"SessionState={self.ir['SessionState']}, is_finished={self.is_driver_finished(car_idx)}")
                     active_drivers.append(disconnected_driver)
