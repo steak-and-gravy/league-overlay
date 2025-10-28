@@ -204,7 +204,29 @@ class LeagueOverlay(QMainWindow):
         if element_type == "spacing":
             return self.font_sizes.get(self.settings.font_size, self.font_sizes["Medium"]).get(element_type, 3)
         return self.font_sizes.get(self.settings.font_size, self.font_sizes["Medium"]).get(element_type, "9pt")
+    
+    def blend_color_with_black(self, color_hex, amount=0.15):
+        """Blend a division color with black to create a subtle tinted background."""
+        # Remove the # if present
+        color_hex = color_hex.lstrip('#')
 
+        # Convert hex to RGB
+        r = int(color_hex[0:2], 16)
+        g = int(color_hex[2:4], 16)
+        b = int(color_hex[4:6], 16)
+
+        # Blend with black (reduce intensity)
+        r = int(r * amount)
+        g = int(g * amount)
+        b = int(b * amount)
+
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def create_gradient_background(self, color_hex):
+        """Create a horizontal gradient that creates a subtle "glow" effect for player row."""
+        tinted = self.blend_color_with_black(color_hex, 0.25)
+        return f"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {tinted}, stop:0.5 #1a1a1a, stop:1 {tinted})"
+    
     def update_all_backgrounds(self):
         """Refresh all UI backgrounds, fonts, and styling after settings change.
 

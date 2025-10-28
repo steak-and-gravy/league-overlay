@@ -293,7 +293,7 @@ class RaceStateTracker:
             for car_idx in range(len(car_idx_lap)):
                 if self.is_driver_finished(car_idx):
                     continue
-
+                #TODO: this could be optimized to store who's in class and not have to recheck each time
                 if self.player_car_class_id is not None:
                     try:
                         drivers = self.ir['DriverInfo']['Drivers']
@@ -346,12 +346,12 @@ class RaceStateTracker:
                 if self.ir['SessionState'] < 5:
                     # Still racing - mark as DC, position unknown
                     driver_state.official_position = -1
+                    # Mark as disconnected
+                    driver_state.is_disconnected = True
                 else:
+                    # TODO: Does this need to happen??? Or maybe only once??
                     # After checkered - get their final position from results
                     driver_state.official_position = get_position_from_results_fn(current_session, car_idx)
-
-                # Mark as disconnected
-                driver_state.is_disconnected = True
 
                 # Skip if snapshot is missing critical fields (minimal snapshot for different class)
                 if not driver_state.driver_info:

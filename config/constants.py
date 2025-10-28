@@ -127,9 +127,9 @@ class FileConfig:
 @dataclass(frozen=True)
 class TelemetryConfig:
     """Telemetry configuration constants."""
-    DEFAULT_REFRESH_RATE: float = 2.0  # seconds
+    DEFAULT_REFRESH_RATE: float = 1.0  # seconds
     MIN_REFRESH_RATE: float = 0.25
-    MAX_REFRESH_RATE: float = 5.0
+    MAX_REFRESH_RATE: float = 3.0
 
     # iRacing SDK constants
     MAX_CARS: int = 64

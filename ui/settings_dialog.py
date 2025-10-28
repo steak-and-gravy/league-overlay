@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
-from config.constants import VERSION, UI_DIMENSIONS
+from config.constants import VERSION, UI_DIMENSIONS, TelemetryConfig
 from config.logging_config import set_log_level
 
 if TYPE_CHECKING:
@@ -138,8 +138,8 @@ class SettingsDialog(QDialog):
         refresh_row.addWidget(refresh_label)
         
         self.refresh_slider = QSlider(Qt.Horizontal)
-        self.refresh_slider.setMinimum(1)  # 0.25 seconds
-        self.refresh_slider.setMaximum(20)  # 5.0 seconds
+        self.refresh_slider.setMinimum(1) 
+        self.refresh_slider.setMaximum(TelemetryConfig.MAX_REFRESH_RATE/TelemetryConfig.MIN_REFRESH_RATE)
         self.refresh_slider.setSingleStep(1)  # 0.25 increment
         self.refresh_slider.setPageStep(1)
         self.refresh_slider.setValue(int(self.parent_overlay.settings.refresh_rate * 4))
@@ -280,12 +280,12 @@ class SettingsDialog(QDialog):
         checkbox_row1 = QHBoxLayout()
 
         self.hide_headers_cb = QCheckBox("Auto-hide headers")
-        self.hide_headers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.hide_headers_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
         self.hide_headers_cb.setChecked(self.parent_overlay.settings.hide_headers)
         checkbox_row1.addWidget(self.hide_headers_cb)
 
         self.center_drivers_cb = QCheckBox("Center driver names")
-        self.center_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.center_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
         self.center_drivers_cb.setChecked(self.parent_overlay.settings.center_drivers)
         checkbox_row1.addWidget(self.center_drivers_cb)
 
@@ -294,12 +294,12 @@ class SettingsDialog(QDialog):
         checkbox_row2 = QHBoxLayout()
 
         self.bold_drivers_cb = QCheckBox("Bold all driver rows")
-        self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
         self.bold_drivers_cb.setChecked(self.parent_overlay.settings.bold_drivers)
         checkbox_row2.addWidget(self.bold_drivers_cb)
 
         self.show_division_gap_cb = QCheckBox("Show division gap")
-        self.show_division_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_division_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
         self.show_division_gap_cb.setChecked(self.parent_overlay.settings.show_division_gap)
         checkbox_row2.addWidget(self.show_division_gap_cb)
 
