@@ -88,27 +88,11 @@ class DriverState:
     """True if this is the player's car"""
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # FINISH TRACKING
-    # ═══════════════════════════════════════════════════════════════════════════
-
-    finish_time: Optional[float] = None
-    """SessionTime when driver crossed finish line (for gap calculations)"""
-
-    finish_lap: Optional[int] = None
-    """Lap number when driver finished"""
-
-    # ═══════════════════════════════════════════════════════════════════════════
     # GAP DISPLAY
     # ═══════════════════════════════════════════════════════════════════════════
 
     gap: str = ""
     """Formatted gap string for display (e.g., "+2.5s", "1 Lap", "Leader")"""
-
-    finish_gap: Optional[float] = None
-    """Time gap at finish (in seconds) for finished drivers"""
-
-    finish_lap_gap: Optional[int] = None
-    """Lap gap at finish for finished drivers (e.g., car was lapped)"""
 
     # ═══════════════════════════════════════════════════════════════════════════
     # COMPUTED PROPERTIES
@@ -153,14 +137,3 @@ class DriverState:
         self.current_lap = current_lap
         self.lap_pct = lap_pct
         self.official_position = official_position
-
-    def mark_finished(self, finish_time: float, finish_lap: int) -> None:
-        """Mark driver as finished.
-
-        Args:
-            finish_time: SessionTime when driver crossed finish line
-            finish_lap: Lap number when driver finished
-        """
-        self.is_finished = True
-        self.finish_time = finish_time
-        self.finish_lap = finish_lap
