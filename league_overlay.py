@@ -821,10 +821,7 @@ class LeagueOverlay(QMainWindow):
                         self.connection_time = None  # Reset connection time on disconnect
                         self.ir.shutdown()
 
-                if self.race_state_tracker.is_checkered():
-                    time.sleep(TIMING.CHECKERED_REFRESH)  # refresh more often to track finish times
-                else:
-                    time.sleep(self.settings.refresh_rate)
+                time.sleep(self.settings.refresh_rate)
 
             except Exception as e:
                 logger.error(f"Telemetry error: {e}", exc_info=True)
@@ -868,6 +865,7 @@ class LeagueOverlay(QMainWindow):
             self.race_data = []
             self._last_emitted_data = []  # Reset change tracking on session change
             self.division_filter.reset()  # Reset division filter on session change
+            #TODO: Should we emit update_data here?
 
         # Update race data and player info
         self.race_data = race_data
@@ -876,25 +874,15 @@ class LeagueOverlay(QMainWindow):
         # Immediately emit UI update with new data (event-driven)
         # Only update if data has actually changed to avoid redundant widget rebuilds
         if race_data:
-            current_data = self._filter_by_division(race_data)
+            current_data = self.division_filter.apply_filter(
+                            race_data,
+                            self.player_car_idx,
+                            self.division_manager.get_driver_color)
 
             # Check if data changed structurally
             data_changed = self._has_data_changed(current_data)
 
-            # During checkered flag: Force update every N cycles to refresh gaps
-            # During normal racing: Always update (gaps trigger immediate updates)
-            force_update = False
-            if self.race_state_tracker.is_checkered():
-                self._update_counter += 1
-                force_update = self._update_counter >= TIMING.CHECKERED_UPDATE_CYCLE_COUNT
-                if force_update:
-                    self._update_counter = 0
-            else:
-                # Not checkered - always allow updates (reset counter for consistency)
-                self._update_counter = 0
-                force_update = True
-
-            if data_changed or force_update:
+            if data_changed:
                 self._last_emitted_data = current_data.copy()
                 self.signals.update_data.emit(current_data)
 
@@ -915,42 +903,22 @@ class LeagueOverlay(QMainWindow):
 
         # Compare key fields for each driver
         for new_driver, old_driver in zip(new_data, self._last_emitted_data):
-            # Check fields that affect display structure (NOT gap - it changes constantly)
-            # Use attribute access for DriverState objects
-            new_position = new_driver.real_time_position if new_driver.real_time_position else new_driver.official_position
-            old_position = old_driver.real_time_position if old_driver.real_time_position else old_driver.official_position
+            # Check fields that affect display structure
+            new_position = new_driver.real_time_position if not new_driver.is_finished else new_driver.official_position
+            old_position = old_driver.real_time_position if not old_driver.is_finished else old_driver.official_position
 
             if (new_driver.car_idx != old_driver.car_idx or
+                new_driver.gap != old_driver.gap or
                 new_position != old_position or
                 new_driver.division_position != old_driver.division_position or
                 new_driver.car_number != old_driver.car_number or
                 new_driver.driver_name != old_driver.driver_name or
-                new_driver.is_player != old_driver.is_player):
-                return True
-
-            # Check if driver division changed (affects color)
-            if (new_driver.driver_info.get('UserID') != old_driver.driver_info.get('UserID') or
-                new_driver.driver_info.get('UserName') != old_driver.driver_info.get('UserName')):
+                new_driver.is_player != old_driver.is_player or
+                new_driver.is_finished != old_driver.is_finished or
+                new_driver.division_name != old_driver.division_name):
                 return True
 
         return False
-
-    def _filter_by_division(self, race_data: List[DriverState]) -> List[DriverState]:
-        """Filter race data based on division filter settings.
-
-        Delegates to DivisionFilter for actual filtering logic.
-
-        Args:
-            race_data: Full list of driver data to filter
-
-        Returns:
-            Filtered list of driver data
-        """
-        return self.division_filter.apply_filter(
-            race_data,
-            self.player_car_idx,
-            self.division_manager.get_driver_color
-        )
 
     def check_auto_center(self):
         """Check if auto-center timeout has elapsed and re-engage if needed.
