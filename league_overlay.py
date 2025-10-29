@@ -904,8 +904,8 @@ class LeagueOverlay(QMainWindow):
         # Compare key fields for each driver
         for new_driver, old_driver in zip(new_data, self._last_emitted_data):
             # Check fields that affect display structure
-            new_position = new_driver.real_time_position if not new_driver.is_finished else new_driver.official_position
-            old_position = old_driver.real_time_position if not old_driver.is_finished else old_driver.official_position
+            new_position = new_driver.position
+            old_position = old_driver.position
 
             if (new_driver.car_idx != old_driver.car_idx or
                 new_driver.gap != old_driver.gap or

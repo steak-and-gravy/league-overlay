@@ -65,11 +65,8 @@ class DriverState:
     # POSITIONS (calculated)
     # ═══════════════════════════════════════════════════════════════════════════
 
-    official_position: int = 0
-    """Official position from iRacing (updates at start/finish line)"""
-
-    real_time_position: int = 0
-    """Real-time position based on track position (continuous updates)"""
+    position: int = 0
+    """Driver's position (real-time during race, final after finish, best lap in practice/qual)"""
 
     division_position: int = 0
     """Position within driver's division (1 = division leader)"""
@@ -126,14 +123,14 @@ class DriverState:
     # UTILITY METHODS
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def update_telemetry(self, current_lap: int, lap_pct: float, official_position: int) -> None:
+    def update_telemetry(self, current_lap: int, lap_pct: float, position: int) -> None:
         """Update telemetry data from iRacing SDK.
 
         Args:
             current_lap: Current lap number
             lap_pct: Progress through current lap (0.0 to 1.0)
-            official_position: Official class position from iRacing
+            position: Current position
         """
         self.current_lap = current_lap
         self.lap_pct = lap_pct
-        self.official_position = official_position
+        self.position = position

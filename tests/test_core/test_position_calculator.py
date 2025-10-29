@@ -152,8 +152,8 @@ class TestCalculateRealTimePositions:
         assert result[1]['car_idx'] == 2  # 10.5
         assert result[2]['car_idx'] == 3  # 10.3
 
-    def test_assigns_real_time_position(self):
-        """Test real-time position numbers assigned correctly."""
+    def test_assigns_position(self):
+        """Test position numbers assigned correctly."""
         mock_ir = MagicMock()
         calculator = PositionCalculator(mock_ir)
 
@@ -172,8 +172,8 @@ class TestCalculateRealTimePositions:
 
         result = calculator.calculate_real_time_positions(make_drivers_dict(drivers))
 
-        assert result[0]['real_time_position'] == 1
-        assert result[1]['real_time_position'] == 2
+        assert result[0]['position'] == 1
+        assert result[1]['position'] == 2
 
     def test_filters_to_player_class(self):
         """Test only shows cars in player's class."""
@@ -313,8 +313,8 @@ class TestCalculateRealTimePositions:
 class TestGetOfficialPositions:
     """Test cases for official position retrieval."""
 
-    def test_gets_official_positions(self):
-        """Test retrieves official positions from iRacing."""
+    def test_gets_positions(self):
+        """Test retrieves positions from iRacing."""
         mock_ir = MagicMock()
         calculator = PositionCalculator(mock_ir)
 
@@ -332,11 +332,11 @@ class TestGetOfficialPositions:
         result = calculator.get_official_positions(make_drivers_dict(drivers))
 
         assert len(result) == 2
-        assert result[0]['official_position'] == 1
-        assert result[1]['official_position'] == 2
+        assert result[0]['position'] == 1
+        assert result[1]['position'] == 2
 
-    def test_sorts_by_official_position(self):
-        """Test results sorted by official position."""
+    def test_sorts_by_position(self):
+        """Test results sorted by position."""
         mock_ir = MagicMock()
         calculator = PositionCalculator(mock_ir)
 

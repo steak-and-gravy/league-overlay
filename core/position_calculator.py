@@ -113,7 +113,7 @@ class PositionCalculator:
                 'total_track_position': total_track_position,
                 'current_lap': current_lap,
                 'lap_pct': lap_pct,
-                'official_position': car_idx_class_position[car_idx]
+                'position': car_idx_class_position[car_idx]
             })
 
         # Sort by track position (highest first = furthest ahead)
@@ -121,7 +121,7 @@ class PositionCalculator:
 
         # Assign real-time positions based on sorted order
         for i, driver in enumerate(active_drivers):
-            driver['real_time_position'] = i + 1
+            driver['position'] = i + 1
 
         return active_drivers
 
@@ -161,10 +161,10 @@ class PositionCalculator:
             active_drivers.append({
                 'car_idx': car_idx,
                 'driver_info': driver_info,
-                'official_position': car_idx_class_position[car_idx]
+                'position': car_idx_class_position[car_idx]
             })
 
-        active_drivers.sort(key=lambda x: x['official_position'])
+        active_drivers.sort(key=lambda x: x['position'])
 
         return active_drivers
 

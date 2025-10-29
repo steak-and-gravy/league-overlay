@@ -21,6 +21,7 @@ class RaceStateTracker:
         """
         self.ir = ir
         self.player_car_class_id: Optional[int] = None
+        self.player_class_car_indices: Optional[Set[int]] = None
         self.reset()
 
     def reset(self) -> None:
@@ -29,6 +30,7 @@ class RaceStateTracker:
         self.finished_drivers: Set[int] = set()
         self.checkered_flag_shown: bool = False
         self.driver_snapshots: Dict[int, DriverState] = {}  # Changed from Dict to DriverState
+        self.player_class_car_indices: Optional[Set[int]] = None
 
     def is_racing(self) -> bool:
         """Check if race is still in progress (checkered not shown yet)."""
@@ -52,13 +54,13 @@ class RaceStateTracker:
             official_position: Official finishing position
         """
         if car_idx not in self.finished_drivers:
-            logger.debug(f"MARK_FINISHED - Car {car_idx} marked as finished: official_position={official_position}")
+            logger.debug(f"MARK_FINISHED - Car {car_idx} marked as finished: position={official_position}")
             self.finished_drivers.add(car_idx)
 
             # Store final position in snapshot and mark as finished
             if car_idx in self.driver_snapshots:
                 driver_state = self.driver_snapshots[car_idx]
-                driver_state.official_position = official_position
+                driver_state.position = official_position
                 driver_state.is_finished = True
 
     def is_driver_finished(self, car_idx: int) -> bool:
@@ -106,6 +108,25 @@ class RaceStateTracker:
         """
         self.player_car_class_id = player_car_class_id
 
+    def _cache_player_class_cars(self) -> None:
+        """Cache which cars are in player's class to avoid repeated lookups during finish tracking."""
+        if self.player_car_class_id is None:
+            self.player_class_car_indices = None
+            return
+
+        self.player_class_car_indices = set()
+        try:
+            drivers = self.ir['DriverInfo']['Drivers']
+            for d in drivers:
+                if d.get('CarClassID') == self.player_car_class_id:
+                    car_idx = d.get('CarIdx')
+                    if car_idx is not None:
+                        self.player_class_car_indices.add(car_idx)
+            logger.debug(f"FINISH_TRACKING - Cached {len(self.player_class_car_indices)} cars in player's class")
+        except (KeyError, TypeError):
+            logger.warning("FINISH_TRACKING - Failed to cache player class cars")
+            self.player_class_car_indices = None
+
     # ═══════════════════════════════════════════════════════════════════════════
     # FINISH STATUS TRACKING
     # ═══════════════════════════════════════════════════════════════════════════
@@ -138,6 +159,8 @@ class RaceStateTracker:
             # First time after checkered - flip to finish tracking mode
             logger.debug("FINISH_TRACKING - Checkered flag detected, entering finish tracking mode")
             self.set_checkered_flag()
+            # Cache player's class car indices once to avoid repeated lookups
+            self._cache_player_class_cars()
 
         # PHASE 2: Wait for the OVERALL race leader (P1 overall, any class) to finish
         # This allows multi-class racing where slower class drivers can finish before their class leader
@@ -181,20 +204,10 @@ class RaceStateTracker:
             for car_idx in range(len(car_idx_lap)):
                 if self.is_driver_finished(car_idx):
                     continue
-                #TODO: this could be optimized to store who's in class and not have to recheck each time
-                if self.player_car_class_id is not None:
-                    try:
-                        drivers = self.ir['DriverInfo']['Drivers']
-                        driver_class_id = None
-                        for d in drivers:
-                            if d.get('CarIdx') == car_idx:
-                                driver_class_id = d.get('CarClassID')
-                                break
 
-                        if driver_class_id != self.player_car_class_id:
-                            continue
-                    except (KeyError, TypeError):
-                        continue
+                # Use cached class car indices for quick filtering
+                if self.player_class_car_indices is not None and car_idx not in self.player_class_car_indices:
+                    continue
 
                 driver_state = self.get_snapshot(car_idx)
                 if driver_state is None:
@@ -229,13 +242,13 @@ class RaceStateTracker:
                 # This driver disconnected or retired
                 if self.ir['SessionState'] < 5:
                     # Still racing - mark as DC, position unknown
-                    driver_state.official_position = -1
+                    driver_state.position = -1
                     # Mark as disconnected
                     driver_state.is_disconnected = True
-                else:
+                #else:
                     # TODO: Does this need to happen??? Or maybe only once??
                     # After checkered - get their final position from results
-                    driver_state.official_position = get_position_from_results_fn(current_session, car_idx)
+                    #driver_state.position = get_position_from_results_fn(current_session, car_idx)
 
                 # Skip if snapshot is missing critical fields (minimal snapshot for different class)
                 if not driver_state.driver_info:
@@ -251,7 +264,7 @@ class RaceStateTracker:
                 disconnected_driver = {
                     'car_idx': driver_state.car_idx,
                     'driver_info': driver_state.driver_info,
-                    'official_position': driver_state.official_position,
+                    'position': driver_state.position,
                     'current_lap': driver_state.current_lap,
                     'lap_pct': driver_state.lap_pct,
                     'total_track_position': driver_state.total_track_position,
@@ -259,5 +272,5 @@ class RaceStateTracker:
                 }
 
                 # Only show disconnected drivers if they have a valid position or race is ongoing
-                if self.ir['SessionState'] < 5 or driver_state.official_position >= 0:
+                if self.ir['SessionState'] < 5 or driver_state.position >= 0:
                     active_drivers.append(disconnected_driver)
