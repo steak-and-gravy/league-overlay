@@ -245,10 +245,9 @@ class RaceStateTracker:
                     driver_state.position = -1
                     # Mark as disconnected
                     driver_state.is_disconnected = True
-                #else:
-                    # TODO: Does this need to happen??? Or maybe only once??
-                    # After checkered - get their final position from results
-                    #driver_state.position = get_position_from_results_fn(current_session, car_idx)
+                else:
+                    # After checkered - get their final position from results, do this every cycle as things can change
+                    driver_state.position = get_position_from_results_fn(current_session, car_idx)
 
                 # Skip if snapshot is missing critical fields (minimal snapshot for different class)
                 if not driver_state.driver_info:
