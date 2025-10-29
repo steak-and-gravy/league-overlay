@@ -106,7 +106,7 @@ This project uses a modular architecture with clear separation of concerns:
 │   ├── styles.py                 # Color schemes
 │   ├── widgets.py                # Custom Qt widgets
 │   └── auto_center_controller.py # Auto-scroll logic
-├── tests/               # Test suites (319 tests)
+├── tests/               # Test suites (349 tests: 317 passing, 32 skipped)
 └── league_overlay.py    # Main application entry point
 ```
 
@@ -121,7 +121,7 @@ For AI-Assisted development, see [CLAUDE.md](CLAUDE.md) for project context.
 - **PySide6** - Qt framework for UI
 - **pyirsdk** - iRacing SDK Python wrapper for telemetry access
 - **Nuitka** - Python-to-executable compilation
-- **pytest** - Testing framework (319 comprehensive tests)
+- **pytest** - Testing framework (349 comprehensive tests)
 
 ---
 
