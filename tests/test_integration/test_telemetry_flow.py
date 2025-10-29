@@ -172,8 +172,8 @@ class TestTelemetryProcessingPipeline:
         assert race_data[1]['driver_info']['UserName'] == 'Player'
         assert race_data[2]['driver_info']['UserName'] == 'Driver 3'
 
-    def test_real_time_position_calculation(self, mock_ir, division_manager, race_state_tracker, gap_calculator, get_driver_color_fn):
-        """Test real-time position calculation using lap + lap_distance_pct."""
+    def test_position_calculation(self, mock_ir, division_manager, race_state_tracker, gap_calculator, get_driver_color_fn):
+        """Test position calculation using lap + lap_distance_pct."""
         processor = TelemetryProcessor(
             ir=mock_ir,
             division_manager=division_manager,
@@ -819,7 +819,7 @@ class TestDisconnectedFinishedDrivers:
             'total_track_position': 25.8,  # Frozen when they finished
             'current_lap': 25,
             'lap_pct': 0.8,
-            'official_position': 1,
+            'position': 1,
             'driver_info': {
                 'CarIdx': 1,
                 'UserID': 100,
@@ -938,7 +938,7 @@ class TestDisconnectedFinishedDrivers:
                 'car_idx': car_idx,
                 'total_track_position': 25.7,  # Stale data
                 'current_lap': 25,
-                'official_position': car_idx,
+                'position': car_idx,
                 'driver_info': {
                     'CarIdx': car_idx,
                     'UserID': car_idx * 100,

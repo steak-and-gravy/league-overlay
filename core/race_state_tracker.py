@@ -21,6 +21,7 @@ class RaceStateTracker:
         """
         self.ir = ir
         self.player_car_class_id: Optional[int] = None
+        self.player_class_car_indices: Optional[Set[int]] = None
         self.reset()
 
     def reset(self) -> None:
@@ -28,9 +29,8 @@ class RaceStateTracker:
         self.leader_finished: bool = False
         self.finished_drivers: Set[int] = set()
         self.checkered_flag_shown: bool = False
-        self.finish_times: Dict[int, float] = {}
-        self.finish_laps: Dict[int, int] = {}  # Store lap count when each driver finished
         self.driver_snapshots: Dict[int, DriverState] = {}  # Changed from Dict to DriverState
+        self.player_class_car_indices: Optional[Set[int]] = None
 
     def is_racing(self) -> bool:
         """Check if race is still in progress (checkered not shown yet)."""
@@ -46,133 +46,26 @@ class RaceStateTracker:
         """Check if checkered flag has shown."""
         return self.checkered_flag_shown
 
-    def mark_driver_finished(self, car_idx: int, finish_time: float, official_position: int, finish_lap: int = 0) -> None:
+    def mark_driver_finished(self, car_idx: int, official_position: int) -> None:
         """Mark a driver as having completed their finish lap.
 
         Args:
             car_idx: Car index of the finishing driver
-            finish_time: SessionTime when driver crossed finish line
             official_position: Official finishing position
-            finish_lap: Lap number when driver finished
         """
         if car_idx not in self.finished_drivers:
-            logger.debug(f"MARK_FINISHED - Car {car_idx} marked as finished: finish_time={finish_time}, official_position={official_position}, finish_lap={finish_lap}")
+            logger.debug(f"MARK_FINISHED - Car {car_idx} marked as finished: position={official_position}")
             self.finished_drivers.add(car_idx)
-            self.finish_times[car_idx] = finish_time
-            self.finish_laps[car_idx] = finish_lap
 
             # Store final position in snapshot and mark as finished
             if car_idx in self.driver_snapshots:
                 driver_state = self.driver_snapshots[car_idx]
-                driver_state.official_position = official_position
-                driver_state.mark_finished(finish_time, finish_lap)
-
-    def recalculate_all_finish_gaps(self, current_session, get_driver_color_func: Callable) -> None:
-        """Recalculate division positions and finish gaps for all finished drivers.
-
-        This should be called after marking a new driver as finished, to ensure all
-        division-based gaps are updated based on the latest finishing order.
-
-        Args:
-            current_session: Current session data with ResultsPositions
-            get_driver_color_func: Function to get division color for a driver
-        """
-        logger.debug(f"=== RECALCULATE_ALL_FINISH_GAPS called, {len(self.finished_drivers)} finished drivers ===")
-        logger.debug(f"Finish times: {self.finish_times}")
-        # Step 1: Update official positions from ResultsPositions for all finished drivers
-        try:
-            if 'ResultsPositions' in current_session:
-                for driver in current_session['ResultsPositions']:
-                    car_idx = driver.get('CarIdx')
-                    if car_idx is not None and car_idx in self.finished_drivers:
-                        if 'ClassPosition' in driver:
-                            official_position = driver['ClassPosition'] + 1  # ClassPosition is 0-based
-                            driver_state = self.driver_snapshots.get(car_idx)
-                            if driver_state:
-                                driver_state.official_position = official_position
-        except (KeyError, TypeError, IndexError):
-            pass
-
-        # Step 2: Build list of all finished drivers with their divisions
-        finished_with_divisions = []
-        for car_idx in self.finished_drivers:
-            driver_state = self.driver_snapshots.get(car_idx)
-            if driver_state and driver_state.driver_info:
-                driver_color = get_driver_color_func(driver_state.driver_info)
-                official_position = driver_state.official_position
-                finished_with_divisions.append({
-                    'car_idx': car_idx,
-                    'color': driver_color,
-                    'official_position': official_position
-                })
-
-        logger.debug(f"Finished drivers with divisions: {[(d['car_idx'], d['official_position'], d['color']) for d in finished_with_divisions]}")
-
-        # Step 3: Calculate division positions for finished drivers
-        # Sort by finish_times (ground truth) rather than official_position (can be unstable during checkered flag)
-        division_positions = {}
-        for color in set(d['color'] for d in finished_with_divisions):
-            same_division = [d for d in finished_with_divisions if d['color'] == color]
-            same_division.sort(key=lambda x: self.finish_times.get(x['car_idx'], 999999))
-            logger.debug(f"Division {color} sorted by finish_time: {[(d['car_idx'], self.finish_times.get(d['car_idx'])) for d in same_division]}")
-            for i, driver in enumerate(same_division):
-                division_positions[driver['car_idx']] = i + 1
-
-        logger.debug(f"Division positions: {division_positions}")
-
-        # Sort finished_with_divisions by finish_times for consistent search order in Step 4
-        finished_with_divisions.sort(key=lambda x: self.finish_times.get(x['car_idx'], 999999))
-
-        # Step 4: Calculate finish gaps within divisions
-        for car_idx in self.finished_drivers:
-            driver_state = self.driver_snapshots.get(car_idx)
-            if not driver_state or not driver_state.driver_info:
-                continue
-
-            driver_color = get_driver_color_func(driver_state.driver_info)
-            division_position = division_positions.get(car_idx, 1)
-
-            # Clear existing finish gaps (reset to None)
-            driver_state.finish_gap = None
-
-            # If not division leader, find car ahead in same division
-            if division_position > 1:
-                car_ahead_idx = None
-                for d in finished_with_divisions:
-                    if d['color'] == driver_color and division_positions.get(d['car_idx']) == division_position - 1:
-                        car_ahead_idx = d['car_idx']
-                        break
-
-                if car_ahead_idx is not None:
-                    # Calculate time gap based on SessionTime
-                    finish_gap_seconds = self.get_finish_gap(car_ahead_idx, car_idx)
-                    logger.debug(f"Car {car_idx} (P{division_position}) gap to car {car_ahead_idx} (P{division_position-1}): "
-                               f"{finish_gap_seconds}s (times: {self.finish_times.get(car_ahead_idx)} -> {self.finish_times.get(car_idx)})")
-                    if finish_gap_seconds is not None:
-                        driver_state.finish_gap = finish_gap_seconds
-
-                    # Calculate lap gap
-                    car_ahead_lap = self.finish_laps.get(car_ahead_idx, 0)
-                    current_car_lap = self.finish_laps.get(car_idx, 0)
-                    lap_gap = car_ahead_lap - current_car_lap
-                    if lap_gap > 0:
-                        driver_state.finish_lap_gap = lap_gap
+                driver_state.position = official_position
+                driver_state.is_finished = True
 
     def is_driver_finished(self, car_idx: int) -> bool:
         """Check if a driver has finished their race."""
         return car_idx in self.finished_drivers
-
-    def get_finish_time(self, car_idx: int) -> Optional[float]:
-        """Get the finish time for a finished driver."""
-        return self.finish_times.get(car_idx)
-
-    def get_finish_gap(self, car_ahead_idx: int, car_behind_idx: int) -> Optional[float]:
-        """Get the final gap between two drivers."""
-        time_ahead = self.finish_times.get(car_ahead_idx)
-        time_behind = self.finish_times.get(car_behind_idx)
-        if time_ahead is not None and time_behind is not None:
-            return time_behind - time_ahead
-        return None
 
     def update_snapshot(self, car_idx: int, driver_state: DriverState) -> None:
         """Update or create driver snapshot with current state.
@@ -215,12 +108,30 @@ class RaceStateTracker:
         """
         self.player_car_class_id = player_car_class_id
 
+    def _cache_player_class_cars(self) -> None:
+        """Cache which cars are in player's class to avoid repeated lookups during finish tracking."""
+        if self.player_car_class_id is None:
+            self.player_class_car_indices = None
+            return
+
+        self.player_class_car_indices = set()
+        try:
+            drivers = self.ir['DriverInfo']['Drivers']
+            for d in drivers:
+                if d.get('CarClassID') == self.player_car_class_id:
+                    car_idx = d.get('CarIdx')
+                    if car_idx is not None:
+                        self.player_class_car_indices.add(car_idx)
+            logger.debug(f"FINISH_TRACKING - Cached {len(self.player_class_car_indices)} cars in player's class")
+        except (KeyError, TypeError):
+            logger.warning("FINISH_TRACKING - Failed to cache player class cars")
+            self.player_class_car_indices = None
+
     # ═══════════════════════════════════════════════════════════════════════════
     # FINISH STATUS TRACKING
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def update_finish_status(self, current_session: Dict,
-                           get_driver_color_fn: Callable, get_overall_leader_fn: Callable) -> None:
+    def update_finish_status(self, get_overall_leader_fn: Callable) -> None:
         """Track which drivers have finished the race after the checkered flag.
 
         IMPORTANT: iRacing shows the checkered flag BEFORE the leader crosses the
@@ -234,8 +145,6 @@ class RaceStateTracker:
         4. Stores their official position at the moment they finish
 
         Args:
-            current_session: Current session data
-            get_driver_color_fn: Function to get driver's division color
             get_overall_leader_fn: Function to get overall race leader car_idx
         """
         # SessionState < 5 means race hasn't reached checkered flag yet
@@ -250,6 +159,8 @@ class RaceStateTracker:
             # First time after checkered - flip to finish tracking mode
             logger.debug("FINISH_TRACKING - Checkered flag detected, entering finish tracking mode")
             self.set_checkered_flag()
+            # Cache player's class car indices once to avoid repeated lookups
+            self._cache_player_class_cars()
 
         # PHASE 2: Wait for the OVERALL race leader (P1 overall, any class) to finish
         # This allows multi-class racing where slower class drivers can finish before their class leader
@@ -294,19 +205,9 @@ class RaceStateTracker:
                 if self.is_driver_finished(car_idx):
                     continue
 
-                if self.player_car_class_id is not None:
-                    try:
-                        drivers = self.ir['DriverInfo']['Drivers']
-                        driver_class_id = None
-                        for d in drivers:
-                            if d.get('CarIdx') == car_idx:
-                                driver_class_id = d.get('CarClassID')
-                                break
-
-                        if driver_class_id != self.player_car_class_id:
-                            continue
-                    except (KeyError, TypeError):
-                        continue
+                # Use cached class car indices for quick filtering
+                if self.player_class_car_indices is not None and car_idx not in self.player_class_car_indices:
+                    continue
 
                 driver_state = self.get_snapshot(car_idx)
                 if driver_state is None:
@@ -319,11 +220,7 @@ class RaceStateTracker:
                 if current_lap > prev_lap:
                     # Capture the official position at the moment they finish
                     official_position = car_idx_class_position[car_idx] if car_idx < len(car_idx_class_position) else 0
-                    finish_time = self.ir['SessionTime']
-                    self.mark_driver_finished(car_idx, finish_time, official_position, current_lap)
-
-                    # Recalculate division positions and gaps for ALL finished drivers
-                    self.recalculate_all_finish_gaps(current_session, get_driver_color_fn)
+                    self.mark_driver_finished(car_idx, official_position)
 
     def handle_disconnected_drivers(self, active_drivers: List[Dict], current_session: Dict,
                                    get_position_from_results_fn: Callable) -> None:
@@ -345,13 +242,13 @@ class RaceStateTracker:
                 # This driver disconnected or retired
                 if self.ir['SessionState'] < 5:
                     # Still racing - mark as DC, position unknown
-                    driver_state.official_position = -1
-                else:
+                    driver_state.position = -1
+                    # Mark as disconnected
+                    driver_state.is_disconnected = True
+                #else:
+                    # TODO: Does this need to happen??? Or maybe only once??
                     # After checkered - get their final position from results
-                    driver_state.official_position = get_position_from_results_fn(current_session, car_idx)
-
-                # Mark as disconnected
-                driver_state.is_disconnected = True
+                    #driver_state.position = get_position_from_results_fn(current_session, car_idx)
 
                 # Skip if snapshot is missing critical fields (minimal snapshot for different class)
                 if not driver_state.driver_info:
@@ -367,7 +264,7 @@ class RaceStateTracker:
                 disconnected_driver = {
                     'car_idx': driver_state.car_idx,
                     'driver_info': driver_state.driver_info,
-                    'official_position': driver_state.official_position,
+                    'position': driver_state.position,
                     'current_lap': driver_state.current_lap,
                     'lap_pct': driver_state.lap_pct,
                     'total_track_position': driver_state.total_track_position,
@@ -375,5 +272,5 @@ class RaceStateTracker:
                 }
 
                 # Only show disconnected drivers if they have a valid position or race is ongoing
-                if self.ir['SessionState'] < 5 or driver_state.official_position >= 0:
+                if self.ir['SessionState'] < 5 or driver_state.position >= 0:
                     active_drivers.append(disconnected_driver)
