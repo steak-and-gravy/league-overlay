@@ -109,7 +109,7 @@ Unified data structure for driver information during a session.
 **Key Features:**
 - Dataclass with type hints for all fields
 - Computed properties: `car_number`, `driver_name`, `car_class_id`, `total_track_position`
-- Direct fields: `car_idx`, `driver_info`, `official_position`, `real_time_position`, `division_position`, `division_name`, `division_color`, `gap`, `is_player`, `is_disconnected`, etc.
+- Direct fields: `car_idx`, `driver_info`, `position`, `division_position`, `division_name`, `division_color`, `gap`, `is_player`, `is_disconnected`, `is_finished`, etc.
 - Used throughout the codebase as the primary driver data container
 - Eliminates the need for intermediate dicts and parallel data structures
 
@@ -705,7 +705,7 @@ Telemetry Thread                Main Thread
 
 ## Testing Architecture
 
-### Unit Tests (308 tests as of 10/20/25, ~97% coverage on core modules)
+### Unit Tests (349 tests: 317 passing, 32 skipped, ~97% coverage on core modules)
 
 **Test Organization:**
 ```
