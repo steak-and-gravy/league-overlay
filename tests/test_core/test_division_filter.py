@@ -42,22 +42,22 @@ def sample_race_data():
     return [
         DriverState(
             car_idx=0,
-            real_time_position=1,
+            position=1,
             driver_info={'UserID': '1', 'UserName': 'Driver1'}
         ),
         DriverState(
             car_idx=1,
-            real_time_position=2,
+            position=2,
             driver_info={'UserID': '2', 'UserName': 'Driver2'}
         ),
         DriverState(
             car_idx=2,
-            real_time_position=3,
+            position=3,
             driver_info={'UserID': '3', 'UserName': 'Driver3'}
         ),
         DriverState(
             car_idx=3,
-            real_time_position=4,
+            position=4,
             driver_info={'UserID': '4', 'UserName': 'Driver4'}
         )
     ]

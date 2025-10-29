@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 
 # Application version
-VERSION = "0.9.7.7"
+VERSION = "0.9.8.0"
 
 
 @dataclass(frozen=True)
@@ -51,9 +51,7 @@ class Timing:
     STARTUP_GRACE_PERIOD: float = 3.0  # seconds
     AUTO_HIDE_DELAY: int = 500  # milliseconds
     UPDATE_CHECK_DELAY: float = 1.0  # seconds
-    CHECKERED_REFRESH: float = 0.1  # seconds (10 Hz - fast finish tracking, throttled UI updates)
-    CONNECTION_MESSAGE_DURATION: float = 5.0  # seconds - how long to show "Connected" message
-    CHECKERED_UPDATE_CYCLE_COUNT: int = 5  # Force UI update every 5 cycles during checkered flag
+    CONNECTION_MESSAGE_DURATION: float = 3.0  # seconds - how long to show "Connected" message
     DEFAULT_LAP_TIME_FALLBACK: float = 90.0  # seconds - fallback lap time when no data available
 
 
@@ -127,9 +125,9 @@ class FileConfig:
 @dataclass(frozen=True)
 class TelemetryConfig:
     """Telemetry configuration constants."""
-    DEFAULT_REFRESH_RATE: float = 2.0  # seconds
+    DEFAULT_REFRESH_RATE: float = 1.0  # seconds
     MIN_REFRESH_RATE: float = 0.25
-    MAX_REFRESH_RATE: float = 5.0
+    MAX_REFRESH_RATE: float = 3.0
 
     # iRacing SDK constants
     MAX_CARS: int = 64

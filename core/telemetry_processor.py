@@ -221,109 +221,37 @@ class TelemetryProcessor:
     # DIVISION POSITION CALCULATION
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def _calculate_division_positions(self, active_drivers: List[Dict], position_key: str,
-                                     get_driver_color_fn: Callable, current_session: Dict = None) -> Tuple[Dict[int, int], List[Dict]]:
+    def _calculate_division_positions(self, active_drivers: List[Dict],
+                                     get_driver_color_fn: Callable) -> Tuple[Dict[int, int], List[Dict]]:
         """Calculate division positions for all drivers.
-
-        For finished drivers, uses official ResultsPositions to ensure positions remain
-        stable even if drivers disconnect after finishing.
 
         Args:
             active_drivers: List of driver data dicts
-            position_key: Key to use for position ('real_time_position' or 'official_position')
             get_driver_color_fn: Function to get driver's division color
-            current_session: Current session data (optional, used for finished drivers)
 
         Returns:
             Tuple of (division_positions, all_drivers_with_colors):
             - division_positions: Dict mapping car_idx to division position (1-based)
-            - all_drivers_with_colors: List of dicts with car_idx, position, color, official_position
+            - all_drivers_with_colors: List of dicts with car_idx, position, color
         """
-        # Separate finished and racing drivers
-        # After checkered flag, also check ResultsPositions to catch drivers who finished before lap tracking started
-        finished_car_idxs = {d['car_idx'] for d in active_drivers if self.race_state_tracker.is_driver_finished(d['car_idx'])}
-
-        # After checkered: check ResultsPositions for additional finished drivers not caught by lap tracking
-        # ResultsPositions is updated every lap, but only after a driver finishes does their Time field get populated
-        if current_session and self.race_state_tracker.is_checkered() and self.race_state_tracker.has_leader_finished():
-            results = current_session.get('ResultsPositions', [])
-            if results:
-                newly_marked = []
-                for driver in active_drivers:
-                    car_idx = driver['car_idx']
-                    if car_idx not in finished_car_idxs:
-                        # Check if this driver is in ResultsPositions with finish data
-                        for result in results:
-                            if result.get('CarIdx') == car_idx:
-                                # Check if this result has actual finish data (Time field populated with finish time)
-                                # During racing, Time is -1. After finishing, it's the actual finish time in seconds
-                                finish_time = result.get('Time', -1)
-                                if finish_time >= 0:
-                                    # Driver has finished but wasn't marked by lap tracking - mark them now
-                                    # Mark as finished using ResultsPositions data
-                                    finish_position = result.get('ClassPosition', 0)
-                                    finish_lap = result.get('LapsComplete', 0)
-                                    self.race_state_tracker.mark_driver_finished(car_idx, finish_time, finish_position, finish_lap)
-                                    finished_car_idxs.add(car_idx)
-                                    newly_marked.append(car_idx)
-                                break
-
-                # If we marked any new drivers as finished, recalculate all finish gaps
-                if newly_marked:
-                    self.race_state_tracker.recalculate_all_finish_gaps(current_session, get_driver_color_fn)
-
-        racing_drivers = [d for d in active_drivers if d['car_idx'] not in finished_car_idxs]
-
         all_drivers_with_colors = []
         for driver in active_drivers:
             driver_color = get_driver_color_fn(driver['driver_info'])
             all_drivers_with_colors.append({
                 'car_idx': driver['car_idx'],
-                'position': driver.get(position_key, driver.get('official_position', 0)) if position_key == 'official_position' or not self.race_state_tracker.is_driver_finished(driver['car_idx']) else driver.get('official_position', 0),
+                'position': driver.get('position', 0),
                 'color': driver_color,
-                'official_position': driver.get('official_position', driver.get(position_key, 0))
             })
 
         division_positions = {}
+        from collections import defaultdict
+        grouped_by_color = defaultdict(list)  # Auto-creates empty list for new keys
+        for driver in all_drivers_with_colors:
+            grouped_by_color[driver['color']].append(driver)
 
-        # Calculate division positions for finished drivers from official results
-        if current_session and finished_car_idxs:
-            results = current_session.get('ResultsPositions', [])
-
-            # Group finished drivers by division color
-            finished_by_color = {}
-            for driver in active_drivers:
-                if driver['car_idx'] in finished_car_idxs:
-                    driver_color = get_driver_color_fn(driver['driver_info'])
-                    if driver_color not in finished_by_color:
-                        finished_by_color[driver_color] = []
-
-                    # Get official ClassPosition from results
-                    official_class_position = None
-                    for result in results:
-                        if result.get('CarIdx') == driver['car_idx']:
-                            # ClassPosition is 0-indexed, convert to 1-indexed
-                            official_class_position = result.get('ClassPosition', -1) + 1
-                            break
-
-                    if official_class_position and official_class_position > 0:
-                        finished_by_color[driver_color].append({
-                            'car_idx': driver['car_idx'],
-                            'official_class_position': official_class_position
-                        })
-
-            # For each finished driver, use their ClassPosition directly as division position
-            # This preserves the correct position even for lapped cars and when drivers disconnect
-            for color, drivers_in_color in finished_by_color.items():
-                for driver_info in drivers_in_color:
-                    # Use ClassPosition directly (preserves lapped car positions like P11, P12, not 4, 5)
-                    division_positions[driver_info['car_idx']] = driver_info['official_class_position']
-
-        # Calculate division positions for racing drivers (unchanged logic)
-        for color in set(get_driver_color_fn(d['driver_info']) for d in racing_drivers):
-            same_color = [d for d in all_drivers_with_colors if d['color'] == color and d['car_idx'] not in finished_car_idxs]
-            same_color.sort(key=lambda x: x['position'])
-            for i, driver in enumerate(same_color):
+        for drivers in grouped_by_color.values():
+            sorted_drivers = sorted(drivers, key=lambda x: x['position'])
+            for i, driver in enumerate(sorted_drivers):
                 division_positions[driver['car_idx']] = i + 1
 
         return division_positions, all_drivers_with_colors
@@ -332,14 +260,16 @@ class TelemetryProcessor:
     # RACE DATA BUILDING
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], gap: str, display_position: int) -> DriverState:
+    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], gap: str, display_position: int, division_color: str, division_name: Optional[str]) -> DriverState:
         """Build a single race data entry for display.
 
         Args:
             driver: Driver data dict
             division_positions: Dict mapping car_idx to division position
             gap: Gap string to display
-            display_position: The position to use for display/sorting (final_position for finished drivers, real_time_position otherwise)
+            display_position: The position to use for display/sorting
+            division_color: Hex color code for driver's division
+            division_name: Name of driver's division (Pro, ProAm, Am, Rookie, or None)
 
         Returns:
             DriverState with formatted race data for this driver
@@ -353,9 +283,10 @@ class TelemetryProcessor:
         return DriverState(
             car_idx=car_idx,
             driver_info=driver_info,
-            real_time_position=display_position,  # Use display_position for both finished and racing drivers
-            official_position=driver.get('official_position', 0),
+            position=display_position,
             division_position=current_color_position,
+            division_color=division_color,
+            division_name=division_name,
             gap=gap if not is_disconnected else "(DC)",
             is_player=is_player,
             is_disconnected=is_disconnected
@@ -383,13 +314,12 @@ class TelemetryProcessor:
             driver_state = self.race_state_tracker.get_snapshot(car_idx)
 
             if driver_state:
-                # Update existing state - preserve gap, finish_gap
+                # Update existing state - preserve gap
                 driver_state.current_lap = driver_data.get('current_lap', 0)
                 driver_state.lap_pct = driver_data.get('lap_pct', 0.0)
-                driver_state.official_position = driver_data.get('official_position', 0)
-                driver_state.real_time_position = driver_data.get('real_time_position', 0)
+                driver_state.position = driver_data.get('position', 0)
                 driver_state.is_disconnected = False
-                # gap and finish_gap are preserved (not overwritten)
+                # gap is preserved (not overwritten)
             else:
                 # Create new state
                 driver_info = driver_data['driver_info']
@@ -403,8 +333,7 @@ class TelemetryProcessor:
                     division_color=division_color,
                     current_lap=driver_data.get('current_lap', 0),
                     lap_pct=driver_data.get('lap_pct', 0.0),
-                    official_position=driver_data.get('official_position', 0),
-                    real_time_position=driver_data.get('real_time_position', 0),
+                    position=driver_data.get('position', 0),
                     is_disconnected=False,
                 )
 
@@ -416,7 +345,7 @@ class TelemetryProcessor:
 
     def _calculate_gap(self, driver: Dict, current_color_position: int, current_driver_color: str,
                       active_drivers: List[Dict], all_drivers_with_colors: List[Dict],
-                      is_race: bool, position_key: str, live_data: irsdk.IRSDK, current_session: Dict,
+                      is_race: bool, current_session: Dict,
                       get_driver_color_fn: Callable, show_division_gap: bool = True) -> str:
         """Calculate gap for a driver to the car ahead.
 
@@ -433,8 +362,6 @@ class TelemetryProcessor:
             active_drivers: List of all active drivers
             all_drivers_with_colors: List of drivers with color info
             is_race: True if in race session
-            position_key: 'real_time_position' or 'official_position'
-            live_data: Live telemetry data
             current_session: Current session data
             get_driver_color_fn: Function to get driver's division color
             show_division_gap: If True, show gap to car ahead in same division. If False, show gap to any car ahead.
@@ -451,98 +378,32 @@ class TelemetryProcessor:
                 return GapCalculator.format_gap_display(is_leader=True)
         else:
             # Overall leader shows "Leader"
-            if driver.get(position_key, 0) == 1:
+            if driver.get('position', 0) == 1:
                 return GapCalculator.format_gap_display(is_leader=True)
 
-        # Finished driver - use stored finish gap (only for division mode)
+        # Finished driver (non-leader)
         if self.race_state_tracker.is_driver_finished(car_idx):
-            if show_division_gap:
-                # Division mode: use pre-calculated division-based finish gaps
-                driver_state = self.race_state_tracker.get_snapshot(car_idx)
-                if driver_state and (driver_state.finish_gap is not None or driver_state.finish_lap_gap is not None):
-                    finish_gap_seconds = driver_state.finish_gap
-                    finish_lap_gap = driver_state.finish_lap_gap or 0
-                    return GapCalculator.format_gap_display(time_gap=finish_gap_seconds, lap_gap=finish_lap_gap)
-
-                # No finish gap data - this can happen when a car finishes before the division leader
-                # (e.g., in multi-class, GT3 P2 finishes before GT3 P1 because overall leader already finished)
-                # In this case, calculate a live gap to the racing car ahead in the same division
-
-                # If not division leader, try to find racing car ahead in same division
-                if current_color_position > 1:
-                    # Find the car in division position current_color_position - 1
-                    car_ahead_idx = None
-                    for temp_driver in all_drivers_with_colors:
-                        if (temp_driver['color'] == current_driver_color and
-                            temp_driver.get('car_idx') != car_idx):
-                            temp_div_position = None
-                            # Check if this driver is in the division_positions dict (finished) or calculate from all_drivers_with_colors
-                            for d in all_drivers_with_colors:
-                                if d['car_idx'] == temp_driver['car_idx'] and d['color'] == current_driver_color:
-                                    # Count how many cars in same division are ahead of this one
-                                    temp_div_position = 1 + sum(1 for x in all_drivers_with_colors
-                                                               if x['color'] == current_driver_color and x['position'] < d['position'])
-                                    break
-
-                            if temp_div_position == current_color_position - 1:
-                                car_ahead_idx = temp_driver['car_idx']
-                                break
-
-                    if car_ahead_idx is not None and not self.race_state_tracker.is_driver_finished(car_ahead_idx):
-                        # Car ahead is still racing - calculate live gap
-                        return self._calculate_live_race_gap(driver, current_driver_color, active_drivers,
-                                                            position_key, live_data, current_session,
-                                                            get_driver_color_fn, show_division_gap)
-
-                return ""
-            else:
-                # Overall mode: calculate gap to car directly ahead in overall standings
-                # Find car directly ahead by official position
-                current_position = driver.get('official_position', driver.get(position_key, 999))
-                if current_position == 1:
-                    return GapCalculator.format_gap_display(is_leader=True)
-
-                # Find the car in position current_position - 1
-                car_ahead_idx = None
-                for temp_driver in active_drivers:
-                    temp_position = temp_driver.get('official_position', temp_driver.get(position_key, 999))
-                    if temp_position == current_position - 1:
-                        car_ahead_idx = temp_driver['car_idx']
-                        break
-
-                if car_ahead_idx is not None:
-                    # Calculate gap using finish times
-                    finish_gap_seconds = self.race_state_tracker.get_finish_gap(car_ahead_idx, car_idx)
-
-                    if finish_gap_seconds is not None:
-                        # Calculate lap gap
-                        car_ahead_lap = self.race_state_tracker.finish_laps.get(car_ahead_idx, 0)
-                        current_car_lap = self.race_state_tracker.finish_laps.get(car_idx, 0)
-                        lap_gap = car_ahead_lap - current_car_lap
-                        return GapCalculator.format_gap_display(time_gap=finish_gap_seconds, lap_gap=lap_gap if lap_gap > 0 else 0)
-                return ""
+            return ""
 
         # Live racing - calculate real-time gap
         if is_race:
             return self._calculate_live_race_gap(driver, current_driver_color, active_drivers,
-                                                position_key, live_data, current_session, get_driver_color_fn, show_division_gap)
+                                                current_session, get_driver_color_fn, show_division_gap)
 
         # Practice/Qualifying - use best lap times
         return self._calculate_practice_gap(car_idx, current_color_position, current_driver_color,
                                            all_drivers_with_colors, current_session, show_division_gap)
 
     def _calculate_live_race_gap(self, driver: Dict, current_driver_color: str,
-                                active_drivers: List[Dict], position_key: str,
-                                live_data: irsdk.IRSDK, current_session: Dict,
-                                get_driver_color_fn: Callable, show_division_gap: bool = True) -> str:
+                                active_drivers: List[Dict],
+                                current_session: Dict, get_driver_color_fn: Callable,
+                                show_division_gap: bool = True) -> str:
         """Calculate live gap during a race.
 
         Args:
             driver: Current driver data
             current_driver_color: Driver's division color
             active_drivers: List of all active drivers
-            position_key: Position key to use
-            live_data: Live telemetry data
             current_session: Current session data
             get_driver_color_fn: Function to get driver's division color
             show_division_gap: If True, compare to car ahead in same division. If False, compare to any car ahead.
@@ -561,7 +422,7 @@ class TelemetryProcessor:
                 if temp_color == current_driver_color:
                     comparison_drivers.append({
                         'car_idx': temp_driver['car_idx'],
-                        'position': temp_driver.get(position_key, 0),
+                        'position': temp_driver.get('position', 0),
                         'total_track_position': temp_driver['total_track_position'],
                         'current_lap': temp_driver['current_lap'],
                         'lap_pct': temp_driver['lap_pct']
@@ -572,7 +433,7 @@ class TelemetryProcessor:
             for temp_driver in active_drivers:
                 comparison_drivers.append({
                     'car_idx': temp_driver['car_idx'],
-                    'position': temp_driver.get(position_key, 0),
+                    'position': temp_driver.get('position', 0),
                     'total_track_position': temp_driver['total_track_position'],
                     'current_lap': temp_driver['current_lap'],
                     'lap_pct': temp_driver['lap_pct']
@@ -593,13 +454,12 @@ class TelemetryProcessor:
 
         car_ahead_idx = comparison_drivers[current_pos_index - 1]['car_idx']
 
-        # Car ahead has finished, use snapshot gap
+        # Car ahead has finished
         if self.race_state_tracker.is_driver_finished(car_ahead_idx):
-            snapshot = self.race_state_tracker.get_snapshot(car_idx)
-            return snapshot.get('gap', '') if snapshot else ""
+            return "-"
 
         # Both cars still racing - calculate live time gap
-        car_idx_est_time = live_data['CarIdxEstTime']
+        car_idx_est_time = self.ir['CarIdxEstTime']
         current_est_time = car_idx_est_time[car_idx]
         ahead_est_time = car_idx_est_time[car_ahead_idx]
 
@@ -667,7 +527,7 @@ class TelemetryProcessor:
             car_ahead_idx = comparison_drivers[current_idx - 1]['car_idx']
         else:
             # Overall gap - find car directly ahead by overall position
-            all_drivers_with_colors.sort(key=lambda x: x['official_position'])
+            all_drivers_with_colors.sort(key=lambda x: x['position'])
 
             current_idx = None
             for i, d in enumerate(all_drivers_with_colors):
@@ -724,20 +584,14 @@ class TelemetryProcessor:
             # Share player class ID with race state tracker for multi-class filtering
             self.race_state_tracker.set_player_class_id(self.position_calculator.player_car_class_id)
 
-            live_data = self.ir
-            if not live_data:
+            if not self.ir:
                 return None
 
             # Process positions (different logic for race vs practice/qualifying)
             if is_race:
-                self.race_state_tracker.update_finish_status(
-                    current_session,
-                    get_driver_color_fn,
-                    self.position_calculator.get_overall_race_leader_idx
-                )
+                self.race_state_tracker.update_finish_status(self.position_calculator.get_overall_race_leader_idx)
 
                 active_drivers = self.position_calculator.calculate_real_time_positions(drivers)
-                position_key = 'real_time_position'
 
                 if active_drivers:
                     # Update snapshots for active drivers
@@ -754,9 +608,18 @@ class TelemetryProcessor:
                     finished_drivers = [d for d in active_drivers if self.race_state_tracker.is_driver_finished(d['car_idx'])]
                     racing_drivers = [d for d in active_drivers if not self.race_state_tracker.is_driver_finished(d['car_idx'])]
 
-                    # Sort finished drivers by their official results position
+                    # Override finished driver positions with locked values from snapshots
+                    # This prevents positions from shifting when drivers disconnect
                     for driver in finished_drivers:
-                        driver['final_position'] = self.get_position_from_results(current_session, driver['car_idx'])
+                        snapshot = self.race_state_tracker.get_snapshot(driver['car_idx'])
+                        if snapshot and snapshot.position > 0:
+                            # Use locked position from when they finished
+                            driver['position'] = snapshot.position
+                            driver['final_position'] = snapshot.position
+                        else:
+                            # Fallback to live telemetry if no snapshot
+                            driver['final_position'] = self.get_position_from_results(current_session, driver['car_idx'])
+                            driver['position'] = driver['final_position']
                     finished_drivers.sort(key=lambda x: x.get('final_position', 999))
 
                     # Sort racing drivers by current track position
@@ -785,25 +648,23 @@ class TelemetryProcessor:
                     # Step 3: Assign available positions to racing drivers in track position order
                     for i, driver in enumerate(racing_drivers):
                         if i < len(available_positions):
-                            driver['real_time_position'] = available_positions[i]
+                            driver['position'] = available_positions[i]
                         else:
                             # Fallback: if we run out of available positions (shouldn't happen)
                             # assign next number after highest
-                            driver['real_time_position'] = total_drivers + (i - len(available_positions)) + 1
+                            driver['position'] = total_drivers + (i - len(available_positions)) + 1
 
                     # Merge them back: finished drivers first (in order), then racing drivers
                     active_drivers = finished_drivers + racing_drivers
             else:
                 active_drivers = self.position_calculator.get_official_positions(drivers)
-                position_key = 'official_position'
 
             if not active_drivers:
                 return None
 
             # Calculate division positions
             division_positions, all_drivers_with_colors = self._calculate_division_positions(
-                active_drivers, position_key, get_driver_color_fn, current_session
-            )
+                active_drivers, get_driver_color_fn)
 
             race_data = []
 
@@ -812,28 +673,29 @@ class TelemetryProcessor:
                 driver_info = driver['driver_info']
 
                 if self.race_state_tracker.is_driver_finished(car_idx):
-                    # Use pre-calculated final_position if available (from Solution 3), otherwise fetch from results
+                    # Use pre-calculated final_position if available, otherwise fetch from results
                     position = driver.get('final_position', self.get_position_from_results(current_session, car_idx))
                 else:
-                    position = driver.get(position_key, 0)
+                    position = driver.get('position', 0)
 
                 current_driver_color = get_driver_color_fn(driver_info)
+                current_driver_division = self.division_manager.get_driver_division(driver_info)
                 current_color_position = division_positions.get(car_idx, position)
 
                 # Calculate gap using helper method
                 gap = self._calculate_gap(
                     driver, current_color_position, current_driver_color,
                     active_drivers, all_drivers_with_colors,
-                    is_race, position_key, live_data, current_session,
+                    is_race, current_session,
                     get_driver_color_fn, show_division_gap
                 )
 
                 # Build and append race data entry
                 driver['position'] = position  # Ensure position is set for helper method (still needed for gap calculations)
-                race_entry = self._build_race_data_entry(driver, division_positions, gap, position)
+                race_entry = self._build_race_data_entry(driver, division_positions, gap, position, current_driver_color, current_driver_division)
                 race_data.append(race_entry)
 
-            race_data.sort(key=lambda x: x.real_time_position)
+            race_data.sort(key=lambda x: x.position)
 
             return race_data
 

@@ -65,11 +65,8 @@ class DriverState:
     # POSITIONS (calculated)
     # ═══════════════════════════════════════════════════════════════════════════
 
-    official_position: int = 0
-    """Official position from iRacing (updates at start/finish line)"""
-
-    real_time_position: int = 0
-    """Real-time position based on track position (continuous updates)"""
+    position: int = 0
+    """Driver's position (real-time during race, final after finish, best lap in practice/qual)"""
 
     division_position: int = 0
     """Position within driver's division (1 = division leader)"""
@@ -88,27 +85,11 @@ class DriverState:
     """True if this is the player's car"""
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # FINISH TRACKING
-    # ═══════════════════════════════════════════════════════════════════════════
-
-    finish_time: Optional[float] = None
-    """SessionTime when driver crossed finish line (for gap calculations)"""
-
-    finish_lap: Optional[int] = None
-    """Lap number when driver finished"""
-
-    # ═══════════════════════════════════════════════════════════════════════════
     # GAP DISPLAY
     # ═══════════════════════════════════════════════════════════════════════════
 
     gap: str = ""
     """Formatted gap string for display (e.g., "+2.5s", "1 Lap", "Leader")"""
-
-    finish_gap: Optional[float] = None
-    """Time gap at finish (in seconds) for finished drivers"""
-
-    finish_lap_gap: Optional[int] = None
-    """Lap gap at finish for finished drivers (e.g., car was lapped)"""
 
     # ═══════════════════════════════════════════════════════════════════════════
     # COMPUTED PROPERTIES
@@ -142,25 +123,14 @@ class DriverState:
     # UTILITY METHODS
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def update_telemetry(self, current_lap: int, lap_pct: float, official_position: int) -> None:
+    def update_telemetry(self, current_lap: int, lap_pct: float, position: int) -> None:
         """Update telemetry data from iRacing SDK.
 
         Args:
             current_lap: Current lap number
             lap_pct: Progress through current lap (0.0 to 1.0)
-            official_position: Official class position from iRacing
+            position: Current position
         """
         self.current_lap = current_lap
         self.lap_pct = lap_pct
-        self.official_position = official_position
-
-    def mark_finished(self, finish_time: float, finish_lap: int) -> None:
-        """Mark driver as finished.
-
-        Args:
-            finish_time: SessionTime when driver crossed finish line
-            finish_lap: Lap number when driver finished
-        """
-        self.is_finished = True
-        self.finish_time = finish_time
-        self.finish_lap = finish_lap
+        self.position = position
