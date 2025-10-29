@@ -108,7 +108,7 @@ class DriverRowRenderer:
         pos_color = styling.get('position_color', text_color) if styling else text_color
         pos_bg = styling.get('position_bg', label_bg) if styling else label_bg
 
-        pos_label = QLabel(str(driver.real_time_position if driver.real_time_position else ''))
+        pos_label = QLabel(str(driver.position if driver.position else ''))
         pos_label.setStyleSheet(f"""
             QLabel {{
                 color: {pos_color};
