@@ -36,7 +36,7 @@ def setup_logging(log_level=logging.INFO):
     file_handler = RotatingFileHandler(
         log_file,
         mode='a',  # RotatingFileHandler uses append mode
-        maxBytes=25 * 1024 * 1024,  # 25MB
+        maxBytes=1024 * 1024,  # 1MB
         backupCount=1,
         encoding='utf-8'
     )
