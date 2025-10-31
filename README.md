@@ -30,7 +30,7 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - Window position and size
 - Opacity (transparency)
 - Font size
-- Row color style (Default, Alternate, Outline, Dark)
+- Row color style (Default, Dark, Alternate, Outline)
 - Refresh rate
 - Division colors
 - Log level (DEBUG, INFO, WARNING, ERROR)
