@@ -201,7 +201,7 @@ class SettingsDialog(QDialog):
         color_style_row.addWidget(color_style_label)
 
         self.color_style_combo = QComboBox()
-        self.color_style_combo.addItems(["Default", "Alternate", "Outline", "Stream"])
+        self.color_style_combo.addItems(["Default", "Dark", "Alternate", "Outline"])
         self.color_style_combo.setCurrentText(self.parent_overlay.settings.row_color_style)
         self.color_style_combo.setStyleSheet("""
             QComboBox {

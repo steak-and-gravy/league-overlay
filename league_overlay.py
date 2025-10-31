@@ -530,12 +530,12 @@ class LeagueOverlay(QMainWindow):
         self.header_layout.setSpacing(2)
 
         # Column proportions - adjust based on style
-        is_stream_style = self.settings.row_color_style == "Stream"
+        is_default_style = self.settings.row_color_style == "Default"
 
         self.header_layout.setColumnStretch(0, COLUMN_LAYOUT.POS)
         self.header_layout.setColumnStretch(1, COLUMN_LAYOUT.DIV_POS)
-        if is_stream_style:
-            # Stream: Position | Div Pos | Driver Name | Car Number | Gap
+        if is_default_style:
+            # Default: Position | Div Pos | Driver Name | Car Number | Gap
             self.header_layout.setColumnStretch(2, COLUMN_LAYOUT.DRIVER_NAME)
             self.header_layout.setColumnStretch(3, COLUMN_LAYOUT.CAR_NUM)
         else:
@@ -548,7 +548,7 @@ class LeagueOverlay(QMainWindow):
         gap_header = "Div Gap" if self.settings.show_division_gap else "Gap"
 
         # Set header labels based on style
-        if is_stream_style:
+        if is_default_style:
             headers = ["Pos", "D-Pos", "Driver", "Car#", gap_header]
         else:
             headers = ["Pos", "D-Pos", "Car#", "Driver", gap_header]

@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt
 
 from config.constants import COLUMN_LAYOUT
 from core.driver_state import DriverState
-from .styles import DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, StreamColorStyle
+from .styles import DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, DarkColorStyle
 
 if TYPE_CHECKING:
     from league_overlay import LeagueOverlay
@@ -17,9 +17,9 @@ class DriverRowRenderer:
 
     STYLES = {
         "Default": DefaultColorStyle(),
+        "Dark": DarkColorStyle(),
         "Alternate": AlternateColorStyle(),
-        "Outline": OutlineColorStyle(),
-        "Stream": StreamColorStyle()
+        "Outline": OutlineColorStyle()
     }
 
     def __init__(self, parent: 'LeagueOverlay'):
@@ -56,14 +56,14 @@ class DriverRowRenderer:
         layout.setContentsMargins(*styling['layout_margins'])
         layout.setSpacing(styling['layout_spacing'])
 
-        # Determine if we're using Stream style (which swaps car number and driver name positions)
-        is_stream_style = self.parent.settings.row_color_style == "Stream"
+        # Determine if we're using Default style (which swaps car number and driver name positions)
+        is_default_style = self.parent.settings.row_color_style == "Default"
 
         # Set column stretches
         layout.setColumnStretch(0, COLUMN_LAYOUT.POS)
         layout.setColumnStretch(1, COLUMN_LAYOUT.DIV_POS)
-        if is_stream_style:
-            # Stream: Position | Div Pos | Driver Name | Car Number | Gap
+        if is_default_style:
+            # Default: Position | Div Pos | Driver Name | Car Number | Gap
             layout.setColumnStretch(2, COLUMN_LAYOUT.DRIVER_NAME)
             layout.setColumnStretch(3, COLUMN_LAYOUT.CAR_NUM)
         else:
@@ -75,10 +75,10 @@ class DriverRowRenderer:
         # Determine font weight
         font_weight = "bold" if driver.is_player or self.parent.settings.bold_drivers else "normal"
 
-        # Create labels (pass styling for special styles like Stream)
+        # Create labels (pass styling for special styles like Default)
         # Column positions depend on style
-        car_col = 3 if is_stream_style else 2
-        name_col = 2 if is_stream_style else 3
+        car_col = 3 if is_default_style else 2
+        name_col = 2 if is_default_style else 3
 
         self._create_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling)
         self._create_division_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling)
@@ -104,7 +104,7 @@ class DriverRowRenderer:
     def _create_position_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                label_bg: str, label_border: str, font_weight: str, styling: Dict = None) -> None:
         """Create position label."""
-        # Check for special position styling (for Stream style)
+        # Check for special position styling (for Default style)
         pos_color = styling.get('position_color', text_color) if styling else text_color
         pos_bg = styling.get('position_bg', label_bg) if styling else label_bg
 
@@ -128,7 +128,7 @@ class DriverRowRenderer:
     def _create_division_position_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                        label_bg: str, label_border: str, font_weight: str, styling: Dict = None) -> None:
         """Create division position label."""
-        # Check for special division position styling (same as car number for Stream style)
+        # Check for special division position styling (same as car number for Default style)
         div_pos_color = styling.get('car_number_color', text_color) if styling else text_color
         div_pos_bg = styling.get('car_number_bg', label_bg) if styling else label_bg
 
@@ -152,7 +152,7 @@ class DriverRowRenderer:
     def _create_car_number_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                  label_bg: str, label_border: str, font_weight: str, styling: Dict = None, column: int = 2) -> None:
         """Create car number label."""
-        # Check for special car number styling (for Stream style)
+        # Check for special car number styling (for Default style)
         car_color = styling.get('car_number_color', text_color) if styling else text_color
         car_bg = styling.get('car_number_bg', label_bg) if styling else label_bg
 
