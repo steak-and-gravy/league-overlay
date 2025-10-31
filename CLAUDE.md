@@ -22,7 +22,7 @@ Real-time iRacing race position overlay with division-based racing.
 ├── ui/                  # UI components
 │   ├── driver_row_renderer.py    # Row widget creation
 │   ├── settings_dialog.py        # Settings UI
-│   ├── styles.py                 # Color strategies (Default/Alternate/Outline/Stream)
+│   ├── styles.py                 # Color strategies (Default/Alternate/Outline/Dark)
 │   ├── widgets.py                # Custom Qt widgets
 │   └── auto_center_controller.py # Auto-scrolling controller
 ├── league_overlay.py    # Main application (1180 lines, down from 3,299)

@@ -1,7 +1,7 @@
 """User interface module for League Overlay."""
 
 from .widgets import DataUpdateSignal, CustomSizeGrip
-from .styles import ColorStyleStrategy, DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, StreamColorStyle
+from .styles import ColorStyleStrategy, DarkColorStyle, AlternateColorStyle, OutlineColorStyle, DefaultColorStyle
 from .driver_row_renderer import DriverRowRenderer
 from .settings_dialog import SettingsDialog
 
@@ -12,7 +12,7 @@ __all__ = [
     'DefaultColorStyle',
     'AlternateColorStyle',
     'OutlineColorStyle',
-    'StreamColorStyle',
+    'DarkColorStyle',
     'DriverRowRenderer',
     'SettingsDialog',
 ]

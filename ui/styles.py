@@ -35,8 +35,8 @@ class ColorStyleStrategy(ABC):
         raise NotImplementedError("Subclasses must implement get_styling()")
 
 
-class DefaultColorStyle(ColorStyleStrategy):
-    """Default color style: Black background with colored text, player gets gradient glow."""
+class DarkColorStyle(ColorStyleStrategy):
+    """Dark color style: Black background with colored text, player gets gradient glow."""
 
     def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
         text_color = driver.division_color
@@ -145,8 +145,8 @@ class OutlineColorStyle(ColorStyleStrategy):
         }
 
 
-class StreamColorStyle(ColorStyleStrategy):
-    """Stream color style: Red position background, division color car number, black driver name and gap."""
+class DefaultColorStyle(ColorStyleStrategy):
+    """Default color style: Red position background, division color car number, black driver name and gap."""
 
     def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
         # Position: red background, white text
