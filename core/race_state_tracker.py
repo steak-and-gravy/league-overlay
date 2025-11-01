@@ -236,6 +236,12 @@ class RaceStateTracker:
         """
         active_car_indices = {d['car_idx'] for d in active_drivers}
 
+        # Get race lap count for retirement detection
+        try:
+            race_laps = self.ir['RaceLaps']
+        except (KeyError, TypeError):
+            race_laps = 0
+
         for car_idx in range(TELEMETRY_CONFIG.MAX_CARS):
             driver_state = self.get_snapshot(car_idx)
             if driver_state and car_idx not in active_car_indices:
@@ -248,6 +254,14 @@ class RaceStateTracker:
                 else:
                     # After checkered - get their final position from results, do this every cycle as things can change
                     driver_state.position = get_position_from_results_fn(current_session, car_idx)
+
+                    # Determine if this is a permanent retirement vs brief connection blip
+                    # If they disconnected early (< 60% race completion), they're permanently retired
+                    # If they disconnected late (>= 60% race completion), might be brief connection issue
+                    if race_laps > 0 and driver_state.current_lap < (race_laps * 0.6):
+                        # Permanently retired - mark as finished so gap-filling doesn't reposition them
+                        driver_state.is_finished = True
+                        logger.debug(f"DISCONNECT - Car {car_idx} retired early (lap {driver_state.current_lap}/{race_laps}), marking as finished with position {driver_state.position}")
 
                 # Skip if snapshot is missing critical fields (minimal snapshot for different class)
                 if not driver_state.driver_info:
