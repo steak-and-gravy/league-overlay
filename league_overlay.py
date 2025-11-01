@@ -692,15 +692,16 @@ class LeagueOverlay(QMainWindow):
 
     def set_driver_division(self, driver_info: Dict[str, str], division_name: str) -> None:
         """Assign a driver to a division - delegates to DivisionManager.
-
-        The telemetry processor will pick up the new division assignment
-        on the next update cycle and refresh the UI automatically.
+        Immediately refreshes the display to show the new division assignment.
         """
         # Delegate to DivisionManager for assignment logic
         self.division_manager.set_driver_division(driver_info, division_name)
 
         # Save configuration
         self.division_manager.save_config()
+
+        # Immediately refresh display to show new division assignment
+        self.refresh_driver_colors()
 
     def refresh_driver_colors(self):
         """Refresh all driver colors"""
