@@ -465,11 +465,15 @@ class TelemetryProcessor:
 
         time_gap_raw = None
 
-        # If both cars on same lap, use iRacing's estimated time (most accurate)
+        # If both cars on same lap, use iRacing's estimated time
         if current_est_time > 0 and ahead_est_time > 0 and comparison_drivers[current_pos_index - 1]['current_lap'] == driver['current_lap']:
             time_gap_raw = GapCalculator.calculate_time_gap(ahead_est_time, current_est_time)
+        elif current_est_time > 0 and ahead_est_time > 0 and comparison_drivers[current_pos_index - 1]['current_lap'] > driver['current_lap'] and self.ir['CarIdxLastLapTime'][car_ahead_idx] > 0:
+            # If on different laps, add last lap time to get to best estimate
+            ahead_last_lap_time = self.ir['CarIdxLastLapTime'][car_ahead_idx]
+            time_gap_raw = GapCalculator.calculate_time_gap(ahead_est_time + ahead_last_lap_time, current_est_time)
         else:
-            # Different laps - estimate gap based on track position difference
+            # Estimate gap based on track position difference as fallback
             position_diff = comparison_drivers[current_pos_index - 1]['total_track_position'] - driver['total_track_position']
             time_gap_raw = position_diff * self.get_fastest_lap_time(current_session)
 
