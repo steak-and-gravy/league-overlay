@@ -146,14 +146,17 @@ class OutlineColorStyle(ColorStyleStrategy):
 
 
 class DefaultColorStyle(ColorStyleStrategy):
-    """Default color style: Red position background, division color car number, black driver name and gap."""
+    """Default color style: Red position background, division color car number and driver name, white gap."""
 
     def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
-        # Position: red background, white text
-        # Driver name: black background, white text
-        # Car number: division color background, white text
-        # Division position: division color background, white text
-        # Gap: black background, white text
+        text_color = driver.division_color
+        gap_color = "white"
+        label_bg = parent.get_bg_color('#000000')
+        label_border = ''
+        position_bg = parent.get_bg_color('#FF0000')
+        position_color = "white"
+        car_number_bg = parent.get_bg_color(driver.division_color)
+        car_number_color = "white"
 
         if driver.is_player:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
@@ -166,15 +169,15 @@ class DefaultColorStyle(ColorStyleStrategy):
         return {
             'row_widget': row_widget,
             'container_widget': None,
-            'text_color': "white",  # Default text color (driver name, gap)
-            'gap_color': "white",
-            'label_bg': parent.get_bg_color('#000000'),  # Default background (driver name, gap)
-            'label_border': '',
+            'text_color': text_color,
+            'gap_color': gap_color,
+            'label_bg': label_bg,  # Default background (driver name, gap)
+            'label_border': label_border,
             'layout_margins': (2, 2, 2, 2),
             'layout_spacing': 2,
             # Special styling for specific labels
-            'position_bg': parent.get_bg_color('#FF0000'),  # Red background for position
-            'position_color': "white",
-            'car_number_bg': parent.get_bg_color(driver.division_color),  # Division color for car number
-            'car_number_color': "white"  # White text for car number and div position
+            'position_bg': position_bg,  # Red background for position
+            'position_color': position_color,
+            'car_number_bg': car_number_bg,  # Division color for car number
+            'car_number_color': car_number_color  # White text for car number and div position
         }
