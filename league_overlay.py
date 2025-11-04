@@ -598,8 +598,19 @@ class LeagueOverlay(QMainWindow):
             msg = f"Update available: v{result['latest_version']}"
             self.signals.update_status.emit(msg, '#00FF00')
 
-    def _update_division_button(self):
-        """Update division button appearance based on current filter state."""
+    def toggle_division_filter(self):
+        """Toggle division filter - cycles through different division views.
+        Two modes:
+        1. Player is on track: Toggle between "All Divisions" and "My Division"
+        2. Player spectating: Cycle through each division (Pro -> ProAm -> Am -> Rookie -> All)
+        """
+        # Cycle to next filter state
+        self.division_filter.cycle_filter(
+            self.race_data,
+            self.player_car_idx,
+            self.division_manager.get_driver_color
+        )
+
         # Get button state from filter
         button_state = self.division_filter.get_button_state()
 
@@ -620,23 +631,6 @@ class LeagueOverlay(QMainWindow):
                 background-color: {hover_color};
             }}
         """)
-
-    def toggle_division_filter(self):
-        """Toggle division filter - cycles through different division views.
-        Two modes:
-        1. Player is on track: Toggle between "All Divisions" and "My Division"
-        2. Player spectating: Cycle through each division (Pro -> ProAm -> Am -> Rookie -> All)
-        """
-        # Cycle to next filter state
-        self.division_filter.cycle_filter(
-            self.race_data,
-            self.player_car_idx,
-            self.division_manager.get_driver_color
-        )
-
-        # Update button to reflect new filter state
-        self._update_division_button()
-
         self.scroll_area.verticalScrollBar().setValue(0)
 
         # Immediately apply the filter and update UI
@@ -871,10 +865,7 @@ class LeagueOverlay(QMainWindow):
         if session_changed and self.current_session_id is not None:
             self.race_data = []
             self._last_emitted_data = []  # Reset change tracking on session change
-            self.division_filter.reset()  # Reset division filter on session change
-
-            # Update button to reflect reset filter state
-            self._update_division_button()
+            # Note: Division filter state is intentionally preserved across session changes
 
         # Update race data and player info
         self.race_data = race_data
