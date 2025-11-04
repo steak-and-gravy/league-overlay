@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 
 # Application version
-VERSION = "0.9.8.0"
+VERSION = "0.9.8.1"
 
 
 @dataclass(frozen=True)
