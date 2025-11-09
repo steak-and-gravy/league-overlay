@@ -462,6 +462,12 @@ class TelemetryProcessor:
         car_idx_est_time = self.ir['CarIdxEstTime']
         current_est_time = car_idx_est_time[car_idx]
         ahead_est_time = car_idx_est_time[car_ahead_idx]
+        ahead_lap_time = self.ir['DriverInfo']['Drivers'][car_ahead_idx]['CarClassEstLapTime']
+        current_lap_time = self.ir['DriverInfo']['Drivers'][car_idx]['CarClassEstLapTime']
+        if (ahead_lap_time > 0 and current_lap_time > 0):
+            # Normalize Car Ahead EstTime
+            normalize_lap_time_pct = ahead_lap_time/current_lap_time
+            ahead_est_time = ahead_est_time/normalize_lap_time_pct
 
         time_gap_raw = None
 
@@ -470,8 +476,10 @@ class TelemetryProcessor:
             time_gap_raw = GapCalculator.calculate_time_gap(ahead_est_time, current_est_time)
         elif current_est_time > 0 and ahead_est_time > 0 and comparison_drivers[current_pos_index - 1]['current_lap'] > driver['current_lap']:
             # If on different laps, add est lap time to get to best estimate
-            est_lap_time = self.ir['DriverInfo']['Drivers'][car_ahead_idx]['CarClassEstLapTime']
-            time_gap_raw = GapCalculator.calculate_time_gap(ahead_est_time + est_lap_time, current_est_time)
+            if (normalize_lap_time_pct > 0):
+                time_gap_raw = GapCalculator.calculate_time_gap(ahead_est_time + ahead_lap_time/normalize_lap_time_pct, current_est_time)
+            else:
+                time_gap_raw = GapCalculator.calculate_time_gap(ahead_est_time + ahead_lap_time, current_est_time)
         else:
             # Estimate gap based on track position difference as fallback
             position_diff = comparison_drivers[current_pos_index - 1]['total_track_position'] - driver['total_track_position']
