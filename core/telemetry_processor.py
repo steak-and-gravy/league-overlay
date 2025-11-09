@@ -608,6 +608,16 @@ class TelemetryProcessor:
                         self.get_position_from_results
                     )
 
+                    # Update all finished drivers with official positions from ResultsPositions
+                    # This ensures we always show correct final results, even for disconnected drivers
+                    if self.race_state_tracker.is_checkered():
+                        for car_idx in self.race_state_tracker.finished_drivers:
+                            snapshot = self.race_state_tracker.get_snapshot(car_idx)
+                            if snapshot:
+                                official_position = self.get_position_from_results(current_session, car_idx)
+                                if official_position > 0:
+                                    snapshot.position = official_position
+
                     # Separate finished and racing drivers to prevent position contamination
                     finished_drivers = [d for d in active_drivers if self.race_state_tracker.is_driver_finished(d['car_idx'])]
                     racing_drivers = [d for d in active_drivers if not self.race_state_tracker.is_driver_finished(d['car_idx'])]

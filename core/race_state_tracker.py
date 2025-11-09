@@ -255,13 +255,12 @@ class RaceStateTracker:
                     # After checkered - get their final position from results, do this every cycle as things can change
                     driver_state.position = get_position_from_results_fn(current_session, car_idx)
 
-                    # Determine if this is a permanent retirement vs brief connection blip
-                    # If they disconnected early (< 60% race completion), they're permanently retired
-                    # If they disconnected late (>= 60% race completion), might be brief connection issue
-                    if race_laps > 0 and driver_state.current_lap < (race_laps * 0.6):
-                        # Permanently retired - mark as finished so gap-filling doesn't reposition them
+                    # After leader has finished, mark ALL disconnected drivers as finished
+                    # This ensures they use ResultsPositions and don't participate in gap-filling
+                    if self.has_leader_finished():
                         driver_state.is_finished = True
-                        logger.debug(f"DISCONNECT - Car {car_idx} retired early (lap {driver_state.current_lap}/{race_laps}), marking as finished with position {driver_state.position}")
+                        self.finished_drivers.add(car_idx)
+                        logger.debug(f"DISCONNECT - Car {car_idx} marked as finished after leader finished, position={driver_state.position}")
 
                 # Skip if snapshot is missing critical fields (minimal snapshot for different class)
                 if not driver_state.driver_info:
