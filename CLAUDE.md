@@ -116,10 +116,53 @@ session_state = self.ir['SessionState'] if 'SessionState' in self.ir else 4  # �
 - Snapshots store DriverState objects - use attribute access with fallbacks for safety
 - Example: `racing_drivers.sort(key=lambda x: x.total_track_position or 0, reverse=True)`
 
+**Disconnected Driver Position Handling:**
+- **During race**: Disconnected drivers marked as DC, position unknown
+- **After leader finishes**: ALL disconnected drivers immediately marked as finished
+- **Finished drivers**: Continuously updated from `ResultsPositions` (iRacing's official results) after checkered flag
+- **Why this works**: No arbitrary thresholds - simple logic that always converges to correct final positions
+- **Network blips**: Self-correcting via continuous `ResultsPositions` updates
+- Implemented in `race_state_tracker.py` `handle_disconnected_drivers()` and `telemetry_processor.py` lines 611-619
+
 ### 4. MULTI-CLASS SUPPORT
 - **Class** = Car types (LMP2, GT3, GT4, etc.)
 - **Division** = Driver groupings within same class
 - Overlay filters to player's class automatically
+
+### 5. CAR-SPECIFIC TIME NORMALIZATION FOR GAP CALCULATIONS
+**The Problem:**
+- iRacing's `CarIdxEstTime` is scaled to each **car's** expected pace (not class or driver skill)
+- Each car model has unique `CarClassEstLapTime` set by iRacing based on car performance
+  - Example: Corvette C8.R GT3: 90.5s, Ferrari 296 GT3: 90.2s, Mustang GT3: 90.8s
+  - Example: GT3 class: ~90s, GT4 class: ~95s
+- `CarIdxEstTime` values are in "car-specific time" and cannot be directly compared
+- Even same-class cars (Corvette vs Ferrari) need normalization for accurate gaps
+
+**The Solution:**
+Normalize using each car's `CarClassEstLapTime` to convert to a common time scale:
+```python
+# Get estimated lap times for each car (iRacing's expected pace for that car model)
+ahead_lap_time = ir['DriverInfo']['Drivers'][car_ahead_idx]['CarClassEstLapTime']
+current_lap_time = ir['DriverInfo']['Drivers'][car_idx]['CarClassEstLapTime']
+
+# Calculate normalization ratio
+normalize_lap_time_pct = ahead_lap_time / current_lap_time
+
+# Normalize car ahead's EstTime to current car's time reference
+normalized_ahead_est_time = ahead_est_time / normalize_lap_time_pct
+```
+
+**Examples:**
+- Multi-class: GT3 (90s) vs GT4 (95s) → normalize by 90/95 = 0.947
+- Same class: Ferrari (90.2s) vs Corvette (90.5s) → normalize by 90.2/90.5 = 0.997
+
+**Edge Cases:**
+- Falls back to non-normalized gaps if lap times unavailable (division by zero protection)
+- Check: `if (ahead_lap_time > 0 and current_lap_time > 0)`
+
+**Implementation:**
+- Location: `telemetry_processor.py` `_calculate_live_race_gap()` lines 465-470
+- Applied before all gap calculations (same lap, different laps, etc.)
 
 ## Common Tasks
 
@@ -253,7 +296,7 @@ lambda pos: self.parent.show_context_menu(driver)  # driver captured by referenc
 
 ## Testing
 
-The project includes comprehensive test coverage with **349 tests** (317 passing, 32 skipped) across multiple test suites:
+The project includes comprehensive test coverage with **354 tests** (322 passing, 32 skipped) across multiple test suites:
 
 ### Test Organization
 ```

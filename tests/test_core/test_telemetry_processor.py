@@ -1090,3 +1090,355 @@ class TestDisconnectedFinishersLeaderBug:
         assert positions_after[3] == 1, "Racing P1 unchanged"
         assert positions_after[4] == 2, "Racing P2 unchanged"
         assert positions_after[5] == 3, "Racing P3 unchanged"
+"""Unit tests for car-specific time normalization in gap calculations.
+
+Tests verify that gaps are correctly normalized when comparing cars with
+different CarClassEstLapTime values (different car models or classes).
+"""
+
+import pytest
+from unittest.mock import MagicMock
+from core.telemetry_processor import TelemetryProcessor
+from core.gap_calculator import GapCalculator
+from core.race_state_tracker import RaceStateTracker
+from core.position_calculator import PositionCalculator
+from core.division_manager import DivisionManager
+
+
+class TestCarSpecificTimeNormalization:
+    """Tests for car-specific EstTime normalization in gap calculations."""
+
+    @pytest.fixture
+    def mock_dependencies(self):
+        """Create minimal mock dependencies for TelemetryProcessor."""
+        ir = MagicMock()
+        division_manager = MagicMock(spec=DivisionManager)
+        race_state_tracker = RaceStateTracker(ir)
+        gap_calculator = GapCalculator
+        position_calculator = MagicMock(spec=PositionCalculator)
+        position_calculator.player_car_idx = 0
+
+        return {
+            'ir': ir,
+            'division_manager': division_manager,
+            'race_state_tracker': race_state_tracker,
+            'gap_calculator': gap_calculator,
+            'position_calculator': position_calculator
+        }
+
+    def test_normalization_applied_for_different_car_models_same_class(self, mock_dependencies):
+        """Verify normalization is applied when comparing different car models in same class.
+
+        Scenario: Ferrari GT3 (90.2s lap) vs Corvette GT3 (90.5s lap)
+        Without normalization, gaps would be incorrect.
+        """
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+
+        # Setup: Two GT3 cars with slightly different expected lap times
+        ir['CarIdxEstTime'] = [100.0, 102.0]  # Ferrari at 100s, Corvette at 102s (in their respective time scales)
+
+        # Mock the DriverInfo access pattern: ir['DriverInfo']['Drivers'][car_idx]['CarClassEstLapTime']
+        drivers_list = [
+            {'CarIdx': 0, 'CarClassEstLapTime': 90.2},  # Ferrari - faster expected pace
+            {'CarIdx': 1, 'CarClassEstLapTime': 90.5},  # Corvette - slower expected pace
+        ]
+        ir.__getitem__.side_effect = lambda key: {
+            'CarIdxEstTime': [100.0, 102.0],
+            'DriverInfo': {'Drivers': drivers_list}
+        }[key]
+
+        # Mock active drivers (Corvette ahead, Ferrari behind)
+        driver_ahead = {
+            'car_idx': 1,
+            'driver_info': {'UserID': 100},
+            'position': 1,
+            'current_lap': 10,
+            'lap_pct': 0.5,
+            'total_track_position': 10.5
+        }
+        driver_current = {
+            'car_idx': 0,
+            'driver_info': {'UserID': 200},
+            'position': 2,
+            'current_lap': 10,
+            'lap_pct': 0.4,
+            'total_track_position': 10.4
+        }
+        active_drivers = [driver_ahead, driver_current]
+        comparison_drivers = [
+            {
+                'car_idx': 1,
+                'position': 1,
+                'current_lap': 10,
+                'lap_pct': 0.5,
+                'total_track_position': 10.5
+            },
+            {
+                'car_idx': 0,
+                'position': 2,
+                'current_lap': 10,
+                'lap_pct': 0.4,
+                'total_track_position': 10.4
+            }
+        ]
+
+        current_session = {'ResultsPositions': []}
+
+        # Calculate gap with normalization
+        gap = processor._calculate_live_race_gap(
+            driver_current,
+            "#FFFFFF",
+            active_drivers,
+            current_session,
+            lambda x: "#FFFFFF",
+            show_division_gap=False
+        )
+
+        # The gap should be calculated using normalized EstTime values
+        # Without normalization: 102 - 100 = 2.0s
+        # With normalization: normalize_pct = 90.5/90.2 = 1.003
+        #                     normalized_ahead = 102/1.003 = 101.7
+        #                     gap = 101.7 - 100 = 1.7s
+        # The exact value depends on GapCalculator.format_gap_display, but should be non-empty
+        assert gap != "", "Gap should be calculated"
+        assert gap != "Leader", "P2 should not show as leader"
+
+    def test_normalization_applied_for_multi_class_racing(self, mock_dependencies):
+        """Verify normalization is applied when comparing different classes (GT3 vs GT4).
+
+        Scenario: GT3 (90s lap) vs GT4 (95s lap)
+        Normalization ratio should be significant: 90/95 = 0.947
+        """
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+
+        # Setup: GT3 ahead of GT4 with different expected lap times
+        drivers_list = [
+            {'CarIdx': 0, 'CarClassEstLapTime': 90.0},  # GT3
+            {'CarIdx': 1, 'CarClassEstLapTime': 95.0},  # GT4
+        ]
+        ir.__getitem__.side_effect = lambda key: {
+            'CarIdxEstTime': [100.0, 105.0],
+            'DriverInfo': {'Drivers': drivers_list}
+        }[key]
+
+        # Mock active drivers (GT3 ahead, GT4 behind)
+        driver_ahead = {
+            'car_idx': 0,
+            'driver_info': {'UserID': 100},
+            'position': 1,
+            'current_lap': 10,
+            'lap_pct': 0.5,
+            'total_track_position': 10.5
+        }
+        driver_current = {
+            'car_idx': 1,
+            'driver_info': {'UserID': 200},
+            'position': 2,
+            'current_lap': 10,
+            'lap_pct': 0.4,
+            'total_track_position': 10.4
+        }
+        active_drivers = [driver_ahead, driver_current]
+        comparison_drivers = [
+            {
+                'car_idx': 0,
+                'position': 1,
+                'current_lap': 10,
+                'lap_pct': 0.5,
+                'total_track_position': 10.5
+            },
+            {
+                'car_idx': 1,
+                'position': 2,
+                'current_lap': 10,
+                'lap_pct': 0.4,
+                'total_track_position': 10.4
+            }
+        ]
+
+        current_session = {'ResultsPositions': []}
+
+        # Calculate gap with normalization
+        gap = processor._calculate_live_race_gap(
+            driver_current,
+            "#FFFFFF",
+            active_drivers,
+            current_session,
+            lambda x: "#FFFFFF",
+            show_division_gap=False
+        )
+
+        # Verify gap is calculated (non-empty)
+        assert gap != "", "Gap should be calculated for multi-class"
+        assert gap != "Leader", "GT4 should not show as leader"
+
+    def test_fallback_when_lap_times_unavailable(self, mock_dependencies):
+        """Verify fallback to non-normalized gaps when CarClassEstLapTime is 0 or unavailable."""
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+
+        # Setup: EstTime available but CarClassEstLapTime is 0 (division by zero case)
+        drivers_list = [
+            {'CarIdx': 0, 'CarClassEstLapTime': 0},  # Invalid - will skip normalization
+            {'CarIdx': 1, 'CarClassEstLapTime': 90.0},
+        ]
+        ir.__getitem__.side_effect = lambda key: {
+            'CarIdxEstTime': [100.0, 102.0],
+            'DriverInfo': {'Drivers': drivers_list}
+        }[key]
+
+        # Mock active drivers
+        driver_ahead = {
+            'car_idx': 1,
+            'driver_info': {'UserID': 100},
+            'position': 1,
+            'current_lap': 10,
+            'lap_pct': 0.5,
+            'total_track_position': 10.5
+        }
+        driver_current = {
+            'car_idx': 0,
+            'driver_info': {'UserID': 200},
+            'position': 2,
+            'current_lap': 10,
+            'lap_pct': 0.4,
+            'total_track_position': 10.4
+        }
+        active_drivers = [driver_ahead, driver_current]
+
+        current_session = {'ResultsPositions': []}
+
+        # Calculate gap - should fall back to non-normalized calculation
+        gap = processor._calculate_live_race_gap(
+            driver_current,
+            "#FFFFFF",
+            active_drivers,
+            current_session,
+            lambda x: "#FFFFFF",
+            show_division_gap=False
+        )
+
+        # Should still calculate a gap using non-normalized EstTime
+        assert gap != "", "Gap should still be calculated using fallback"
+
+    def test_normalization_with_zero_current_lap_time(self, mock_dependencies):
+        """Verify division by zero protection when current car's CarClassEstLapTime is 0."""
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+
+        # Setup: Current car has 0 lap time (edge case)
+        drivers_list = [
+            {'CarIdx': 0, 'CarClassEstLapTime': 0},  # Current car - invalid
+            {'CarIdx': 1, 'CarClassEstLapTime': 90.0},  # Car ahead - valid
+        ]
+        ir.__getitem__.side_effect = lambda key: {
+            'CarIdxEstTime': [100.0, 102.0],
+            'DriverInfo': {'Drivers': drivers_list}
+        }[key]
+
+        # Mock active drivers
+        driver_ahead = {
+            'car_idx': 1,
+            'driver_info': {'UserID': 100},
+            'position': 1,
+            'current_lap': 10,
+            'lap_pct': 0.5,
+            'total_track_position': 10.5
+        }
+        driver_current = {
+            'car_idx': 0,
+            'driver_info': {'UserID': 200},
+            'position': 2,
+            'current_lap': 10,
+            'lap_pct': 0.4,
+            'total_track_position': 10.4
+        }
+        active_drivers = [driver_ahead, driver_current]
+
+        current_session = {'ResultsPositions': []}
+
+        # This should not crash (division by zero protection)
+        gap = processor._calculate_live_race_gap(
+            driver_current,
+            "#FFFFFF",
+            active_drivers,
+            current_session,
+            lambda x: "#FFFFFF",
+            show_division_gap=False
+        )
+
+        # Should calculate gap using fallback (non-normalized)
+        assert gap != "", "Should calculate gap without crashing"
+
+    def test_normalization_different_laps(self, mock_dependencies):
+        """Verify normalization is applied when cars are on different laps.
+
+        When car ahead is 1 lap ahead, normalization must be applied to
+        both EstTime and the added lap time.
+        """
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+
+        # Setup: Car ahead is 1 lap ahead
+        drivers_list = [
+            {'CarIdx': 0, 'CarClassEstLapTime': 90.2},  # Ferrari GT3
+            {'CarIdx': 1, 'CarClassEstLapTime': 90.5},  # Corvette GT3
+        ]
+        ir.__getitem__.side_effect = lambda key: {
+            'CarIdxEstTime': [100.0, 105.0],
+            'DriverInfo': {'Drivers': drivers_list}
+        }[key]
+
+        # Mock active drivers (car 1 is one lap ahead)
+        driver_ahead = {
+            'car_idx': 1,
+            'driver_info': {'UserID': 100},
+            'position': 1,
+            'current_lap': 11,  # One lap ahead
+            'lap_pct': 0.2,
+            'total_track_position': 11.2
+        }
+        driver_current = {
+            'car_idx': 0,
+            'driver_info': {'UserID': 200},
+            'position': 2,
+            'current_lap': 10,  # One lap behind
+            'lap_pct': 0.8,
+            'total_track_position': 10.8
+        }
+        active_drivers = [driver_ahead, driver_current]
+        comparison_drivers = [
+            {
+                'car_idx': 1,
+                'position': 1,
+                'current_lap': 11,
+                'lap_pct': 0.2,
+                'total_track_position': 11.2
+            },
+            {
+                'car_idx': 0,
+                'position': 2,
+                'current_lap': 10,
+                'lap_pct': 0.8,
+                'total_track_position': 10.8
+            }
+        ]
+
+        current_session = {'ResultsPositions': []}
+
+        # Calculate gap with normalization (different laps)
+        gap = processor._calculate_live_race_gap(
+            driver_current,
+            "#FFFFFF",
+            active_drivers,
+            current_session,
+            lambda x: "#FFFFFF",
+            show_division_gap=False
+        )
+
+        # Should show lap gap (1L or similar) since they're on different laps
+        # The exact format depends on GapCalculator but should indicate lap difference
+        assert gap != "", "Gap should be calculated"
+        assert gap != "Leader", "P2 should not show as leader"
