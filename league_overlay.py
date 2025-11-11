@@ -22,7 +22,7 @@ import irsdk
 # Import from modular structure
 from config.constants import (
     UI_CONFIG, FILE_CONFIG, VERSION,
-    UI_COLORS, UI_DIMENSIONS, COLUMN_LAYOUT, TIMING
+    UI_COLORS, UI_DIMENSIONS, COLUMN_LAYOUT, TIMING, TELEMETRY_CONFIG
 )
 from config.settings import SettingsManager
 from config.logging_config import setup_logging, get_logger
@@ -953,17 +953,34 @@ class LeagueOverlay(QMainWindow):
                 4=Racing, 5=Checkered, 6=CoolDown
 
         Returns:
-            Human-readable state name
+            Human-readable state name (includes FCY detection)
         """
         if session_type != "Race":
             return session_type
 
+        # Map session states (some take precedence over FCY)
         state_map = {
             2: "Warmup",
             3: "Pacing",
             5: "Checkered",
             6: "Cool Down"
         }
+
+        # Checkered (5) and Cool Down (6) take precedence over FCY
+        # Once race is over, FCY doesn't matter
+        if session_state >= 5:
+            return state_map.get(session_state, "Race")
+
+        # Check for Full Course Yellow during active racing states
+        try:
+            session_flags = self.ir['SessionFlags']
+            is_fcy = (session_flags & TELEMETRY_CONFIG.FLAG_CAUTION) != 0
+            is_fcy_waving = (session_flags & TELEMETRY_CONFIG.FLAG_CAUTION_WAVING) != 0
+
+            if is_fcy or is_fcy_waving:
+                return "CAUTION"
+        except (KeyError, TypeError):
+            pass  # SessionFlags not available, continue with normal state mapping
 
         return state_map.get(session_state, "Race")
 
@@ -1104,7 +1121,9 @@ class LeagueOverlay(QMainWindow):
 
             # Show detailed session status
             status_text = self._get_session_status_text()
-            self.signals.update_status.emit(status_text, 'green')
+            # Use yellow color for CAUTION state, green otherwise
+            status_color = 'yellow' if 'CAUTION' in status_text else 'green'
+            self.signals.update_status.emit(status_text, status_color)
 
         except Exception as e:
             logger.error(f"GUI update error: {e}", exc_info=True)
