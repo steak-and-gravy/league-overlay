@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 from league_overlay import LeagueOverlay
+from config.constants import TELEMETRY_CONFIG
 
 
 class TestSessionStatusFormatting:
@@ -57,9 +58,47 @@ class TestSessionStatusFormatting:
 
     def test_get_session_state_name_race_unknown_state(self, mock_app):
         """Race in unknown state should default to 'Race'."""
+        mock_app.ir.__getitem__ = Mock(side_effect=KeyError("SessionFlags"))
         assert mock_app._get_session_state_name("Race", 0) == "Race"
         assert mock_app._get_session_state_name("Race", 1) == "Race"
         assert mock_app._get_session_state_name("Race", 99) == "Race"
+
+    def test_get_session_state_name_full_course_yellow(self, mock_app):
+        """Race under Full Course Yellow should return 'CAUTION'."""
+        mock_app.ir.__getitem__ = Mock(return_value=TELEMETRY_CONFIG.FLAG_CAUTION)
+        assert mock_app._get_session_state_name("Race", 4) == "CAUTION"
+
+    def test_get_session_state_name_caution_waving(self, mock_app):
+        """Race with caution waving should return 'CAUTION'."""
+        mock_app.ir.__getitem__ = Mock(return_value=TELEMETRY_CONFIG.FLAG_CAUTION_WAVING)
+        assert mock_app._get_session_state_name("Race", 4) == "CAUTION"
+
+    def test_get_session_state_name_both_caution_flags(self, mock_app):
+        """Race with both caution flags set should return 'CAUTION'."""
+        flags = TELEMETRY_CONFIG.FLAG_CAUTION | TELEMETRY_CONFIG.FLAG_CAUTION_WAVING
+        mock_app.ir.__getitem__ = Mock(return_value=flags)
+        assert mock_app._get_session_state_name("Race", 4) == "CAUTION"
+
+    def test_get_session_state_name_caution_during_racing(self, mock_app):
+        """FCY should override Racing state but not Checkered/CoolDown."""
+        mock_app.ir.__getitem__ = Mock(return_value=TELEMETRY_CONFIG.FLAG_CAUTION)
+        # FCY overrides Racing state
+        assert mock_app._get_session_state_name("Race", 4) == "CAUTION"
+        # But Checkered takes precedence over FCY (race is over)
+        assert mock_app._get_session_state_name("Race", 5) == "Checkered"
+        # Cool Down also takes precedence
+        assert mock_app._get_session_state_name("Race", 6) == "Cool Down"
+
+    def test_get_session_state_name_local_yellow_not_caution(self, mock_app):
+        """Local yellow flag should not trigger CAUTION display."""
+        mock_app.ir.__getitem__ = Mock(return_value=TELEMETRY_CONFIG.FLAG_YELLOW)
+        assert mock_app._get_session_state_name("Race", 4) == "Race"
+
+    def test_get_session_state_name_no_session_flags(self, mock_app):
+        """When SessionFlags unavailable, should fall back to normal state mapping."""
+        mock_app.ir.__getitem__ = Mock(side_effect=KeyError("SessionFlags"))
+        assert mock_app._get_session_state_name("Race", 4) == "Race"
+        assert mock_app._get_session_state_name("Race", 5) == "Checkered"
 
     # ═══════════════════════════════════════════════════════════════════
     # TIME DURATION FORMATTING TESTS

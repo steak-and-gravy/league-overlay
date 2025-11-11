@@ -135,6 +135,24 @@ class TelemetryConfig:
     INVALID_LAP: int = -1
     INVALID_LAP_PCT: float = -1.0
 
+    # iRacing SessionFlags (bitfield values)
+    FLAG_CHECKERED: int = 0x00000001
+    FLAG_WHITE: int = 0x00000002
+    FLAG_GREEN: int = 0x00000004
+    FLAG_YELLOW: int = 0x00000008           # Local yellow
+    FLAG_RED: int = 0x00000010
+    FLAG_BLUE: int = 0x00000020
+    FLAG_DEBRIS: int = 0x00000040
+    FLAG_CROSSED: int = 0x00000080
+    FLAG_YELLOW_WAVING: int = 0x00000100    # Local yellow waving
+    FLAG_ONE_LAP_TO_GREEN: int = 0x00000200
+    FLAG_GREEN_HELD: int = 0x00000400
+    FLAG_TEN_TO_GO: int = 0x00000800
+    FLAG_FIVE_TO_GO: int = 0x00001000
+    FLAG_RANDOM_WAVING: int = 0x00002000
+    FLAG_CAUTION: int = 0x00004000           # Full Course Yellow
+    FLAG_CAUTION_WAVING: int = 0x00008000    # FCY being established
+
 
 # Global configuration instances
 UI_COLORS = UIColors()
