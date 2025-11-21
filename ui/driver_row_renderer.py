@@ -56,29 +56,21 @@ class DriverRowRenderer:
         layout.setContentsMargins(*styling['layout_margins'])
         layout.setSpacing(styling['layout_spacing'])
 
-        # Determine if we're using Default style (which swaps car number and driver name positions)
-        is_default_style = self.parent.settings.row_color_style == "Default"
-
         # Set column stretches
+        # Layout: Position | Div Pos | Driver Name | Car Number | Gap
         layout.setColumnStretch(0, COLUMN_LAYOUT.POS)
         layout.setColumnStretch(1, COLUMN_LAYOUT.DIV_POS)
-        if is_default_style:
-            # Default: Position | Div Pos | Driver Name | Car Number | Gap
-            layout.setColumnStretch(2, COLUMN_LAYOUT.DRIVER_NAME)
-            layout.setColumnStretch(3, COLUMN_LAYOUT.CAR_NUM)
-        else:
-            # Default: Position | Div Pos | Car Number | Driver Name | Gap
-            layout.setColumnStretch(2, COLUMN_LAYOUT.CAR_NUM)
-            layout.setColumnStretch(3, COLUMN_LAYOUT.DRIVER_NAME)
+        layout.setColumnStretch(2, COLUMN_LAYOUT.DRIVER_NAME)
+        layout.setColumnStretch(3, COLUMN_LAYOUT.CAR_NUM)
         layout.setColumnStretch(4, COLUMN_LAYOUT.GAP)
 
         # Determine font weight
         font_weight = "bold" if driver.is_player or self.parent.settings.bold_drivers else "normal"
 
         # Create labels (pass styling for special styles like Default)
-        # Column positions depend on style
-        car_col = 3 if is_default_style else 2
-        name_col = 2 if is_default_style else 3
+        # Car number is always on the right (column 3), driver name on the left (column 2)
+        car_col = 3
+        name_col = 2
 
         self._create_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling)
         self._create_division_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling)

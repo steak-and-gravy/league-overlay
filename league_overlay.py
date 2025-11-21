@@ -529,29 +529,19 @@ class LeagueOverlay(QMainWindow):
         self.header_layout.setContentsMargins(5, 2, 11, 2)
         self.header_layout.setSpacing(2)
 
-        # Column proportions - adjust based on style
-        is_default_style = self.settings.row_color_style == "Default"
-
+        # Column proportions
+        # Layout: Position | Div Pos | Driver Name | Car Number | Gap
         self.header_layout.setColumnStretch(0, COLUMN_LAYOUT.POS)
         self.header_layout.setColumnStretch(1, COLUMN_LAYOUT.DIV_POS)
-        if is_default_style:
-            # Default: Position | Div Pos | Driver Name | Car Number | Gap
-            self.header_layout.setColumnStretch(2, COLUMN_LAYOUT.DRIVER_NAME)
-            self.header_layout.setColumnStretch(3, COLUMN_LAYOUT.CAR_NUM)
-        else:
-            # Default: Position | Div Pos | Car Number | Driver Name | Gap
-            self.header_layout.setColumnStretch(2, COLUMN_LAYOUT.CAR_NUM)
-            self.header_layout.setColumnStretch(3, COLUMN_LAYOUT.DRIVER_NAME)
+        self.header_layout.setColumnStretch(2, COLUMN_LAYOUT.DRIVER_NAME)
+        self.header_layout.setColumnStretch(3, COLUMN_LAYOUT.CAR_NUM)
         self.header_layout.setColumnStretch(4, COLUMN_LAYOUT.GAP)
 
         # Set gap header based on show_division_gap setting
         gap_header = "Div Gap" if self.settings.show_division_gap else "Gap"
 
-        # Set header labels based on style
-        if is_default_style:
-            headers = ["Pos", "D-Pos", "Driver", "Car#", gap_header]
-        else:
-            headers = ["Pos", "D-Pos", "Car#", "Driver", gap_header]
+        # Set header labels
+        headers = ["Pos", "D-Pos", "Driver", "Car#", gap_header]
 
         for i, header in enumerate(headers):
             label = QLabel(header)
