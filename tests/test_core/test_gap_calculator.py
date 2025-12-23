@@ -285,3 +285,198 @@ class TestFormatGapDisplay:
             is_disconnected=False
         )
         assert display == "2L"
+
+
+class TestFormatDeltaDisplay:
+    """Test cases for format_delta_display method."""
+
+    def test_positive_delta_driver_slower(self):
+        """Test positive delta (driver slower than reference)."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=85.5,
+            reference_lap_time=85.0
+        )
+        assert delta == "+0.5"
+
+    def test_negative_delta_driver_faster(self):
+        """Test negative delta (driver faster than reference)."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=84.7,
+            reference_lap_time=85.0
+        )
+        assert delta == "-0.3"
+
+    def test_large_positive_delta(self):
+        """Test large positive delta."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=90.0,
+            reference_lap_time=85.0
+        )
+        assert delta == "+5.0"
+
+    def test_large_negative_delta(self):
+        """Test large negative delta."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=80.0,
+            reference_lap_time=85.0
+        )
+        assert delta == "-5.0"
+
+    def test_very_small_positive_delta(self):
+        """Test very small positive delta rounds correctly."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=85.04,
+            reference_lap_time=85.0
+        )
+        assert delta == "+0.0"
+
+    def test_very_small_negative_delta(self):
+        """Test very small negative delta rounds correctly."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=84.96,
+            reference_lap_time=85.0
+        )
+        assert delta == "-0.0"
+
+    def test_invalid_driver_lap_time_zero(self):
+        """Test invalid driver lap time (zero) returns '--'."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=0.0,
+            reference_lap_time=85.0
+        )
+        assert delta == "--"
+
+    def test_invalid_driver_lap_time_negative(self):
+        """Test invalid driver lap time (negative) returns '--'."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=-1.0,
+            reference_lap_time=85.0
+        )
+        assert delta == "--"
+
+    def test_invalid_driver_lap_time_pit_lap(self):
+        """Test pit lap (999+) returns '--'."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=999.9,
+            reference_lap_time=85.0
+        )
+        assert delta == "--"
+
+    def test_invalid_reference_lap_time_zero(self):
+        """Test invalid reference lap time (zero) returns '--'."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=85.0,
+            reference_lap_time=0.0
+        )
+        assert delta == "--"
+
+    def test_invalid_reference_lap_time_negative(self):
+        """Test invalid reference lap time (negative) returns '--'."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=85.0,
+            reference_lap_time=-1.0
+        )
+        assert delta == "--"
+
+    def test_invalid_reference_lap_time_pit_lap(self):
+        """Test reference pit lap (999+) returns '--'."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=85.0,
+            reference_lap_time=999.9
+        )
+        assert delta == "--"
+
+    def test_both_invalid_returns_dash(self):
+        """Test both lap times invalid returns '--'."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=0.0,
+            reference_lap_time=0.0
+        )
+        assert delta == "--"
+
+    def test_rounding_to_one_decimal(self):
+        """Test delta rounds to 1 decimal place."""
+        delta = GapCalculator.format_delta_display(
+            driver_lap_time=85.567,
+            reference_lap_time=85.0
+        )
+        assert delta == "+0.6"
+
+
+class TestFormatLapTime:
+    """Test cases for format_lap_time method."""
+
+    def test_lap_time_under_60_seconds(self):
+        """Test lap time under 60 seconds shows seconds with 2 decimals."""
+        lap_time = GapCalculator.format_lap_time(45.67)
+        assert lap_time == "45.67"
+
+    def test_lap_time_exactly_60_seconds(self):
+        """Test exactly 60 seconds shows as minutes:seconds."""
+        lap_time = GapCalculator.format_lap_time(60.0)
+        assert lap_time == "1:00.00"
+
+    def test_lap_time_over_60_seconds(self):
+        """Test lap time over 60 seconds shows minutes:seconds."""
+        lap_time = GapCalculator.format_lap_time(84.56)
+        assert lap_time == "1:24.56"
+
+    def test_lap_time_multiple_minutes(self):
+        """Test lap time with multiple minutes."""
+        lap_time = GapCalculator.format_lap_time(145.78)
+        assert lap_time == "2:25.78"
+
+    def test_lap_time_very_short(self):
+        """Test very short lap time (under 10 seconds)."""
+        lap_time = GapCalculator.format_lap_time(8.34)
+        assert lap_time == "8.34"
+
+    def test_lap_time_just_under_60(self):
+        """Test lap time just under 60 seconds."""
+        lap_time = GapCalculator.format_lap_time(59.99)
+        assert lap_time == "59.99"
+
+    def test_lap_time_just_over_60(self):
+        """Test lap time just over 60 seconds."""
+        lap_time = GapCalculator.format_lap_time(60.01)
+        assert lap_time == "1:00.01"
+
+    def test_invalid_lap_time_zero(self):
+        """Test zero lap time returns '--'."""
+        lap_time = GapCalculator.format_lap_time(0.0)
+        assert lap_time == "--"
+
+    def test_invalid_lap_time_negative(self):
+        """Test negative lap time returns '--'."""
+        lap_time = GapCalculator.format_lap_time(-1.0)
+        assert lap_time == "--"
+
+    def test_invalid_lap_time_pit_lap(self):
+        """Test pit lap (999+) returns '--'."""
+        lap_time = GapCalculator.format_lap_time(999.9)
+        assert lap_time == "--"
+
+    def test_invalid_lap_time_threshold(self):
+        """Test lap time at 999 boundary returns '--'."""
+        lap_time = GapCalculator.format_lap_time(999.0)
+        assert lap_time == "--"
+
+    def test_valid_lap_time_just_below_threshold(self):
+        """Test valid lap time just below 999 threshold."""
+        lap_time = GapCalculator.format_lap_time(998.9)
+        assert lap_time == "16:38.90"
+
+    def test_lap_time_rounding_two_decimals(self):
+        """Test lap time rounds to 2 decimal places."""
+        lap_time = GapCalculator.format_lap_time(45.6789)
+        assert lap_time == "45.68"
+
+    def test_lap_time_padding_seconds(self):
+        """Test seconds are padded with leading zero."""
+        lap_time = GapCalculator.format_lap_time(65.34)
+        assert lap_time == "1:05.34"
+
+    def test_lap_time_padding_decimals(self):
+        """Test decimals are padded correctly."""
+        lap_time = GapCalculator.format_lap_time(85.1)
+        assert lap_time == "1:25.10"
