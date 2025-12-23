@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 
 # Application version
-VERSION = "0.9.8.2"
+VERSION = "0.9.8.3"
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,7 @@ class UIDimensions:
     SIZE_GRIP_SIZE: int = 20
     CLOSE_BUTTON_WIDTH: int = 25
     SETTINGS_DIALOG_WIDTH: int = 310
-    SETTINGS_DIALOG_HEIGHT: int = 705
+    SETTINGS_DIALOG_HEIGHT: int = 740
 
 
 @dataclass(frozen=True)

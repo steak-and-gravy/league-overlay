@@ -58,15 +58,30 @@ class DriverRowRenderer:
         layout.setContentsMargins(*styling['layout_margins'])
         layout.setSpacing(styling['layout_spacing'])
 
-        # Set column stretches
-        # Layout: Position | Div Pos | Driver Name | Car Number | Gap | Last Lap | Delta
-        layout.setColumnStretch(0, COLUMN_LAYOUT.POS)
-        layout.setColumnStretch(1, COLUMN_LAYOUT.DIV_POS)
-        layout.setColumnStretch(2, COLUMN_LAYOUT.DRIVER_NAME)
-        layout.setColumnStretch(3, COLUMN_LAYOUT.CAR_NUM)
-        layout.setColumnStretch(4, COLUMN_LAYOUT.GAP)
-        layout.setColumnStretch(5, COLUMN_LAYOUT.LAST_LAP)
-        layout.setColumnStretch(6, COLUMN_LAYOUT.DELTA)
+        # Build column configuration based on settings
+        # Always show: Position | Div Pos | Driver Name | Car Number | Gap
+        # Optional: Last Lap, Delta
+        stretches = [COLUMN_LAYOUT.POS, COLUMN_LAYOUT.DIV_POS, COLUMN_LAYOUT.DRIVER_NAME,
+                     COLUMN_LAYOUT.CAR_NUM, COLUMN_LAYOUT.GAP]
+        current_col = 5  # Next column after Gap
+
+        # Track column indices for optional columns
+        last_lap_col = None
+        delta_col = None
+
+        if self.parent.settings.show_last_lap:
+            stretches.append(COLUMN_LAYOUT.LAST_LAP)
+            last_lap_col = current_col
+            current_col += 1
+
+        if self.parent.settings.show_delta:
+            stretches.append(COLUMN_LAYOUT.DELTA)
+            delta_col = current_col
+            current_col += 1
+
+        # Apply column stretches
+        for col_idx, stretch in enumerate(stretches):
+            layout.setColumnStretch(col_idx, stretch)
 
         # Determine font weight
         font_weight = "bold" if driver.is_player or self.parent.settings.bold_drivers else "normal"
@@ -81,8 +96,13 @@ class DriverRowRenderer:
         self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_col)
         self._create_driver_name_label(layout, driver, text_color, label_bg, label_border, font_weight, name_col)
         self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight)
-        self._create_last_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight)
-        self._create_delta_label(layout, driver, delta_faster_color, delta_slower_color, gap_color, label_bg, label_border, font_weight)
+
+        # Add optional columns
+        if last_lap_col is not None:
+            self._create_last_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, last_lap_col)
+
+        if delta_col is not None:
+            self._create_delta_label(layout, driver, delta_faster_color, delta_slower_color, gap_color, label_bg, label_border, font_weight, delta_col)
 
         # Set context menu for row widget
         row_widget.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -217,7 +237,7 @@ class DriverRowRenderer:
 
     def _create_delta_label(self, layout: QGridLayout, driver: DriverState, delta_faster_color: str,
                            delta_slower_color: str, default_color: str, label_bg: str,
-                           label_border: str, font_weight: str) -> None:
+                           label_border: str, font_weight: str, column: int = 6) -> None:
         """Create delta label with style-specific colors.
 
         Args:
@@ -253,10 +273,10 @@ class DriverRowRenderer:
         delta_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
-        layout.addWidget(delta_label, 0, 6)
+        layout.addWidget(delta_label, 0, column)
 
     def _create_last_lap_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
-                               label_bg: str, label_border: str, font_weight: str) -> None:
+                               label_bg: str, label_border: str, font_weight: str, column: int = 5) -> None:
         """Create last lap time label.
 
         Args:
@@ -282,4 +302,4 @@ class DriverRowRenderer:
         last_lap_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
-        layout.addWidget(last_lap_label, 0, 5)
+        layout.addWidget(last_lap_label, 0, column)

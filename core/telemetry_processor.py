@@ -354,7 +354,7 @@ class TelemetryProcessor:
     # ═══════════════════════════════════════════════════════════════════════════
 
     def _calculate_delta(self, driver_lap_time: float, all_drivers_with_colors: List[Dict],
-                        car_idx_last_lap: list, current_driver_color: str) -> str:
+                        car_idx_last_lap: list, current_driver_color: str, car_idx: int) -> str:
         """Calculate delta lap time comparison.
 
         When driving: Compare to player's last lap time
@@ -365,6 +365,7 @@ class TelemetryProcessor:
             all_drivers_with_colors: List of all drivers with division info
             car_idx_last_lap: Array of last lap times indexed by car_idx
             current_driver_color: Driver's division color
+            car_idx: Current driver's car index
 
         Returns:
             Formatted delta string (e.g., "+0.5", "-0.3", "--")
@@ -372,10 +373,12 @@ class TelemetryProcessor:
         # Determine reference lap time based on driving vs spectating
         player_car_idx = self.position_calculator.player_car_idx
         reference_lap_time = 0.0
+        reference_car_idx = None
 
         if player_car_idx is not None:
             # DRIVING MODE: Compare to player's last lap
             reference_lap_time = car_idx_last_lap[player_car_idx]
+            reference_car_idx = player_car_idx
             # If player hasn't completed a lap yet, don't show delta for anyone
             if reference_lap_time <= 0 or reference_lap_time >= 999:
                 return "--"
@@ -387,6 +390,11 @@ class TelemetryProcessor:
                 division_drivers.sort(key=lambda x: x['position'])
                 division_leader_idx = division_drivers[0]['car_idx']
                 reference_lap_time = car_idx_last_lap[division_leader_idx]
+                reference_car_idx = division_leader_idx
+
+        # If this is the reference driver, show "--" instead of "+0.0"
+        if car_idx == reference_car_idx:
+            return "--"
 
         # Format the delta using GapCalculator
         return GapCalculator.format_delta_display(driver_lap_time, reference_lap_time)
@@ -782,7 +790,8 @@ class TelemetryProcessor:
                     last_lap_time,
                     all_drivers_with_colors,
                     car_idx_last_lap,
-                    current_driver_color
+                    current_driver_color,
+                    car_idx
                 )
 
                 # Build and append race data entry

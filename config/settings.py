@@ -33,6 +33,8 @@ class AppSettings:
     center_drivers: bool = False
     bold_drivers: bool = True
     show_division_gap: bool = True
+    show_last_lap: bool = False
+    show_delta: bool = False
     log_level: str = "INFO"
 
     # Configuration files
@@ -116,6 +118,8 @@ class SettingsManager:
                 'center_drivers': settings.center_drivers,
                 'bold_drivers': settings.bold_drivers,
                 'show_division_gap': settings.show_division_gap,
+                'show_last_lap': settings.show_last_lap,
+                'show_delta': settings.show_delta,
                 'font_size': settings.font_size,
                 'row_color_style': settings.row_color_style,
                 'log_level': settings.log_level
@@ -158,6 +162,8 @@ class SettingsManager:
             'center_drivers': settings.center_drivers,
             'bold_drivers': settings.bold_drivers,
             'show_division_gap': settings.show_division_gap,
+            'show_last_lap': settings.show_last_lap,
+            'show_delta': settings.show_delta,
             'font_size': settings.font_size,
             'row_color_style': settings.row_color_style,
             'log_level': settings.log_level

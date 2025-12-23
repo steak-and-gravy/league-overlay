@@ -84,8 +84,8 @@ class GapCalculator:
 
         Returns:
             Formatted lap time string:
-            - "1:24.5" for times >= 60 seconds
-            - "58.3" for times < 60 seconds
+            - "1:24.56" for times >= 60 seconds
+            - "58.34" for times < 60 seconds
             - "--" if no valid data
         """
         # Check for invalid lap times (no data, pit lap, invalid lap)
@@ -94,8 +94,8 @@ class GapCalculator:
 
         # Format based on duration
         if lap_time < 60:
-            return f"{lap_time:.1f}"
+            return f"{lap_time:.2f}"
         else:
             minutes = int(lap_time // 60)
             seconds = lap_time % 60
-            return f"{minutes}:{seconds:04.1f}"
+            return f"{minutes}:{seconds:05.2f}"
