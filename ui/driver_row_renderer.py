@@ -59,13 +59,14 @@ class DriverRowRenderer:
         layout.setSpacing(styling['layout_spacing'])
 
         # Set column stretches
-        # Layout: Position | Div Pos | Driver Name | Car Number | Gap | Delta
+        # Layout: Position | Div Pos | Driver Name | Car Number | Gap | Last Lap | Delta
         layout.setColumnStretch(0, COLUMN_LAYOUT.POS)
         layout.setColumnStretch(1, COLUMN_LAYOUT.DIV_POS)
         layout.setColumnStretch(2, COLUMN_LAYOUT.DRIVER_NAME)
         layout.setColumnStretch(3, COLUMN_LAYOUT.CAR_NUM)
         layout.setColumnStretch(4, COLUMN_LAYOUT.GAP)
-        layout.setColumnStretch(5, COLUMN_LAYOUT.DELTA)
+        layout.setColumnStretch(5, COLUMN_LAYOUT.LAST_LAP)
+        layout.setColumnStretch(6, COLUMN_LAYOUT.DELTA)
 
         # Determine font weight
         font_weight = "bold" if driver.is_player or self.parent.settings.bold_drivers else "normal"
@@ -80,6 +81,7 @@ class DriverRowRenderer:
         self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_col)
         self._create_driver_name_label(layout, driver, text_color, label_bg, label_border, font_weight, name_col)
         self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight)
+        self._create_last_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight)
         self._create_delta_label(layout, driver, delta_faster_color, delta_slower_color, gap_color, label_bg, label_border, font_weight)
 
         # Set context menu for row widget
@@ -251,4 +253,33 @@ class DriverRowRenderer:
         delta_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
-        layout.addWidget(delta_label, 0, 5)
+        layout.addWidget(delta_label, 0, 6)
+
+    def _create_last_lap_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
+                               label_bg: str, label_border: str, font_weight: str) -> None:
+        """Create last lap time label.
+
+        Args:
+            layout: Grid layout to add label to
+            driver: Driver state containing last lap time
+            text_color: Text color (gap_color - white)
+            label_bg: Background color
+            label_border: Border style
+            font_weight: Font weight
+        """
+        last_lap_label = QLabel(driver.last_lap)
+        last_lap_label.setStyleSheet(f"""
+            QLabel {{
+                color: {text_color};
+                background-color: {label_bg};
+                font-size: {self.parent.get_font_size('data')};
+                font-weight: {font_weight};
+                {label_border}
+            }}
+        """)
+        last_lap_label.setAlignment(Qt.AlignCenter)
+        last_lap_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        last_lap_label.customContextMenuRequested.connect(
+            lambda pos, d=driver: self.parent.show_context_menu(d)
+        )
+        layout.addWidget(last_lap_label, 0, 5)

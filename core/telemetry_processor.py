@@ -283,6 +283,9 @@ class TelemetryProcessor:
         is_player = (car_idx == self.position_calculator.player_car_idx)
         is_disconnected = driver.get('disconnected', False)
 
+        # Format last lap time for display
+        last_lap_display = GapCalculator.format_lap_time(last_lap_time)
+
         return DriverState(
             car_idx=car_idx,
             driver_info=driver_info,
@@ -292,6 +295,7 @@ class TelemetryProcessor:
             division_name=division_name,
             gap=gap if not is_disconnected else "(DC)",
             delta=delta,
+            last_lap=last_lap_display,
             last_lap_time=last_lap_time,
             best_lap_time=best_lap_time,
             is_player=is_player,

@@ -530,19 +530,20 @@ class LeagueOverlay(QMainWindow):
         self.header_layout.setSpacing(2)
 
         # Column proportions
-        # Layout: Position | Div Pos | Driver Name | Car Number | Gap | Delta
+        # Layout: Position | Div Pos | Driver Name | Car Number | Gap | Last Lap | Delta
         self.header_layout.setColumnStretch(0, COLUMN_LAYOUT.POS)
         self.header_layout.setColumnStretch(1, COLUMN_LAYOUT.DIV_POS)
         self.header_layout.setColumnStretch(2, COLUMN_LAYOUT.DRIVER_NAME)
         self.header_layout.setColumnStretch(3, COLUMN_LAYOUT.CAR_NUM)
         self.header_layout.setColumnStretch(4, COLUMN_LAYOUT.GAP)
-        self.header_layout.setColumnStretch(5, COLUMN_LAYOUT.DELTA)
+        self.header_layout.setColumnStretch(5, COLUMN_LAYOUT.LAST_LAP)
+        self.header_layout.setColumnStretch(6, COLUMN_LAYOUT.DELTA)
 
         # Set gap header based on show_division_gap setting
         gap_header = "Div Gap" if self.settings.show_division_gap else "Gap"
 
         # Set header labels
-        headers = ["Pos", "D-Pos", "Driver", "Car#", gap_header, "Delta"]
+        headers = ["Pos", "D-Pos", "Driver", "Car#", gap_header, "Last Lap", "Delta"]
 
         for i, header in enumerate(headers):
             label = QLabel(header)
@@ -901,6 +902,7 @@ class LeagueOverlay(QMainWindow):
             if (new_driver.car_idx != old_driver.car_idx or
                 new_driver.gap != old_driver.gap or
                 new_driver.delta != old_driver.delta or
+                new_driver.last_lap != old_driver.last_lap or
                 new_position != old_position or
                 new_driver.division_position != old_driver.division_position or
                 new_driver.car_number != old_driver.car_number or
