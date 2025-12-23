@@ -27,6 +27,8 @@ class ColorStyleStrategy(ABC):
                 - container_widget: Optional container widget (for borders, etc.)
                 - text_color: Color for text labels
                 - gap_color: Color for gap label
+                - delta_faster_color: Color for positive delta (you're faster)
+                - delta_slower_color: Color for negative delta (you're slower)
                 - label_bg: Background color for labels
                 - label_border: CSS border style for labels
                 - layout_margins: Tuple of (left, top, right, bottom) margins
@@ -41,6 +43,8 @@ class DarkColorStyle(ColorStyleStrategy):
     def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
         text_color = driver.division_color
         gap_color = "white"
+        delta_faster_color = "#00FF00"  # Bright green - good contrast on black
+        delta_slower_color = "#FF6666"  # Bright red - good contrast on black
 
         if driver.is_player:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
@@ -57,6 +61,8 @@ class DarkColorStyle(ColorStyleStrategy):
             'container_widget': None,
             'text_color': text_color,
             'gap_color': gap_color,
+            'delta_faster_color': delta_faster_color,
+            'delta_slower_color': delta_slower_color,
             'label_bg': label_bg,
             'label_border': '',
             'layout_margins': (2, 2, 2, 2),
@@ -72,6 +78,8 @@ class AlternateColorStyle(ColorStyleStrategy):
         bg_style = f"background-color: {parent.get_bg_color(base_bg)};"
         text_color = "#000000"
         gap_color = "#000000"
+        delta_faster_color = "#006400"  # Dark green - good contrast on bright backgrounds
+        delta_slower_color = "#8B0000"  # Dark red - good contrast on bright backgrounds
         label_bg = parent.get_bg_color(base_bg)
 
         if driver.is_player:
@@ -93,6 +101,8 @@ class AlternateColorStyle(ColorStyleStrategy):
                 'container_widget': container_widget,
                 'text_color': text_color,
                 'gap_color': gap_color,
+                'delta_faster_color': delta_faster_color,
+                'delta_slower_color': delta_slower_color,
                 'label_bg': label_bg,
                 'label_border': '',
                 'layout_margins': (2, 2, 2, 2),
@@ -107,6 +117,8 @@ class AlternateColorStyle(ColorStyleStrategy):
                 'container_widget': None,
                 'text_color': text_color,
                 'gap_color': gap_color,
+                'delta_faster_color': delta_faster_color,
+                'delta_slower_color': delta_slower_color,
                 'label_bg': label_bg,
                 'label_border': '',
                 'layout_margins': (2, 2, 2, 2),
@@ -120,6 +132,8 @@ class OutlineColorStyle(ColorStyleStrategy):
     def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
         text_color = driver.division_color
         gap_color = "white"
+        delta_faster_color = "#00FF00"  # Bright green - good contrast on black
+        delta_slower_color = "#FF6666"  # Bright red - good contrast on black
         label_bg = "transparent"
         label_border = "border: none;"
 
@@ -138,6 +152,8 @@ class OutlineColorStyle(ColorStyleStrategy):
             'container_widget': None,
             'text_color': text_color,
             'gap_color': gap_color,
+            'delta_faster_color': delta_faster_color,
+            'delta_slower_color': delta_slower_color,
             'label_bg': label_bg,
             'label_border': label_border,
             'layout_margins': (3, 2, 3, 2),
@@ -151,6 +167,8 @@ class DefaultColorStyle(ColorStyleStrategy):
     def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
         text_color = driver.division_color
         gap_color = "white"
+        delta_faster_color = "#00FF00"  # Bright green - good contrast on black
+        delta_slower_color = "#FF6666"  # Bright red - good contrast on black
         label_bg = parent.get_bg_color('#000000')
         label_border = ''
         position_bg = parent.get_bg_color('#FF0000')
@@ -171,6 +189,8 @@ class DefaultColorStyle(ColorStyleStrategy):
             'container_widget': None,
             'text_color': text_color,
             'gap_color': gap_color,
+            'delta_faster_color': delta_faster_color,
+            'delta_slower_color': delta_slower_color,
             'label_bg': label_bg,  # Default background (driver name, gap)
             'label_border': label_border,
             'layout_margins': (2, 2, 2, 2),

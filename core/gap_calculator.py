@@ -44,3 +44,33 @@ class GapCalculator:
                 return f"{minutes}:{seconds:04.1f}"
 
         return "-"
+
+    @staticmethod
+    def format_delta_display(driver_lap_time: float, reference_lap_time: float) -> str:
+        """Format delta lap time comparison for display.
+
+        Args:
+            driver_lap_time: Driver's last lap time
+            reference_lap_time: Reference lap time (player or division leader)
+
+        Returns:
+            Formatted delta string:
+            - Positive ("+0.5") means driver was slower than reference
+            - Negative ("-0.3") means driver was faster than reference
+            - "--" if no valid data
+        """
+        # Check for invalid lap times (no data, pit lap, invalid lap)
+        if driver_lap_time <= 0 or driver_lap_time >= 999:
+            return "--"
+
+        if reference_lap_time <= 0 or reference_lap_time >= 999:
+            return "--"
+
+        # Calculate delta (driver - reference)
+        delta = driver_lap_time - reference_lap_time
+
+        # Format with sign and 1 decimal place
+        if delta >= 0:
+            return f"+{delta:.1f}"
+        else:
+            return f"{delta:.1f}"  # Already has negative sign

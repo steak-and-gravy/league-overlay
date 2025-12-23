@@ -48,6 +48,8 @@ class DriverRowRenderer:
         container_widget = styling['container_widget']
         text_color = styling['text_color']
         gap_color = styling['gap_color']
+        delta_faster_color = styling['delta_faster_color']
+        delta_slower_color = styling['delta_slower_color']
         label_bg = styling['label_bg']
         label_border = styling['label_border']
 
@@ -57,12 +59,13 @@ class DriverRowRenderer:
         layout.setSpacing(styling['layout_spacing'])
 
         # Set column stretches
-        # Layout: Position | Div Pos | Driver Name | Car Number | Gap
+        # Layout: Position | Div Pos | Driver Name | Car Number | Gap | Delta
         layout.setColumnStretch(0, COLUMN_LAYOUT.POS)
         layout.setColumnStretch(1, COLUMN_LAYOUT.DIV_POS)
         layout.setColumnStretch(2, COLUMN_LAYOUT.DRIVER_NAME)
         layout.setColumnStretch(3, COLUMN_LAYOUT.CAR_NUM)
         layout.setColumnStretch(4, COLUMN_LAYOUT.GAP)
+        layout.setColumnStretch(5, COLUMN_LAYOUT.DELTA)
 
         # Determine font weight
         font_weight = "bold" if driver.is_player or self.parent.settings.bold_drivers else "normal"
@@ -77,6 +80,7 @@ class DriverRowRenderer:
         self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_col)
         self._create_driver_name_label(layout, driver, text_color, label_bg, label_border, font_weight, name_col)
         self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight)
+        self._create_delta_label(layout, driver, delta_faster_color, delta_slower_color, gap_color, label_bg, label_border, font_weight)
 
         # Set context menu for row widget
         row_widget.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -208,3 +212,43 @@ class DriverRowRenderer:
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(gap_label, 0, 4)
+
+    def _create_delta_label(self, layout: QGridLayout, driver: DriverState, delta_faster_color: str,
+                           delta_slower_color: str, default_color: str, label_bg: str,
+                           label_border: str, font_weight: str) -> None:
+        """Create delta label with style-specific colors.
+
+        Args:
+            layout: Grid layout to add label to
+            driver: Driver state containing delta value
+            delta_faster_color: Color for positive delta (you're faster)
+            delta_slower_color: Color for negative delta (you're slower)
+            default_color: Fallback color for no data ("--")
+            label_bg: Background color
+            label_border: Border style
+            font_weight: Font weight
+        """
+        # Color code deltas: green for positive (you're faster), red for negative (you're slower)
+        if driver.delta.startswith('+'):
+            delta_display_color = delta_faster_color  # Green - they're slower than you (you're faster)
+        elif driver.delta.startswith('-'):
+            delta_display_color = delta_slower_color  # Red - they're faster than you (you're slower)
+        else:
+            delta_display_color = default_color  # Default color for "--"
+
+        delta_label = QLabel(driver.delta)
+        delta_label.setStyleSheet(f"""
+            QLabel {{
+                color: {delta_display_color};
+                background-color: {label_bg};
+                font-size: {self.parent.get_font_size('data')};
+                font-weight: {font_weight};
+                {label_border}
+            }}
+        """)
+        delta_label.setAlignment(Qt.AlignCenter)
+        delta_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        delta_label.customContextMenuRequested.connect(
+            lambda pos, d=driver: self.parent.show_context_menu(d)
+        )
+        layout.addWidget(delta_label, 0, 5)

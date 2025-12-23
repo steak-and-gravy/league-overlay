@@ -85,11 +85,24 @@ class DriverState:
     """True if this is the player's car"""
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # GAP DISPLAY
+    # LAP TIMES
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    last_lap_time: float = 0.0
+    """Driver's most recent completed lap time in seconds (from CarIdxLastLapTime)"""
+
+    best_lap_time: float = 0.0
+    """Driver's best lap time this session in seconds (from CarIdxBestLapTime)"""
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # GAP AND DELTA DISPLAY
     # ═══════════════════════════════════════════════════════════════════════════
 
     gap: str = ""
     """Formatted gap string for display (e.g., "+2.5s", "1 Lap", "Leader")"""
+
+    delta: str = ""
+    """Formatted delta lap time comparison for display (e.g., "+0.5", "-0.3", "--")"""
 
     # ═══════════════════════════════════════════════════════════════════════════
     # COMPUTED PROPERTIES
