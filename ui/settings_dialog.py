@@ -305,6 +305,20 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row2)
 
+        checkbox_row3 = QHBoxLayout()
+
+        self.show_last_lap_cb = QCheckBox("Show last lap")
+        self.show_last_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
+        self.show_last_lap_cb.setChecked(self.parent_overlay.settings.show_last_lap)
+        checkbox_row3.addWidget(self.show_last_lap_cb)
+
+        self.show_delta_cb = QCheckBox("Show delta")
+        self.show_delta_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
+        self.show_delta_cb.setChecked(self.parent_overlay.settings.show_delta)
+        checkbox_row3.addWidget(self.show_delta_cb)
+
+        window_layout.addLayout(checkbox_row3)
+
         layout.addWidget(window_group)
         
         # Division colors
@@ -587,6 +601,8 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.center_drivers = self.center_drivers_cb.isChecked()
             self.parent_overlay.settings.bold_drivers = self.bold_drivers_cb.isChecked()
             self.parent_overlay.settings.show_division_gap = self.show_division_gap_cb.isChecked()
+            self.parent_overlay.settings.show_last_lap = self.show_last_lap_cb.isChecked()
+            self.parent_overlay.settings.show_delta = self.show_delta_cb.isChecked()
             self.parent_overlay.settings.font_size = self.font_size_combo.currentText()
             self.parent_overlay.settings.row_color_style = self.color_style_combo.currentText()
 

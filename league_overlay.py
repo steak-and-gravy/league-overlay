@@ -529,22 +529,29 @@ class LeagueOverlay(QMainWindow):
         self.header_layout.setContentsMargins(5, 2, 11, 2)
         self.header_layout.setSpacing(2)
 
-        # Column proportions
-        # Layout: Position | Div Pos | Driver Name | Car Number | Gap | Last Lap | Delta
-        self.header_layout.setColumnStretch(0, COLUMN_LAYOUT.POS)
-        self.header_layout.setColumnStretch(1, COLUMN_LAYOUT.DIV_POS)
-        self.header_layout.setColumnStretch(2, COLUMN_LAYOUT.DRIVER_NAME)
-        self.header_layout.setColumnStretch(3, COLUMN_LAYOUT.CAR_NUM)
-        self.header_layout.setColumnStretch(4, COLUMN_LAYOUT.GAP)
-        self.header_layout.setColumnStretch(5, COLUMN_LAYOUT.LAST_LAP)
-        self.header_layout.setColumnStretch(6, COLUMN_LAYOUT.DELTA)
-
-        # Set gap header based on show_division_gap setting
+        # Build column configuration based on settings
+        # Always show: Position | Div Pos | Driver Name | Car Number | Gap
+        # Optional: Last Lap, Delta
         gap_header = "Div Gap" if self.settings.show_division_gap else "Gap"
 
-        # Set header labels
-        headers = ["Pos", "D-Pos", "Driver", "Car#", gap_header, "Last Lap", "Delta"]
+        headers = ["Pos", "D-Pos", "Driver", "Car#", gap_header]
+        stretches = [COLUMN_LAYOUT.POS, COLUMN_LAYOUT.DIV_POS, COLUMN_LAYOUT.DRIVER_NAME,
+                     COLUMN_LAYOUT.CAR_NUM, COLUMN_LAYOUT.GAP]
 
+        # Add optional columns
+        if self.settings.show_last_lap:
+            headers.append("Last Lap")
+            stretches.append(COLUMN_LAYOUT.LAST_LAP)
+
+        if self.settings.show_delta:
+            headers.append("Delta")
+            stretches.append(COLUMN_LAYOUT.DELTA)
+
+        # Apply column stretches
+        for col_idx, stretch in enumerate(stretches):
+            self.header_layout.setColumnStretch(col_idx, stretch)
+
+        # Create header labels
         for i, header in enumerate(headers):
             label = QLabel(header)
             label.setStyleSheet(f"""
@@ -899,17 +906,25 @@ class LeagueOverlay(QMainWindow):
             new_position = new_driver.position
             old_position = old_driver.position
 
-            if (new_driver.car_idx != old_driver.car_idx or
-                new_driver.gap != old_driver.gap or
-                new_driver.delta != old_driver.delta or
-                new_driver.last_lap != old_driver.last_lap or
-                new_position != old_position or
-                new_driver.division_position != old_driver.division_position or
-                new_driver.car_number != old_driver.car_number or
-                new_driver.driver_name != old_driver.driver_name or
-                new_driver.is_player != old_driver.is_player or
-                new_driver.is_finished != old_driver.is_finished or
-                new_driver.division_name != old_driver.division_name):
+            # Build comparison based on visible columns
+            changes = (new_driver.car_idx != old_driver.car_idx or
+                       new_driver.gap != old_driver.gap or
+                       new_position != old_position or
+                       new_driver.division_position != old_driver.division_position or
+                       new_driver.car_number != old_driver.car_number or
+                       new_driver.driver_name != old_driver.driver_name or
+                       new_driver.is_player != old_driver.is_player or
+                       new_driver.is_finished != old_driver.is_finished or
+                       new_driver.division_name != old_driver.division_name)
+
+            # Check optional columns only if they're enabled
+            if self.settings.show_delta:
+                changes = changes or (new_driver.delta != old_driver.delta)
+
+            if self.settings.show_last_lap:
+                changes = changes or (new_driver.last_lap != old_driver.last_lap)
+
+            if changes:
                 return True
 
         return False

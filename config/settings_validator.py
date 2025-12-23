@@ -122,6 +122,16 @@ class SettingsValidator:
             default=True,  # Match AppSettings default
             field_name='show_division_gap'
         )
+        validated['show_last_lap'] = self.coerce_bool(
+            data.get('show_last_lap'),
+            default=False,  # Match AppSettings default
+            field_name='show_last_lap'
+        )
+        validated['show_delta'] = self.coerce_bool(
+            data.get('show_delta'),
+            default=False,  # Match AppSettings default
+            field_name='show_delta'
+        )
 
         # Enum fields (limited valid values)
         validated['font_size'] = self.coerce_enum(
