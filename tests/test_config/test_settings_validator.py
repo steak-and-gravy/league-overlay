@@ -510,3 +510,107 @@ class TestCoerceString:
         validator = SettingsValidator()
         result = validator.coerce_string(123, default="default.json", field_name='config')
         assert result == "default.json"
+
+
+class TestNewDisplaySettings:
+    """Test cases for show_last_lap and show_delta boolean settings."""
+
+    def test_show_last_lap_default_false(self):
+        """Test show_last_lap defaults to False."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['show_last_lap'] is False
+
+    def test_show_delta_default_false(self):
+        """Test show_delta defaults to False."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['show_delta'] is False
+
+    def test_show_last_lap_true(self):
+        """Test show_last_lap can be set to True."""
+        validator = SettingsValidator()
+        data = {'show_last_lap': True}
+        result = validator.validate_and_coerce(data)
+        assert result['show_last_lap'] is True
+
+    def test_show_delta_true(self):
+        """Test show_delta can be set to True."""
+        validator = SettingsValidator()
+        data = {'show_delta': True}
+        result = validator.validate_and_coerce(data)
+        assert result['show_delta'] is True
+
+    def test_show_last_lap_string_coercion(self):
+        """Test show_last_lap string coercion."""
+        validator = SettingsValidator()
+        data = {'show_last_lap': "true"}
+        result = validator.validate_and_coerce(data)
+        assert result['show_last_lap'] is True
+
+    def test_show_delta_string_coercion(self):
+        """Test show_delta string coercion."""
+        validator = SettingsValidator()
+        data = {'show_delta': "false"}
+        result = validator.validate_and_coerce(data)
+        assert result['show_delta'] is False
+
+    def test_show_last_lap_numeric_coercion(self):
+        """Test show_last_lap numeric coercion."""
+        validator = SettingsValidator()
+        data = {'show_last_lap': 1}
+        result = validator.validate_and_coerce(data)
+        assert result['show_last_lap'] is True
+
+    def test_show_delta_numeric_coercion(self):
+        """Test show_delta numeric coercion."""
+        validator = SettingsValidator()
+        data = {'show_delta': 0}
+        result = validator.validate_and_coerce(data)
+        assert result['show_delta'] is False
+
+    def test_both_settings_together(self):
+        """Test both show_last_lap and show_delta can be set together."""
+        validator = SettingsValidator()
+        data = {
+            'show_last_lap': True,
+            'show_delta': True
+        }
+        result = validator.validate_and_coerce(data)
+        assert result['show_last_lap'] is True
+        assert result['show_delta'] is True
+
+    def test_show_last_lap_invalid_returns_default(self):
+        """Test invalid show_last_lap value returns default."""
+        validator = SettingsValidator()
+        data = {'show_last_lap': 'maybe'}
+        result = validator.validate_and_coerce(data)
+        assert result['show_last_lap'] is False
+
+    def test_show_delta_invalid_returns_default(self):
+        """Test invalid show_delta value returns default."""
+        validator = SettingsValidator()
+        data = {'show_delta': [True]}
+        result = validator.validate_and_coerce(data)
+        assert result['show_delta'] is False
+
+    def test_complete_settings_with_display_columns(self):
+        """Test complete settings including new display columns."""
+        validator = SettingsValidator()
+        data = {
+            'width': 500,
+            'opacity': 0.8,
+            'show_division_gap': True,
+            'show_last_lap': True,
+            'show_delta': True,
+            'font_size': 'Large'
+        }
+        result = validator.validate_and_coerce(data)
+        assert result['width'] == 500
+        assert result['opacity'] == 0.8
+        assert result['show_division_gap'] is True
+        assert result['show_last_lap'] is True
+        assert result['show_delta'] is True
+        assert result['font_size'] == 'Large'
