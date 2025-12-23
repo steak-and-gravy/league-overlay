@@ -33,37 +33,47 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(5)
-        
+
+        # Create two-column layout
+        columns_layout = QHBoxLayout()
+        columns_layout.setSpacing(10)
+
+        # LEFT COLUMN
+        left_column = QVBoxLayout()
+        left_column.setSpacing(5)
+
         # Config section
         config_group = QFrame()
         config_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
+        config_group.setMinimumWidth(295)
+        config_group.setMaximumWidth(295)
         config_layout = QVBoxLayout(config_group)
         config_layout.setSpacing(8)
-        
+
         config_title = QLabel("Driver Color Configuration")
         config_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
         config_layout.addWidget(config_title)
-        
+
         # Current config row
         config_file_layout = QHBoxLayout()
         config_file_label = QLabel("Current config file:")
         config_file_label.setStyleSheet("font-size: 9pt; color: white; border: none;")
         config_file_layout.addWidget(config_file_label)
-        
+
         self.current_config_label = QLabel(os.path.basename(self.parent_overlay.color_config_file))
         self.current_config_label.setStyleSheet("""
-            font-size: 8pt; 
-            color: white; 
-            border: none; 
+            font-size: 8pt;
+            color: white;
+            border: none;
             background-color: #404040;
             padding: 2px 6px;
         """)
         config_file_layout.addWidget(self.current_config_label, 1)
         config_layout.addLayout(config_file_layout)
-        
+
         config_btn_layout = QHBoxLayout()
         config_btn_layout.setSpacing(5)
-        
+
         new_config_btn = QPushButton("Create New")
         new_config_btn.setStyleSheet("""
             QPushButton {
@@ -79,7 +89,7 @@ class SettingsDialog(QDialog):
         """)
         new_config_btn.clicked.connect(self.create_new_config)
         config_btn_layout.addWidget(new_config_btn)
-        
+
         load_config_btn = QPushButton("Load")
         load_config_btn.setStyleSheet("""
             QPushButton {
@@ -95,13 +105,80 @@ class SettingsDialog(QDialog):
         """)
         load_config_btn.clicked.connect(self.load_config)
         config_btn_layout.addWidget(load_config_btn)
-        
+
         config_layout.addLayout(config_btn_layout)
-        layout.addWidget(config_group)
-        
-        # Window settings
+        left_column.addWidget(config_group)
+
+        # Division colors (moved to left column)
+        colors_group = QFrame()
+        colors_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
+        colors_group.setMinimumWidth(295)
+        colors_group.setMaximumWidth(295)
+        colors_layout = QVBoxLayout(colors_group)
+        colors_layout.setSpacing(8)
+
+        colors_title = QLabel("Division Colors")
+        colors_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
+        colors_layout.addWidget(colors_title)
+
+        self.color_buttons = {}
+        self.color_value_labels = {}
+
+        for division in ["Pro", "ProAm", "Am", "Rookie"]:
+            if division not in self.parent_overlay.division_manager.division_colors:
+                continue
+
+            color = self.parent_overlay.division_manager.division_colors[division]
+
+            color_row = QHBoxLayout()
+            color_row.setSpacing(5)
+
+            div_label = QLabel(f"{division}:")
+            div_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 50px;")
+            color_row.addWidget(div_label)
+
+            color_btn = QPushButton()
+            color_btn.setFixedSize(104, 30)  # 30% wider than original 80px
+            color_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color};
+                    border: 2px solid #555555;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #777777;
+                }}
+            """)
+            color_btn.clicked.connect(lambda checked, d=division: self.choose_color(d))
+            self.color_buttons[division] = color_btn
+            color_row.addWidget(color_btn)
+
+            color_value = QLabel(color)
+            color_value.setStyleSheet("""
+                border: none;
+                color: white;
+                font-size: 9pt;
+                background-color: #404040;
+                padding: 2px 4px;
+                min-width: 60px;
+            """)
+            self.color_value_labels[division] = color_value
+            color_row.addWidget(color_value)
+
+            color_row.addStretch()
+            colors_layout.addLayout(color_row)
+
+        left_column.addWidget(colors_group)
+        left_column.addStretch()
+
+        # RIGHT COLUMN
+        right_column = QVBoxLayout()
+        right_column.setSpacing(5)
+
+        # Window settings (moved to right column)
         window_group = QFrame()
         window_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
+        window_group.setMinimumWidth(295)
+        window_group.setMaximumWidth(295)
         window_layout = QVBoxLayout(window_group)
         window_layout.setSpacing(8)
         
@@ -319,66 +396,13 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row3)
 
-        layout.addWidget(window_group)
-        
-        # Division colors
-        colors_group = QFrame()
-        colors_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
-        colors_layout = QVBoxLayout(colors_group)
-        colors_layout.setSpacing(8)
-        
-        colors_title = QLabel("Division Colors")
-        colors_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
-        colors_layout.addWidget(colors_title)
-        
-        self.color_buttons = {}
-        self.color_value_labels = {}
-        
-        for division in ["Pro", "ProAm", "Am", "Rookie"]:
-            if division not in self.parent_overlay.division_manager.division_colors:
-                continue
+        right_column.addWidget(window_group)
 
-            color = self.parent_overlay.division_manager.division_colors[division]
-            
-            color_row = QHBoxLayout()
-            color_row.setSpacing(5)
-            
-            div_label = QLabel(f"{division}:")
-            div_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 50px;")
-            color_row.addWidget(div_label)
-            
-            color_btn = QPushButton()
-            color_btn.setFixedSize(104, 30)  # 30% wider than original 80px
-            color_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {color};
-                    border: 2px solid #555555;
-                }}
-                QPushButton:hover {{
-                    border: 2px solid #777777;
-                }}
-            """)
-            color_btn.clicked.connect(lambda checked, d=division: self.choose_color(d))
-            self.color_buttons[division] = color_btn
-            color_row.addWidget(color_btn)
-            
-            color_value = QLabel(color)
-            color_value.setStyleSheet("""
-                border: none; 
-                color: white; 
-                font-size: 9pt; 
-                background-color: #404040;
-                padding: 2px 4px;
-                min-width: 60px;
-            """)
-            self.color_value_labels[division] = color_value
-            color_row.addWidget(color_value)
-            
-            color_row.addStretch()
-            colors_layout.addLayout(color_row)
-        
-        layout.addWidget(colors_group)
-        
+        # Add columns to main layout with equal stretch factors (1:1 ratio)
+        columns_layout.addLayout(left_column, 1)
+        columns_layout.addLayout(right_column, 1)
+        layout.addLayout(columns_layout)
+
         layout.addStretch()
         
         # Buttons - Top row with Cancel and Apply

@@ -30,8 +30,8 @@ class UIDimensions:
     TITLE_BAR_HEIGHT: int = 30
     SIZE_GRIP_SIZE: int = 20
     CLOSE_BUTTON_WIDTH: int = 25
-    SETTINGS_DIALOG_WIDTH: int = 310
-    SETTINGS_DIALOG_HEIGHT: int = 740
+    SETTINGS_DIALOG_WIDTH: int = 620
+    SETTINGS_DIALOG_HEIGHT: int = 450
 
 
 @dataclass(frozen=True)
