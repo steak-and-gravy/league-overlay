@@ -104,6 +104,9 @@ class DriverState:
     delta: str = ""
     """Formatted delta lap time comparison for display (e.g., "+0.5", "-0.3", "--")"""
 
+    last_lap: str = ""
+    """Formatted last lap time for display (e.g., "1:24.5", "--")"""
+
     # ═══════════════════════════════════════════════════════════════════════════
     # COMPUTED PROPERTIES
     # ═══════════════════════════════════════════════════════════════════════════

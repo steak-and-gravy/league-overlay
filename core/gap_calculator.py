@@ -74,3 +74,28 @@ class GapCalculator:
             return f"+{delta:.1f}"
         else:
             return f"{delta:.1f}"  # Already has negative sign
+
+    @staticmethod
+    def format_lap_time(lap_time: float) -> str:
+        """Format lap time for display.
+
+        Args:
+            lap_time: Lap time in seconds
+
+        Returns:
+            Formatted lap time string:
+            - "1:24.5" for times >= 60 seconds
+            - "58.3" for times < 60 seconds
+            - "--" if no valid data
+        """
+        # Check for invalid lap times (no data, pit lap, invalid lap)
+        if lap_time <= 0 or lap_time >= 999:
+            return "--"
+
+        # Format based on duration
+        if lap_time < 60:
+            return f"{lap_time:.1f}"
+        else:
+            minutes = int(lap_time // 60)
+            seconds = lap_time % 60
+            return f"{minutes}:{seconds:04.1f}"
