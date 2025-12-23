@@ -40,8 +40,9 @@ class ColumnLayout:
     POS: int = 11
     DIV_POS: int = 11
     CAR_NUM: int = 13
-    DRIVER_NAME: int = 46
-    GAP: int = 19
+    DRIVER_NAME: int = 40
+    GAP: int = 16
+    DELTA: int = 16
 
 
 @dataclass(frozen=True)

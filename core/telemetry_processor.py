@@ -260,7 +260,7 @@ class TelemetryProcessor:
     # RACE DATA BUILDING
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], gap: str, display_position: int, division_color: str, division_name: Optional[str]) -> DriverState:
+    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], gap: str, display_position: int, division_color: str, division_name: Optional[str], delta: str = "--", last_lap_time: float = 0.0, best_lap_time: float = 0.0) -> DriverState:
         """Build a single race data entry for display.
 
         Args:
@@ -270,6 +270,9 @@ class TelemetryProcessor:
             display_position: The position to use for display/sorting
             division_color: Hex color code for driver's division
             division_name: Name of driver's division (Pro, ProAm, Am, Rookie, or None)
+            delta: Delta lap time comparison string
+            last_lap_time: Driver's last lap time
+            best_lap_time: Driver's best lap time
 
         Returns:
             DriverState with formatted race data for this driver
@@ -288,6 +291,9 @@ class TelemetryProcessor:
             division_color=division_color,
             division_name=division_name,
             gap=gap if not is_disconnected else "(DC)",
+            delta=delta,
+            last_lap_time=last_lap_time,
+            best_lap_time=best_lap_time,
             is_player=is_player,
             is_disconnected=is_disconnected
         )
@@ -338,6 +344,48 @@ class TelemetryProcessor:
                 )
 
                 self.race_state_tracker.update_snapshot(car_idx, driver_state)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # DELTA CALCULATION
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def _calculate_delta(self, driver_lap_time: float, all_drivers_with_colors: List[Dict],
+                        car_idx_last_lap: list, current_driver_color: str) -> str:
+        """Calculate delta lap time comparison.
+
+        When driving: Compare to player's last lap time
+        When spectating: Compare to division leader's last lap time
+
+        Args:
+            driver_lap_time: Current driver's last lap time
+            all_drivers_with_colors: List of all drivers with division info
+            car_idx_last_lap: Array of last lap times indexed by car_idx
+            current_driver_color: Driver's division color
+
+        Returns:
+            Formatted delta string (e.g., "+0.5", "-0.3", "--")
+        """
+        # Determine reference lap time based on driving vs spectating
+        player_car_idx = self.position_calculator.player_car_idx
+        reference_lap_time = 0.0
+
+        if player_car_idx is not None:
+            # DRIVING MODE: Compare to player's last lap
+            reference_lap_time = car_idx_last_lap[player_car_idx]
+            # If player hasn't completed a lap yet, don't show delta for anyone
+            if reference_lap_time <= 0 or reference_lap_time >= 999:
+                return "--"
+        else:
+            # SPECTATING MODE: Compare to division leader's last lap
+            # Find division leader (position 1 in this division)
+            division_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
+            if division_drivers:
+                division_drivers.sort(key=lambda x: x['position'])
+                division_leader_idx = division_drivers[0]['car_idx']
+                reference_lap_time = car_idx_last_lap[division_leader_idx]
+
+        # Format the delta using GapCalculator
+        return GapCalculator.format_delta_display(driver_lap_time, reference_lap_time)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # GAP CALCULATION
@@ -688,6 +736,15 @@ class TelemetryProcessor:
             division_positions, all_drivers_with_colors = self._calculate_division_positions(
                 active_drivers, get_driver_color_fn)
 
+            # Read lap time telemetry data
+            try:
+                car_idx_last_lap = self.ir['CarIdxLastLapTime']
+                car_idx_best_lap = self.ir['CarIdxBestLapTime']
+            except (KeyError, TypeError):
+                # Fallback if telemetry not available (shouldn't happen but be safe)
+                car_idx_last_lap = [0.0] * TELEMETRY_CONFIG.MAX_CARS
+                car_idx_best_lap = [0.0] * TELEMETRY_CONFIG.MAX_CARS
+
             race_data = []
 
             for driver in active_drivers:
@@ -712,9 +769,25 @@ class TelemetryProcessor:
                     get_driver_color_fn, show_division_gap
                 )
 
+                # Get lap time data for this driver
+                last_lap_time = car_idx_last_lap[car_idx]
+                best_lap_time = car_idx_best_lap[car_idx]
+
+                # Calculate delta lap time comparison
+                delta = self._calculate_delta(
+                    last_lap_time,
+                    all_drivers_with_colors,
+                    car_idx_last_lap,
+                    current_driver_color
+                )
+
                 # Build and append race data entry
                 driver['position'] = position  # Ensure position is set for helper method (still needed for gap calculations)
-                race_entry = self._build_race_data_entry(driver, division_positions, gap, position, current_driver_color, current_driver_division)
+                race_entry = self._build_race_data_entry(
+                    driver, division_positions, gap, position,
+                    current_driver_color, current_driver_division,
+                    delta, last_lap_time, best_lap_time
+                )
                 race_data.append(race_entry)
 
             race_data.sort(key=lambda x: x.position)
