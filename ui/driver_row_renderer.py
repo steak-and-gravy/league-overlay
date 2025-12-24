@@ -243,18 +243,18 @@ class DriverRowRenderer:
         Args:
             layout: Grid layout to add label to
             driver: Driver state containing delta value
-            delta_faster_color: Color for positive delta (you're faster)
-            delta_slower_color: Color for negative delta (you're slower)
+            delta_faster_color: Color for negative delta (you're faster)
+            delta_slower_color: Color for positive delta (you're slower)
             default_color: Fallback color for no data ("--")
             label_bg: Background color
             label_border: Border style
             font_weight: Font weight
         """
-        # Color code deltas: green for positive (you're faster), red for negative (you're slower)
+        # Color code deltas: green for negative (you're faster), red for positive (you're slower)
         if driver.delta.startswith('-'):
-            delta_display_color = delta_faster_color  # Green - they're slower than you (you're faster)
+            delta_display_color = delta_faster_color  # Green - you're faster than reference
         elif driver.delta.startswith('+'):
-            delta_display_color = delta_slower_color  # Red - they're faster than you (you're slower)
+            delta_display_color = delta_slower_color  # Red - you're slower than reference
         else:
             delta_display_color = default_color  # Default color for "--"
 
