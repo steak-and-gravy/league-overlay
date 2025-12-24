@@ -251,9 +251,9 @@ class DriverRowRenderer:
             font_weight: Font weight
         """
         # Color code deltas: green for positive (you're faster), red for negative (you're slower)
-        if driver.delta.startswith('+'):
+        if driver.delta.startswith('-'):
             delta_display_color = delta_faster_color  # Green - they're slower than you (you're faster)
-        elif driver.delta.startswith('-'):
+        elif driver.delta.startswith('+'):
             delta_display_color = delta_slower_color  # Red - they're faster than you (you're slower)
         else:
             delta_display_color = default_color  # Default color for "--"

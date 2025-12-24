@@ -529,6 +529,10 @@ class LeagueOverlay(QMainWindow):
         self.header_layout.setContentsMargins(5, 2, 11, 2)
         self.header_layout.setSpacing(2)
 
+        # Reset all column stretches first (clear old values from hidden columns)
+        for col_idx in range(7):  # Max possible columns (5 base + 2 optional)
+            self.header_layout.setColumnStretch(col_idx, 0)
+
         # Build column configuration based on settings
         # Always show: Position | Div Pos | Driver Name | Car Number | Gap
         # Optional: Last Lap, Delta
