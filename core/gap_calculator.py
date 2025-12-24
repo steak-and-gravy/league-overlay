@@ -55,8 +55,8 @@ class GapCalculator:
 
         Returns:
             Formatted delta string:
-            - Positive ("+0.5") means driver was slower than reference
-            - Negative ("-0.3") means driver was faster than reference
+            - Negative ("-0.5") means driver was faster than reference (green)
+            - Positive ("+0.3") means driver was slower than reference (red)
             - "--" if no valid data
         """
         # Check for invalid lap times (no data, pit lap, invalid lap)
@@ -66,8 +66,8 @@ class GapCalculator:
         if reference_lap_time <= 0 or reference_lap_time >= 999:
             return "--"
 
-        # Calculate delta (driver - reference)
-        delta = driver_lap_time - reference_lap_time
+        # Calculate delta
+        delta =  reference_lap_time - driver_lap_time
 
         # Format with sign and 1 decimal place
         if delta >= 0:

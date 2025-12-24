@@ -296,7 +296,7 @@ class TestFormatDeltaDisplay:
             driver_lap_time=85.5,
             reference_lap_time=85.0
         )
-        assert delta == "+0.5"
+        assert delta == "-0.5"
 
     def test_negative_delta_driver_faster(self):
         """Test negative delta (driver faster than reference)."""
@@ -304,7 +304,7 @@ class TestFormatDeltaDisplay:
             driver_lap_time=84.7,
             reference_lap_time=85.0
         )
-        assert delta == "-0.3"
+        assert delta == "+0.3"
 
     def test_large_positive_delta(self):
         """Test large positive delta."""
@@ -312,7 +312,7 @@ class TestFormatDeltaDisplay:
             driver_lap_time=90.0,
             reference_lap_time=85.0
         )
-        assert delta == "+5.0"
+        assert delta == "-5.0"
 
     def test_large_negative_delta(self):
         """Test large negative delta."""
@@ -320,7 +320,7 @@ class TestFormatDeltaDisplay:
             driver_lap_time=80.0,
             reference_lap_time=85.0
         )
-        assert delta == "-5.0"
+        assert delta == "+5.0"
 
     def test_very_small_positive_delta(self):
         """Test very small positive delta rounds correctly."""
@@ -328,7 +328,7 @@ class TestFormatDeltaDisplay:
             driver_lap_time=85.04,
             reference_lap_time=85.0
         )
-        assert delta == "+0.0"
+        assert delta == "-0.0"
 
     def test_very_small_negative_delta(self):
         """Test very small negative delta rounds correctly."""
@@ -336,7 +336,7 @@ class TestFormatDeltaDisplay:
             driver_lap_time=84.96,
             reference_lap_time=85.0
         )
-        assert delta == "-0.0"
+        assert delta == "+0.0"
 
     def test_invalid_driver_lap_time_zero(self):
         """Test invalid driver lap time (zero) returns '--'."""
@@ -400,7 +400,7 @@ class TestFormatDeltaDisplay:
             driver_lap_time=85.567,
             reference_lap_time=85.0
         )
-        assert delta == "+0.6"
+        assert delta == "-0.6"
 
 
 class TestFormatLapTime:
