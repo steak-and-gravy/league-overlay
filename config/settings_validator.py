@@ -55,6 +55,13 @@ class SettingsValidator:
             field_name='league_config'
         )
 
+        # List fields
+        validated['recent_local_configs'] = self.coerce_string_list(
+            data.get('recent_local_configs'),
+            default=[],
+            field_name='recent_local_configs'
+        )
+
         # Integer fields (window position and dimensions)
         validated['x'] = self.coerce_int(
             data.get('x'),
@@ -178,6 +185,38 @@ class SettingsValidator:
             return value
         logger.warning(f"Field '{field_name}' has invalid type {type(value).__name__}, using default '{default}'")
         return default
+
+    def coerce_string_list(self, value: Any, default: List[str], field_name: str) -> List[str]:
+        """Coerce value to list of strings.
+
+        Args:
+            value: Raw value from JSON
+            default: Default value if coercion fails
+            field_name: Name of field (for logging)
+
+        Returns:
+            List of strings
+        """
+        if value is None:
+            return default
+
+        if not isinstance(value, list):
+            logger.warning(
+                f"Field '{field_name}' has invalid type {type(value).__name__}, using default"
+            )
+            return default
+
+        # Validate that all items are strings
+        validated_list = []
+        for item in value:
+            if isinstance(item, str):
+                validated_list.append(item)
+            else:
+                logger.warning(
+                    f"Field '{field_name}' contains non-string item {item} (type {type(item).__name__}), skipping"
+                )
+
+        return validated_list
 
     def coerce_int(self, value: Any, default: int, min_val: int, max_val: int, field_name: str) -> int:
         """Coerce value to integer within range.

@@ -2,8 +2,8 @@
 
 import json
 import os
-from dataclasses import dataclass
-from typing import Optional, Dict
+from dataclasses import dataclass, field
+from typing import Optional, Dict, List
 
 from .constants import UI_CONFIG, FILE_CONFIG, TELEMETRY_CONFIG
 from .logging_config import get_logger
@@ -39,6 +39,7 @@ class AppSettings:
 
     # Configuration files
     league_config: Optional[str] = None
+    recent_local_configs: List[str] = field(default_factory=list)
 
     # Division colors (loaded from config)
     division_colors: Optional[Dict[str, str]] = None
@@ -107,6 +108,7 @@ class SettingsManager:
             # Convert dataclass to dict
             settings_dict = {
                 'league_config': settings.league_config,
+                'recent_local_configs': settings.recent_local_configs,
                 'division_colors': settings.division_colors,
                 'x': settings.x,
                 'y': settings.y,
@@ -151,6 +153,7 @@ class SettingsManager:
         # Convert to dict
         settings_dict = {
             'league_config': settings.league_config,
+            'recent_local_configs': settings.recent_local_configs,
             'division_colors': settings.division_colors,
             'x': settings.x,
             'y': settings.y,
