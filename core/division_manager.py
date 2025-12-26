@@ -28,7 +28,62 @@ class DivisionManager:
         self.load_division_config()
 
     def load_driver_config(self) -> None:
-        """Load driver-division mappings from config file."""
+        """Load driver-division mappings from config file or remote source."""
+        if self.config_file.startswith("official:"):
+            self._load_official_league()
+        else:
+            self._load_local_file()
+
+    def _load_official_league(self) -> None:
+        """Load driver config from official remote league."""
+        from config.official_leagues import get_official_league
+        import requests
+
+        league_name = self.config_file.replace("official:", "")
+
+        try:
+            league = get_official_league(league_name)
+        except ValueError as e:
+            logger.error(f"Unknown official league: {league_name}")
+            self.driver_colors = {'drivers': []}
+            return
+
+        # Try to fetch from remote
+        try:
+            response = requests.get(league.url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+
+            # Save to cache for offline use
+            cache_path = os.path.join(os.path.dirname(__file__), '..', league.cache_file)
+            with open(cache_path, 'w') as f:
+                json.dump(data, f, indent=2)
+
+            if 'drivers' in data:
+                self.driver_colors = data
+                logger.info(f"Loaded {len(data['drivers'])} drivers from {league.name}")
+            else:
+                self.driver_colors = {'drivers': []}
+
+        except Exception as e:
+            # Fall back to cache
+            logger.warning(f"Failed to fetch {league.name}, using cache: {e}")
+            cache_path = os.path.join(os.path.dirname(__file__), '..', league.cache_file)
+            if os.path.exists(cache_path):
+                try:
+                    with open(cache_path, 'r') as f:
+                        data = json.load(f)
+                        self.driver_colors = data if 'drivers' in data else {'drivers': []}
+                        logger.info(f"Loaded from cache: {len(self.driver_colors['drivers'])} drivers")
+                except Exception as cache_error:
+                    logger.error(f"Cache load failed: {cache_error}")
+                    self.driver_colors = {'drivers': []}
+            else:
+                logger.error(f"No cache available for {league.name}")
+                self.driver_colors = {'drivers': []}
+
+    def _load_local_file(self) -> None:
+        """Load driver config from local file."""
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, 'r') as f:
@@ -61,6 +116,10 @@ class DivisionManager:
     def save_config(self) -> None:
         """Save driver-division mappings to config file."""
         try:
+            # Log warning if editing official league cache
+            if os.path.basename(self.config_file).startswith("cache_official_"):
+                logger.info("Editing official league cache - changes will be overwritten on next refresh")
+
             with open(self.config_file, 'w') as f:
                 json.dump(self.driver_colors, f, indent=2)
             logger.debug(f"Saved division config to {self.config_file}")

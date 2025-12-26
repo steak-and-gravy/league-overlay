@@ -54,28 +54,50 @@ class SettingsDialog(QDialog):
         config_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
         config_layout.addWidget(config_title)
 
-        # Current config row
-        config_file_layout = QHBoxLayout()
-        config_file_label = QLabel("Current config file:")
-        config_file_label.setStyleSheet("font-size: 9pt; color: white; border: none;")
-        config_file_layout.addWidget(config_file_label)
+        # League selector dropdown
+        league_row = QHBoxLayout()
+        league_label = QLabel("Active League:")
+        league_label.setStyleSheet("font-size: 9pt; color: white; border: none;")
+        league_row.addWidget(league_label)
 
-        self.current_config_label = QLabel(os.path.basename(self.parent_overlay.color_config_file))
-        self.current_config_label.setStyleSheet("""
-            font-size: 8pt;
-            color: white;
-            border: none;
-            background-color: #404040;
-            padding: 2px 6px;
+        self.league_combo = QComboBox()
+        self.league_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #404040;
+                color: white;
+                border: 1px solid #555555;
+                padding: 4px 8px;
+                font-size: 9pt;
+            }
+            QComboBox:hover {
+                background-color: #505050;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 20px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 6px solid white;
+                margin-right: 6px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #404040;
+                color: white;
+                selection-background-color: #505050;
+                border: 1px solid #555555;
+            }
         """)
-        config_file_layout.addWidget(self.current_config_label, 1)
-        config_layout.addLayout(config_file_layout)
+        self.populate_league_dropdown()
+        self.league_combo.currentIndexChanged.connect(self.on_league_selected)
+        league_row.addWidget(self.league_combo, 1)
+        config_layout.addLayout(league_row)
 
-        config_btn_layout = QHBoxLayout()
-        config_btn_layout.setSpacing(5)
-
-        new_config_btn = QPushButton("Create New")
-        new_config_btn.setStyleSheet("""
+        # Refresh button (only enabled for official leagues)
+        self.refresh_btn = QPushButton("🔄 Refresh")
+        self.refresh_btn.setStyleSheet("""
             QPushButton {
                 background-color: #404040;
                 color: white;
@@ -86,27 +108,13 @@ class SettingsDialog(QDialog):
             QPushButton:hover {
                 background-color: #505050;
             }
-        """)
-        new_config_btn.clicked.connect(self.create_new_config)
-        config_btn_layout.addWidget(new_config_btn)
-
-        load_config_btn = QPushButton("Load")
-        load_config_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #404040;
-                color: white;
-                padding: 4px 8px;
-                border: none;
-                font-size: 8pt;
-            }
-            QPushButton:hover {
-                background-color: #505050;
+            QPushButton:disabled {
+                background-color: #2a2a2a;
+                color: #666666;
             }
         """)
-        load_config_btn.clicked.connect(self.load_config)
-        config_btn_layout.addWidget(load_config_btn)
-
-        config_layout.addLayout(config_btn_layout)
+        self.refresh_btn.clicked.connect(self.refresh_league)
+        config_layout.addWidget(self.refresh_btn)
         left_column.addWidget(config_group)
 
         # Division colors (moved to left column)
@@ -462,17 +470,17 @@ class SettingsDialog(QDialog):
         reset_btn.clicked.connect(self.reset_to_defaults)
         layout.addWidget(reset_btn)
         
-        # Version with update link if available
-        if hasattr(self.parent_overlay, 'latest_version') and self.parent_overlay.latest_version:
-            version_text = f"Version {VERSION} | <a href='https://leagueoverlay.com/download.php' style='color: #4CAF50;'>Update to v{self.parent_overlay.latest_version}</a>"
-            version_label = QLabel(version_text)
-            version_label.setOpenExternalLinks(True)
-        else:
-            version_label = QLabel(f"Version {VERSION}")
+        # Status label (shows driver count when loading files, or version by default)
+        self.status_label = QLabel(f"Version {VERSION}")
+        self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setStyleSheet("color: #888888; font-size: 8pt;")
+        layout.addWidget(self.status_label)
 
-        version_label.setAlignment(Qt.AlignCenter)
-        version_label.setStyleSheet("color: #888888; font-size: 8pt;")
-        layout.addWidget(version_label)
+        # Check for updates and show link if available
+        if hasattr(self.parent_overlay, 'latest_version') and self.parent_overlay.latest_version:
+            version_text = f"Version {VERSION} | <a href='https://leagueoverlay.com/download.php' style='color: #FF8C00;'>Update to v{self.parent_overlay.latest_version}</a>"
+            self.status_label.setText(version_text)
+            self.status_label.setOpenExternalLinks(True)
         
         # Overall styling
         self.setStyleSheet("""
@@ -526,7 +534,178 @@ class SettingsDialog(QDialog):
                 }}
             """)
             self.color_value_labels[division].setText(new_color)
-            
+
+    def _update_status_message(self):
+        """Update the status label with current driver count."""
+        driver_count = len(self.parent_overlay.division_manager.driver_colors.get('drivers', []))
+
+        # Get league name for display
+        config_file = self.parent_overlay.color_config_file
+        if config_file.startswith("official:"):
+            league_name = config_file.replace("official:", "")
+            self.status_label.setText(f"Loaded {driver_count} driver{'s' if driver_count != 1 else ''} from {league_name}")
+        else:
+            filename = os.path.basename(config_file)
+            self.status_label.setText(f"Loaded {driver_count} driver{'s' if driver_count != 1 else ''} from {filename}")
+
+        self.status_label.setStyleSheet("color: #4CAF50; font-size: 8pt;")
+
+    def populate_league_dropdown(self):
+        """Populate the league selection dropdown."""
+        from config.official_leagues import OFFICIAL_LEAGUES
+
+        # Block signals while repopulating to prevent triggering on_league_selected
+        self.league_combo.blockSignals(True)
+
+        self.league_combo.clear()
+
+        # Add official leagues
+        if OFFICIAL_LEAGUES:
+            for league in OFFICIAL_LEAGUES:
+                display_text = f"🏁 {league.name}"
+                self.league_combo.addItem(display_text, f"official:{league.name}")
+
+        # Add separator if we have recent files
+        if self.parent_overlay.settings.recent_local_configs:
+            self.league_combo.insertSeparator(self.league_combo.count())
+
+        # Add recent local files
+        for file_path in self.parent_overlay.settings.recent_local_configs:
+            if os.path.exists(file_path):
+                display_name = os.path.basename(file_path)
+                self.league_combo.addItem(f"💻 {display_name}", file_path)
+
+        # Add separator and actions
+        self.league_combo.insertSeparator(self.league_combo.count())
+        self.league_combo.addItem("📂 Load Other File...", "action:load")
+        self.league_combo.addItem("➕ Create New...", "action:create")
+
+        # Select current active league
+        self._select_active_league()
+
+        # Re-enable signals
+        self.league_combo.blockSignals(False)
+
+    def _select_active_league(self):
+        """Select the currently active league in the dropdown."""
+        current = self.parent_overlay.color_config_file
+
+        for i in range(self.league_combo.count()):
+            data = self.league_combo.itemData(i)
+            if data == current:
+                self.league_combo.setCurrentIndex(i)
+                self._update_refresh_button()
+                return
+
+        # Not found, select first item
+        if self.league_combo.count() > 0:
+            self.league_combo.setCurrentIndex(0)
+            self._update_refresh_button()
+
+    def _update_refresh_button(self):
+        """Enable/disable refresh button based on selection."""
+        # Guard against refresh_btn not being created yet during initialization
+        if not hasattr(self, 'refresh_btn'):
+            return
+
+        current_data = self.league_combo.currentData()
+        # Check if current_data is a string and starts with "official:"
+        is_official = isinstance(current_data, str) and current_data.startswith("official:")
+        self.refresh_btn.setEnabled(is_official)
+
+    def on_league_selected(self, index):
+        """Handle league selection from dropdown."""
+        data = self.league_combo.itemData(index)
+
+        # Skip if data is None (e.g., separator items)
+        if data is None:
+            return
+
+        if data == "action:load":
+            # Reset to previous selection before showing dialog
+            self._select_active_league()
+            self.load_config()
+        elif data == "action:create":
+            # Reset to previous selection before showing dialog
+            self._select_active_league()
+            self.create_new_config()
+        elif isinstance(data, str) and data.startswith("official:"):
+            self._load_official_league(data)
+        elif data:
+            # It's a local file path
+            self._load_local_file(data)
+
+        self._update_refresh_button()
+
+    def _load_official_league(self, league_source):
+        """Load an official league."""
+        try:
+            self.parent_overlay.color_config_file = league_source
+            self.parent_overlay.division_manager.config_file = league_source
+            self.parent_overlay.division_manager.load_driver_config()
+            self.parent_overlay.signals.refresh_colors.emit()
+
+            # Save to settings (but don't add to recent - it's official)
+            self.parent_overlay.settings.league_config = league_source
+            self.parent_overlay.save_settings()
+
+            # Update status message
+            self._update_status_message()
+
+            from config.logging_config import get_logger
+            logger = get_logger(__name__)
+            logger.info(f"Switched to official league: {league_source}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load official league: {e}")
+            self._select_active_league()
+
+    def _load_local_file(self, file_path):
+        """Load a local config file."""
+        try:
+            # Validate file exists and is readable
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"File not found: {file_path}")
+
+            with open(file_path, 'r') as f:
+                json.load(f)  # Validate JSON
+
+            # Load the config
+            self.parent_overlay.color_config_file = file_path
+            self.parent_overlay.division_manager.config_file = file_path
+            self.parent_overlay.division_manager.load_driver_config()
+            self.parent_overlay.signals.refresh_colors.emit()
+
+            # Add to recent files and save settings
+            self.parent_overlay.add_to_recent_files(file_path)
+            self.parent_overlay.settings.league_config = file_path
+            self.parent_overlay.save_settings()
+
+            # Update status message
+            self._update_status_message()
+
+            from config.logging_config import get_logger
+            logger = get_logger(__name__)
+            logger.info(f"Switched to local config: {file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load config file: {e}")
+            self._select_active_league()
+
+    def refresh_league(self):
+        """Refresh the current official league."""
+        success, message, driver_count = self.parent_overlay.refresh_official_league()
+
+        # Update status message
+        if success:
+            self.status_label.setText(f"Refreshed {driver_count} driver{'s' if driver_count != 1 else ''}")
+            self.status_label.setStyleSheet("color: #4CAF50; font-size: 8pt;")
+        else:
+            self.status_label.setText(f"Refresh failed")
+            self.status_label.setStyleSheet("color: #FF5555; font-size: 8pt;")
+            QMessageBox.critical(self, "Refresh Failed", message)
+
+        # Repopulate dropdown in case anything changed
+        self.populate_league_dropdown()
+
     def create_new_config(self):
         """Create new config file"""
         file_path, _ = QFileDialog.getSaveFileName(
@@ -542,9 +721,11 @@ class SettingsDialog(QDialog):
                 with open(file_path, 'w') as f:
                     json.dump(empty_config, f, indent=2)
 
-                # Delegate to parent to handle division config reload
-                self.parent_overlay.reload_division_config(file_path)
-                self.current_config_label.setText(os.path.basename(file_path))
+                # Load the new config
+                self._load_local_file(file_path)
+
+                # Repopulate dropdown to show in recent files
+                self.populate_league_dropdown()
 
                 QMessageBox.information(self, "Success", "Config file created successfully!")
             except Exception as e:
@@ -560,18 +741,10 @@ class SettingsDialog(QDialog):
         )
 
         if file_path:
-            try:
-                # Validate JSON file can be loaded
-                with open(file_path, 'r') as f:
-                    config_data = json.load(f)
-
-                # Delegate to parent to handle division config reload
-                self.parent_overlay.reload_division_config(file_path)
-                self.current_config_label.setText(os.path.basename(file_path))
-
-                QMessageBox.information(self, "Success", "Config file loaded successfully!")
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to load config file: {e}")
+            self._load_local_file(file_path)
+            # Repopulate dropdown to show in recent files
+            self.populate_league_dropdown()
+            QMessageBox.information(self, "Success", "Config file loaded successfully!")
                 
     def reset_to_defaults(self):
         """Reset to default settings"""

@@ -16,8 +16,10 @@ import threading
 import time
 import os
 import re
+import json
 from typing import Dict, List, Optional
 import irsdk
+import requests
 
 # Import from modular structure
 from config.constants import (
@@ -115,8 +117,16 @@ class LeagueOverlay(QMainWindow):
         self.settings_manager = SettingsManager(FILE_CONFIG.SETTINGS_FILE)
         self.settings = self.settings_manager.load()
 
-        # Color config file (defaults if not specified in settings)
-        self.color_config_file = self.settings.league_config or "league_divisions.json"
+        # Color config file (defaults to first official league if not specified in settings)
+        if self.settings.league_config:
+            self.color_config_file = self.settings.league_config
+        else:
+            # Default to first official league
+            from config.official_leagues import OFFICIAL_LEAGUES
+            if OFFICIAL_LEAGUES:
+                self.color_config_file = f"official:{OFFICIAL_LEAGUES[0].name}"
+            else:
+                self.color_config_file = "league_divisions.json"
 
         # User preferences not in settings (runtime state)
         self.top_elements_visible = True  # Current visibility of title/status
@@ -128,8 +138,8 @@ class LeagueOverlay(QMainWindow):
         # ═══════════════════════════════════════════════════════════
         # HELPER CLASSES - Extracted responsibilities
         # ═══════════════════════════════════════════════════════════
-        # Initialize DivisionManager with league config if specified
-        division_config = self.settings.league_config if self.settings.league_config else FILE_CONFIG.DIVISIONS_FILE
+        # Initialize DivisionManager with league config
+        division_config = self.color_config_file
         self.division_manager = DivisionManager(division_config)
         self.division_filter = DivisionFilter(self.division_manager)
         self.race_state_tracker = RaceStateTracker(self.ir)
@@ -731,6 +741,73 @@ class LeagueOverlay(QMainWindow):
         # Refresh the UI to show new colors (reset change tracking to force update)
         self._last_emitted_data = []
         self.signals.refresh_colors.emit()
+
+    def add_to_recent_files(self, file_path: str):
+        """Add a file to recent list, maintaining MRU order.
+
+        Args:
+            file_path: Absolute path to the config file
+        """
+        # Remove if exists (avoid duplicates)
+        if file_path in self.settings.recent_local_configs:
+            self.settings.recent_local_configs.remove(file_path)
+
+        # Add to front
+        self.settings.recent_local_configs.insert(0, file_path)
+
+        # Limit to 5 most recent
+        self.settings.recent_local_configs = self.settings.recent_local_configs[:5]
+
+        # Clean up non-existent files
+        self.settings.recent_local_configs = [
+            f for f in self.settings.recent_local_configs
+            if os.path.exists(f)
+        ]
+
+    def refresh_official_league(self):
+        """Refresh current official league from remote.
+
+        Returns:
+            tuple: (success: bool, message: str, driver_count: int)
+        """
+        if not self.color_config_file.startswith("official:"):
+            logger.warning("Cannot refresh - not an official league")
+            return (False, "Cannot refresh - not an official league", 0)
+
+        from config.official_leagues import get_official_league
+        import requests
+
+        league_name = self.color_config_file.replace("official:", "")
+
+        try:
+            league = get_official_league(league_name)
+
+            # Fetch from remote
+            response = requests.get(league.url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+
+            # Save to cache
+            cache_path = os.path.join(os.path.dirname(__file__), league.cache_file)
+            with open(cache_path, 'w') as f:
+                json.dump(data, f, indent=2)
+
+            # Count drivers
+            driver_count = len(data.get('drivers', []))
+
+            # Reload config
+            self.division_manager.load_driver_config()
+
+            # Update UI
+            self.signals.refresh_colors.emit()
+
+            logger.info(f"Successfully refreshed {league.name}")
+            return (True, f"Successfully refreshed {league.name}", driver_count)
+
+        except Exception as e:
+            error_msg = f"Failed to refresh {league.name}: {e}"
+            logger.error(error_msg)
+            return (False, error_msg, 0)
 
     def open_settings(self):
         """Open settings dialog"""

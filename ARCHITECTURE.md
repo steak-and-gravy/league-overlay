@@ -64,14 +64,52 @@ Application settings persistence and validation.
 
 **Purpose**: Manage user preferences with validation to ensure values are always within valid ranges.
 
-**Dependencies**: `config.constants`, `config.logging_config`
+**Dependencies**: `config.constants`, `config.logging_config`, `config.settings_validator`
 
 **Key Features:**
 - Validates opacity (0.1-1.0), refresh rate (0.25-5.0), dimensions (200-2000)
 - Validates font_size, row_color_style, log_level (enum values)
+- Supports league_config (path or "official:{name}") and recent_local_configs list
 - Gracefully handles missing/corrupt settings files
 - Automatic defaults for missing fields
 - Logs settings load/save operations and errors
+
+#### `settings_validator.py`
+Settings validation and type coercion.
+
+**Class:**
+- `SettingsValidator`
+
+**Purpose**: Handle validation and type coercion of settings data loaded from JSON, ensuring values are of correct type and within valid ranges.
+
+**Dependencies**: `config.constants`, `config.logging_config`
+
+**Key Features:**
+- Type coercion (e.g., "500" string → 500 int, "0.9" → 0.9 float)
+- Range validation and clamping
+- Enum validation for limited valid values
+- List validation (recent_local_configs filters non-string items)
+- Hex color validation for division colors
+- Graceful fallbacks to defaults on invalid data
+
+#### `official_leagues.py`
+Official remotely-managed league configurations.
+
+**Classes:**
+- `OfficialLeague` (dataclass) - League configuration structure
+
+**Functions:**
+- `get_official_league(name)` - Retrieve league config by name
+
+**Purpose**: Define official leagues hosted remotely with automatic updates.
+
+**Dependencies**: None
+
+**Key Features:**
+- Dataclass defining league metadata (name, icon, URL, description, cache_file)
+- OFFICIAL_LEAGUES list containing all available official leagues
+- Used by DivisionManager to fetch remote configs
+- Enables centralized league management without manual file distribution
 
 #### `logging_config.py`
 Logging configuration and setup.
@@ -143,16 +181,21 @@ Driver-to-division mapping and color management.
 - `DivisionManager`
 
 **Responsibilities:**
-- Load driver-division mappings from JSON
+- Load driver-division mappings from JSON (local or remote)
+- Support official remotely-hosted league configs with caching
 - Assign/update driver divisions
 - Provide division colors
 - Persist configuration changes
 
 **Purpose**: Manage the division system that allows league organizers to group drivers.
 
-**Dependencies**: `config.constants`, `config.logging_config`
+**Dependencies**: `config.constants`, `config.logging_config`, `config.official_leagues`, `requests`
 
 **Key Features:**
+- Supports two config modes: local files and official remote leagues
+- Official leagues: Uses "official:{name}" prefix to load from remote URL
+- Remote fetching: Downloads config from URL, caches locally for offline use
+- Cache fallback: Automatically uses cached copy if remote fetch fails
 - Matches drivers by ID (preferred) or name (fallback)
 - "Default" division removes assignment
 - JSON-based config shared across league members
@@ -671,7 +714,7 @@ Telemetry Thread                Main Thread
 - **Format**: JSON
 - **Location**: Same directory as executable
 - **Managed by**: `SettingsManager`
-- **Contents**: Window position, opacity, fonts, division colors, etc.
+- **Contents**: Window position, opacity, fonts, division colors, league_config, recent_local_configs, etc.
 
 #### `LeagueOverlay.log` (Application Log)
 - **Format**: Plain text
@@ -681,12 +724,25 @@ Telemetry Thread                Main Thread
 - **Behavior**: 2 file rotation, appends on every execution
 - **Usage**: Debugging, user support, troubleshooting
 
-#### `League_Divisions.json` - Default (Driver Assignments)
-- **Format**: JSON
-- **Location**: Same directory as executable (or custom path)
-- **Managed by**: `DivisionManager`
-- **Contents**: Driver-to-division mappings
-- **Sharing**: None currently, supports multiple files loaded through settings
+#### League Configuration Files (Driver Assignments)
+
+**Two modes:**
+
+1. **Official Remote Leagues** (Recommended)
+   - **Format**: Remote JSON fetched from URL
+   - **Identifier**: "official:{league_name}" in settings
+   - **Managed by**: `DivisionManager` with `official_leagues.py`
+   - **Caching**: Automatically cached locally (e.g., `cache_broken_wing_gt3.json`)
+   - **Offline support**: Falls back to cache if remote fetch fails
+   - **Updates**: Refreshed on demand via Settings dialog
+   - **Sharing**: Centrally managed, no manual file distribution needed
+
+2. **Local Files** (Legacy/Custom)
+   - **Format**: JSON
+   - **Location**: User-specified path (absolute)
+   - **Managed by**: `DivisionManager`
+   - **Recent files**: MRU list maintained (max 5) in settings
+   - **Sharing**: Manual file distribution required
 
 **Division Config Structure:**
 ```json
@@ -819,6 +875,7 @@ tests/
 - **Python 3.9+** - Language
 - **PySide6** - Qt bindings for UI
 - **irsdk** - iRacing SDK Python wrapper
+- **requests** - HTTP library for remote league config fetching
 
 ### Testing
 - **pytest** - Test framework

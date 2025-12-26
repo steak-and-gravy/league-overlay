@@ -9,6 +9,7 @@ Real-time iRacing race position overlay with division-based racing.
 │   ├── constants.py          # UIConfig, FileConfig, TelemetryConfig
 │   ├── settings.py           # AppSettings, SettingsManager
 │   ├── settings_validator.py # Settings validation and coercion
+│   ├── official_leagues.py   # Official league configurations (remote URLs)
 │   └── logging_config.py     # Logging setup and configuration
 ├── core/                # Business logic
 │   ├── driver_state.py         # Unified driver data structure (DriverState dataclass)
@@ -98,6 +99,13 @@ session_state = self.ir['SessionState'] if 'SessionState' in self.ir else 4  # �
 
 ### 2. DIVISION SYSTEM
 - Drivers assigned to divisions via JSON config (Pro, ProAm, Am, Rookie)
+- **Two config modes**: Official remote leagues (recommended) or local files (legacy/custom)
+- **Official leagues**: Fetched from remote URL, cached locally, auto-updates on demand
+  - Identifier format: "official:{league_name}" (e.g., "official:BWRL GT3 Sprint")
+  - Defined in `config/official_leagues.py`
+  - Cached as `cache_{league_name}.json` for offline use
+  - Managed via dropdown in Settings dialog
+- **Local files**: User-specified paths with MRU list (max 5 recent files)
 - Each division has customizable color
 - Gaps calculated within divisions only
 - Right-click driver to change division

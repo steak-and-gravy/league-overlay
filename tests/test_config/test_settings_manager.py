@@ -48,6 +48,7 @@ class TestAppSettingsDefaults:
         """Test default config file paths."""
         settings = AppSettings()
         assert settings.league_config is None
+        assert settings.recent_local_configs == []
 
     def test_default_division_colors(self):
         """Test default division colors are initialized."""
@@ -84,7 +85,8 @@ class TestLoadSettings:
             'hide_headers': True,
             'center_drivers': True,
             'bold_drivers': False,
-            'league_config': '/path/to/config.json'
+            'league_config': '/path/to/config.json',
+            'recent_local_configs': ['/path/to/file1.json', '/path/to/file2.json']
         }
 
         with open(settings_file, 'w') as f:
@@ -105,6 +107,7 @@ class TestLoadSettings:
         assert settings.center_drivers is True
         assert settings.bold_drivers is False
         assert settings.league_config == '/path/to/config.json'
+        assert settings.recent_local_configs == ['/path/to/file1.json', '/path/to/file2.json']
 
     def test_load_partial_settings(self, tmp_path):
         """Test loading file with only some settings (others use defaults)."""
@@ -515,3 +518,50 @@ class TestEdgeCases:
         validated = manager.validate(settings)
 
         assert validated.refresh_rate >= 0.25
+
+    def test_recent_local_configs_validation(self, tmp_path):
+        """Test recent_local_configs list validation."""
+        settings_file = tmp_path / "settings.config"
+        settings_data = {
+            'recent_local_configs': ['/path/to/file1.json', '/path/to/file2.json', '/path/to/file3.json']
+        }
+
+        with open(settings_file, 'w') as f:
+            json.dump(settings_data, f)
+
+        manager = SettingsManager(str(settings_file))
+        settings = manager.load()
+
+        assert settings.recent_local_configs == ['/path/to/file1.json', '/path/to/file2.json', '/path/to/file3.json']
+
+    def test_recent_local_configs_invalid_type(self, tmp_path):
+        """Test recent_local_configs with invalid type uses default."""
+        settings_file = tmp_path / "settings.config"
+        settings_data = {
+            'recent_local_configs': 'not a list'
+        }
+
+        with open(settings_file, 'w') as f:
+            json.dump(settings_data, f)
+
+        manager = SettingsManager(str(settings_file))
+        settings = manager.load()
+
+        # Should default to empty list
+        assert settings.recent_local_configs == []
+
+    def test_recent_local_configs_mixed_types(self, tmp_path):
+        """Test recent_local_configs with mixed types filters non-strings."""
+        settings_file = tmp_path / "settings.config"
+        settings_data = {
+            'recent_local_configs': ['/path/to/file1.json', 123, '/path/to/file2.json', None, 'valid.json']
+        }
+
+        with open(settings_file, 'w') as f:
+            json.dump(settings_data, f)
+
+        manager = SettingsManager(str(settings_file))
+        settings = manager.load()
+
+        # Should only include string values
+        assert settings.recent_local_configs == ['/path/to/file1.json', '/path/to/file2.json', 'valid.json']
