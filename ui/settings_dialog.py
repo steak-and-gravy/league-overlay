@@ -2,6 +2,8 @@
 
 import os
 import json
+import shutil
+import re
 from typing import TYPE_CHECKING
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -95,6 +97,10 @@ class SettingsDialog(QDialog):
         league_row.addWidget(self.league_combo, 1)
         config_layout.addLayout(league_row)
 
+        # Buttons row for refresh and save local copy
+        buttons_row = QHBoxLayout()
+        buttons_row.setSpacing(5)
+
         # Refresh button (only enabled for official leagues)
         self.refresh_btn = QPushButton("🔄 Refresh")
         self.refresh_btn.setStyleSheet("""
@@ -114,7 +120,30 @@ class SettingsDialog(QDialog):
             }
         """)
         self.refresh_btn.clicked.connect(self.refresh_league)
-        config_layout.addWidget(self.refresh_btn)
+        buttons_row.addWidget(self.refresh_btn)
+
+        # Save local copy button (only enabled for official leagues)
+        self.save_local_btn = QPushButton("💾 Save Local Copy...")
+        self.save_local_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #404040;
+                color: white;
+                padding: 4px 8px;
+                border: none;
+                font-size: 8pt;
+            }
+            QPushButton:hover {
+                background-color: #505050;
+            }
+            QPushButton:disabled {
+                background-color: #2a2a2a;
+                color: #666666;
+            }
+        """)
+        self.save_local_btn.clicked.connect(self.save_local_copy)
+        buttons_row.addWidget(self.save_local_btn)
+
+        config_layout.addLayout(buttons_row)
         left_column.addWidget(config_group)
 
         # Division colors (moved to left column)
@@ -603,15 +632,16 @@ class SettingsDialog(QDialog):
             self._update_refresh_button()
 
     def _update_refresh_button(self):
-        """Enable/disable refresh button based on selection."""
-        # Guard against refresh_btn not being created yet during initialization
-        if not hasattr(self, 'refresh_btn'):
+        """Enable/disable refresh and save local copy buttons based on selection."""
+        # Guard against buttons not being created yet during initialization
+        if not hasattr(self, 'refresh_btn') or not hasattr(self, 'save_local_btn'):
             return
 
         current_data = self.league_combo.currentData()
         # Check if current_data is a string and starts with "official:"
         is_official = isinstance(current_data, str) and current_data.startswith("official:")
         self.refresh_btn.setEnabled(is_official)
+        self.save_local_btn.setEnabled(is_official)
 
     def on_league_selected(self, index):
         """Handle league selection from dropdown."""
@@ -705,6 +735,74 @@ class SettingsDialog(QDialog):
 
         # Repopulate dropdown in case anything changed
         self.populate_league_dropdown()
+
+    def save_local_copy(self):
+        """Save current official league as a local editable copy."""
+        from config.official_leagues import get_official_league
+
+        current_data = self.league_combo.currentData()
+        if not isinstance(current_data, str) or not current_data.startswith("official:"):
+            return
+
+        # Get league name and info
+        league_name = current_data.replace("official:", "")
+        try:
+            league = get_official_league(league_name)
+        except ValueError as e:
+            QMessageBox.critical(self, "Error", str(e))
+            return
+
+        # Generate sanitized default filename
+        sanitized_name = re.sub(r'[^\w\s-]', '', league_name).strip().replace(' ', '_')
+        default_filename = f"{sanitized_name}.json"
+
+        # Get app directory for default location
+        app_dir = os.path.dirname(os.path.abspath(self.parent_overlay.color_config_file))
+
+        # Open save dialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Local Copy",
+            os.path.join(app_dir, default_filename),
+            "JSON files (*.json);;All files (*.*)"
+        )
+
+        if not file_path:
+            return  # User cancelled
+
+        try:
+            # Get cache file path
+            cache_file = os.path.join(app_dir, league.cache_file)
+
+            # Check if cache exists
+            if not os.path.exists(cache_file):
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Cache file not found: {league.cache_file}\n\n"
+                    "Try refreshing the league first."
+                )
+                return
+
+            # Copy cache file to new location
+            shutil.copy2(cache_file, file_path)
+
+            # Load the new local file
+            self._load_local_file(file_path)
+
+            # Repopulate dropdown to show in recent files
+            self.populate_league_dropdown()
+
+            # Update status message
+            filename = os.path.basename(file_path)
+            driver_count = len(self.parent_overlay.division_manager.driver_colors.get('drivers', []))
+            self.status_label.setText(
+                f"Saved and switched to local copy: {filename} ({driver_count} driver{'s' if driver_count != 1 else ''})"
+            )
+            self.status_label.setStyleSheet("color: #4CAF50; font-size: 8pt;")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save local copy: {e}")
 
     def create_new_config(self):
         """Create new config file"""
