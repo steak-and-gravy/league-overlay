@@ -28,7 +28,7 @@ class AppSettings:
     row_color_style: str = "Default"
 
     # Behavior
-    refresh_rate: float = 2.0
+    refresh_rate: float = 1.0
     hide_headers: bool = False
     center_drivers: bool = False
     bold_drivers: bool = True
@@ -38,6 +38,10 @@ class AppSettings:
     show_best_lap: bool = False
     show_positions_gained: bool = False
     log_level: str = "INFO"
+
+    # Performance indicator colors
+    faster_color: str = "#00FF00"  # Green - for faster lap times and positions gained
+    slower_color: str = "#FF0000"  # Red - for slower lap times and positions lost
 
     # Configuration files
     league_config: Optional[str] = None
@@ -128,7 +132,9 @@ class SettingsManager:
                 'show_positions_gained': settings.show_positions_gained,
                 'font_size': settings.font_size,
                 'row_color_style': settings.row_color_style,
-                'log_level': settings.log_level
+                'log_level': settings.log_level,
+                'faster_color': settings.faster_color,
+                'slower_color': settings.slower_color
             }
 
             with open(self.settings_file, 'w') as f:
@@ -175,7 +181,9 @@ class SettingsManager:
             'show_positions_gained': settings.show_positions_gained,
             'font_size': settings.font_size,
             'row_color_style': settings.row_color_style,
-            'log_level': settings.log_level
+            'log_level': settings.log_level,
+            'faster_color': settings.faster_color,
+            'slower_color': settings.slower_color
         }
 
         # Validate using validator

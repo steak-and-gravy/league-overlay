@@ -73,6 +73,7 @@ Application settings persistence and validation.
 **Key Features:**
 - Validates opacity (0.1-1.0), refresh rate (0.25-5.0), dimensions (200-2000)
 - Validates font_size, row_color_style, log_level (enum values)
+- Validates performance indicator colors (faster_color, slower_color) as hex colors
 - Supports league_config (path or "official:{name}") and recent_local_configs list
 - Gracefully handles missing/corrupt settings files
 - Automatic defaults for missing fields
@@ -93,7 +94,8 @@ Settings validation and type coercion.
 - Range validation and clamping
 - Enum validation for limited valid values
 - List validation (recent_local_configs filters non-string items)
-- Hex color validation for division colors
+- Hex color validation for division colors and performance indicator colors
+- Performance indicator colors: faster_color (default #00FF00 green), slower_color (default #FF0000 red)
 - Graceful fallbacks to defaults on invalid data
 
 #### `official_leagues.py`
@@ -420,6 +422,11 @@ Row styling strategies.
 
 **Design Pattern**: Strategy Pattern - easy to add new styles
 
+**Key Features:**
+- Delta colors (faster/slower) and positions gained/lost colors now use customizable settings
+- Each style pulls `faster_color` and `slower_color` from parent.settings
+- Default green (#00FF00) for faster/gained, red (#FF0000) for slower/lost
+
 #### `driver_row_renderer.py`
 Renders driver rows in the UI.
 
@@ -451,7 +458,7 @@ Settings UI dialog.
 - Display settings UI
 - Validate user input
 - Emit signals on changes
-- Manage division color pickers
+- Manage division color pickers and performance indicator color pickers
 
 **Purpose**: Provide user interface for configuration.
 

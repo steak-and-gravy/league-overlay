@@ -176,6 +176,18 @@ class SettingsValidator:
             field_name='division_colors'
         )
 
+        # Color fields (performance indicator colors)
+        validated['faster_color'] = self.coerce_color(
+            data.get('faster_color'),
+            default="#00FF00",  # Green - for faster lap times and positions gained
+            field_name='faster_color'
+        )
+        validated['slower_color'] = self.coerce_color(
+            data.get('slower_color'),
+            default="#FF0000",  # Red - for slower lap times and positions lost
+            field_name='slower_color'
+        )
+
         return validated
 
     def coerce_string(self, value: Any, default: Optional[str], field_name: str) -> Optional[str]:
@@ -430,6 +442,35 @@ class SettingsValidator:
                 validated_colors[division] = self.default_division_colors[division]
 
         return validated_colors
+
+    def coerce_color(self, value: Any, default: str, field_name: str) -> str:
+        """Coerce value to valid hex color string.
+
+        Args:
+            value: Raw value from JSON
+            default: Default hex color to use if invalid
+            field_name: Name of field (for logging)
+
+        Returns:
+            Validated hex color string (#RRGGBB or #RRGGBBAA)
+        """
+        if value is None:
+            return default
+
+        if not isinstance(value, str):
+            logger.warning(
+                f"Field '{field_name}' has invalid type {type(value).__name__}, using default {default}"
+            )
+            return default
+
+        # Validate hex color format
+        if not self._is_valid_hex_color(value):
+            logger.warning(
+                f"Field '{field_name}' has invalid color format '{value}', using default {default}"
+            )
+            return default
+
+        return value
 
     def _is_valid_hex_color(self, color: str) -> bool:
         """Check if string is a valid hex color format.

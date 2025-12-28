@@ -18,7 +18,7 @@ BB’s League Overlay displays live standings and gaps with a focus on divisions
 - **Division Filtering** — Toggle between viewing all divisions, your division only, or specific divisions (if spectating).
 - **Multi-Class Support** — Automatically filters to your car class in multi-class races.
 - **Auto-Centering** — Keeps you in view with intelligent timeout after manual scrolling.
-- **Customizable Appearance** — Configure font sizes, row colors (Default/Dark/Alternate/Outline), and opacity.
+- **Customizable Appearance** — Configure font sizes, row colors (Default/Dark/Alternate/Outline), opacity, and performance indicator colors.
 - **Right-Click Assignments** — Quickly assign drivers to divisions via context menu during a session.
 - **Update Notifications** — Automatic checks for new versions from GitHub.
 
@@ -39,6 +39,7 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - Row color style (Default, Dark, Alternate, Outline)
 - Refresh rate
 - Division colors
+- Performance indicator colors (faster/gained and slower/lost)
 - Column visibility (show/hide Positions Gained, Best Lap, Last Lap, and Delta columns)
 - Log level (DEBUG, INFO, WARNING, ERROR)
 
