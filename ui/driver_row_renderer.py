@@ -59,21 +59,54 @@ class DriverRowRenderer:
         layout.setSpacing(styling['layout_spacing'])
 
         # Build column configuration based on settings
-        # Always show: Position | Div Pos | Driver Name | Car Number | Gap
-        # Optional: Last Lap, Delta
-        stretches = [COLUMN_LAYOUT.POS, COLUMN_LAYOUT.DIV_POS, COLUMN_LAYOUT.DRIVER_NAME,
-                     COLUMN_LAYOUT.CAR_NUM, COLUMN_LAYOUT.GAP]
-        current_col = 5  # Next column after Gap
+        # Always show: Position | [Positions Gained] | Div Pos | Driver Name | Car Number | Gap | [Best Lap] | [Last Lap] | [Delta]
+        # Columns in brackets are optional
+
+        # Start with base columns
+        stretches = [COLUMN_LAYOUT.POS]
+        current_col = 1
 
         # Track column indices for optional columns
+        positions_gained_col = None
+        div_pos_col = None
+        name_col = None
+        car_col = None
+        gap_col = None
+        best_lap_col = None
         last_lap_col = None
         delta_col = None
 
+        # Optional: Positions Gained (column 1, between Pos and D-Pos)
+        if self.parent.settings.show_positions_gained:
+            stretches.append(COLUMN_LAYOUT.POSITIONS_GAINED)
+            positions_gained_col = current_col
+            current_col += 1
+
+        # Always show: Div Pos, Driver Name, Car Number, Gap
+        stretches.extend([COLUMN_LAYOUT.DIV_POS, COLUMN_LAYOUT.DRIVER_NAME,
+                         COLUMN_LAYOUT.CAR_NUM, COLUMN_LAYOUT.GAP])
+        div_pos_col = current_col
+        current_col += 1
+        name_col = current_col
+        current_col += 1
+        car_col = current_col
+        current_col += 1
+        gap_col = current_col
+        current_col += 1
+
+        # Optional: Best Lap (before Last Lap)
+        if self.parent.settings.show_best_lap:
+            stretches.append(COLUMN_LAYOUT.BEST_LAP)
+            best_lap_col = current_col
+            current_col += 1
+
+        # Optional: Last Lap
         if self.parent.settings.show_last_lap:
             stretches.append(COLUMN_LAYOUT.LAST_LAP)
             last_lap_col = current_col
             current_col += 1
 
+        # Optional: Delta
         if self.parent.settings.show_delta:
             stretches.append(COLUMN_LAYOUT.DELTA)
             delta_col = current_col
@@ -86,18 +119,23 @@ class DriverRowRenderer:
         # Determine font weight
         font_weight = "bold" if driver.is_player or self.parent.settings.bold_drivers else "normal"
 
-        # Create labels (pass styling for special styles like Default)
-        # Car number is always on the right (column 3), driver name on the left (column 2)
-        car_col = 3
-        name_col = 2
-
+        # Create labels with dynamic column positions
         self._create_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling)
-        self._create_division_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling)
-        self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_col)
-        self._create_driver_name_label(layout, driver, text_color, label_bg, label_border, font_weight, name_col)
-        self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight)
 
-        # Add optional columns
+        # Optional: Positions Gained
+        if positions_gained_col is not None:
+            self._create_positions_gained_label(layout, driver, gap_color, label_bg, label_border, font_weight, positions_gained_col)
+
+        # Always show columns
+        self._create_division_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, div_pos_col)
+        self._create_driver_name_label(layout, driver, text_color, label_bg, label_border, font_weight, name_col)
+        self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_col)
+        self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, gap_col)
+
+        # Optional columns
+        if best_lap_col is not None:
+            self._create_best_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, best_lap_col)
+
         if last_lap_col is not None:
             self._create_last_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, last_lap_col)
 
@@ -144,7 +182,7 @@ class DriverRowRenderer:
         layout.addWidget(pos_label, 0, 0)
 
     def _create_division_position_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
-                                       label_bg: str, label_border: str, font_weight: str, styling: Dict = None) -> None:
+                                       label_bg: str, label_border: str, font_weight: str, styling: Dict = None, column: int = 1) -> None:
         """Create division position label."""
         # Check for special division position styling (same as car number for Default style)
         div_pos_color = styling.get('car_number_color', text_color) if styling else text_color
@@ -165,7 +203,7 @@ class DriverRowRenderer:
         div_pos_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
-        layout.addWidget(div_pos_label, 0, 1)
+        layout.addWidget(div_pos_label, 0, column)
 
     def _create_car_number_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                  label_bg: str, label_border: str, font_weight: str, styling: Dict = None, column: int = 2) -> None:
@@ -216,7 +254,7 @@ class DriverRowRenderer:
         layout.addWidget(name_label, 0, column)
 
     def _create_gap_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
-                         label_bg: str, label_border: str, font_weight: str) -> None:
+                         label_bg: str, label_border: str, font_weight: str, column: int = 4) -> None:
         """Create gap label."""
         gap_label = QLabel(driver.gap)
         gap_label.setStyleSheet(f"""
@@ -233,7 +271,7 @@ class DriverRowRenderer:
         gap_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
-        layout.addWidget(gap_label, 0, 4)
+        layout.addWidget(gap_label, 0, column)
 
     def _create_delta_label(self, layout: QGridLayout, driver: DriverState, delta_faster_color: str,
                            delta_slower_color: str, default_color: str, label_bg: str,
@@ -303,3 +341,74 @@ class DriverRowRenderer:
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(last_lap_label, 0, column)
+
+    def _create_best_lap_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
+                               label_bg: str, label_border: str, font_weight: str, column: int = 5) -> None:
+        """Create best lap time label.
+
+        Args:
+            layout: Grid layout to add label to
+            driver: Driver state containing best lap time
+            text_color: Text color (gap_color - white)
+            label_bg: Background color
+            label_border: Border style
+            font_weight: Font weight
+            column: Column index to place label
+        """
+        best_lap_label = QLabel(driver.best_lap)
+        best_lap_label.setStyleSheet(f"""
+            QLabel {{
+                color: {text_color};
+                background-color: {label_bg};
+                font-size: {self.parent.get_font_size('data')};
+                font-weight: {font_weight};
+                {label_border}
+            }}
+        """)
+        best_lap_label.setAlignment(Qt.AlignCenter)
+        best_lap_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        best_lap_label.customContextMenuRequested.connect(
+            lambda pos, d=driver: self.parent.show_context_menu(d)
+        )
+        layout.addWidget(best_lap_label, 0, column)
+
+    def _create_positions_gained_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
+                                       label_bg: str, label_border: str, font_weight: str, column: int = 1) -> None:
+        """Create positions gained label with color coding.
+
+        Args:
+            layout: Grid layout to add label to
+            driver: Driver state containing positions gained
+            text_color: Text color (default - used for no change)
+            label_bg: Background color
+            label_border: Border style
+            font_weight: Font weight
+            column: Column index to place label
+        """
+        # Determine color based on positions gained/lost
+        if driver.positions_gained.startswith("↑"):
+            # Gained positions - green
+            positions_color = "#00FF00"
+        elif driver.positions_gained.startswith("↓"):
+            # Lost positions - red
+            positions_color = "#FF0000"
+        else:
+            # No change or invalid - use default color
+            positions_color = text_color
+
+        positions_gained_label = QLabel(driver.positions_gained)
+        positions_gained_label.setStyleSheet(f"""
+            QLabel {{
+                color: {positions_color};
+                background-color: {label_bg};
+                font-size: {self.parent.get_font_size('data')};
+                font-weight: {font_weight};
+                {label_border}
+            }}
+        """)
+        positions_gained_label.setAlignment(Qt.AlignCenter)
+        positions_gained_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        positions_gained_label.customContextMenuRequested.connect(
+            lambda pos, d=driver: self.parent.show_context_menu(d)
+        )
+        layout.addWidget(positions_gained_label, 0, column)

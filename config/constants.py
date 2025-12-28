@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 
 # Application version
-VERSION = "0.9.8.4"
+VERSION = "0.9.8.5"
 
 
 @dataclass(frozen=True)
@@ -38,11 +38,13 @@ class UIDimensions:
 class ColumnLayout:
     """Column stretch factors for driver list."""
     POS: int = 11
+    POSITIONS_GAINED: int = 11
     DIV_POS: int = 11
     CAR_NUM: int = 13
-    DRIVER_NAME: int = 34
+    DRIVER_NAME: int = 37
     GAP: int = 16
-    DELTA: int = 16
+    BEST_LAP: int = 16
+    DELTA: int = 13
     LAST_LAP: int = 16
 
 
@@ -133,6 +135,7 @@ class TelemetryConfig:
 
     # iRacing SDK constants
     MAX_CARS: int = 64
+    MAX_CAR_INDEX: int = 63  # Valid car indices are 0-63
     INACTIVE_POSITION: int = 0
     INVALID_LAP: int = -1
     INVALID_LAP_PCT: float = -1.0

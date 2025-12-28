@@ -614,3 +614,126 @@ class TestNewDisplaySettings:
         assert result['show_last_lap'] is True
         assert result['show_delta'] is True
         assert result['font_size'] == 'Large'
+
+
+class TestNewColumnSettings:
+    """Test cases for show_best_lap and show_positions_gained boolean settings."""
+
+    def test_show_best_lap_default_false(self):
+        """Test show_best_lap defaults to False."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['show_best_lap'] is False
+
+    def test_show_positions_gained_default_false(self):
+        """Test show_positions_gained defaults to False."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['show_positions_gained'] is False
+
+    def test_show_best_lap_true(self):
+        """Test show_best_lap can be set to True."""
+        validator = SettingsValidator()
+        data = {'show_best_lap': True}
+        result = validator.validate_and_coerce(data)
+        assert result['show_best_lap'] is True
+
+    def test_show_positions_gained_true(self):
+        """Test show_positions_gained can be set to True."""
+        validator = SettingsValidator()
+        data = {'show_positions_gained': True}
+        result = validator.validate_and_coerce(data)
+        assert result['show_positions_gained'] is True
+
+    def test_show_best_lap_string_coercion(self):
+        """Test show_best_lap string coercion."""
+        validator = SettingsValidator()
+        data = {'show_best_lap': "true"}
+        result = validator.validate_and_coerce(data)
+        assert result['show_best_lap'] is True
+
+    def test_show_positions_gained_string_coercion(self):
+        """Test show_positions_gained string coercion."""
+        validator = SettingsValidator()
+        data = {'show_positions_gained': "false"}
+        result = validator.validate_and_coerce(data)
+        assert result['show_positions_gained'] is False
+
+    def test_show_best_lap_numeric_coercion(self):
+        """Test show_best_lap numeric coercion."""
+        validator = SettingsValidator()
+        data = {'show_best_lap': 1}
+        result = validator.validate_and_coerce(data)
+        assert result['show_best_lap'] is True
+
+    def test_show_positions_gained_numeric_coercion(self):
+        """Test show_positions_gained numeric coercion."""
+        validator = SettingsValidator()
+        data = {'show_positions_gained': 0}
+        result = validator.validate_and_coerce(data)
+        assert result['show_positions_gained'] is False
+
+    def test_both_new_settings_together(self):
+        """Test both show_best_lap and show_positions_gained can be set together."""
+        validator = SettingsValidator()
+        data = {
+            'show_best_lap': True,
+            'show_positions_gained': True
+        }
+        result = validator.validate_and_coerce(data)
+        assert result['show_best_lap'] is True
+        assert result['show_positions_gained'] is True
+
+    def test_show_best_lap_invalid_returns_default(self):
+        """Test invalid show_best_lap value returns default."""
+        validator = SettingsValidator()
+        data = {'show_best_lap': 'maybe'}
+        result = validator.validate_and_coerce(data)
+        assert result['show_best_lap'] is False
+
+    def test_show_positions_gained_invalid_returns_default(self):
+        """Test invalid show_positions_gained value returns default."""
+        validator = SettingsValidator()
+        data = {'show_positions_gained': [True]}
+        result = validator.validate_and_coerce(data)
+        assert result['show_positions_gained'] is False
+
+    def test_all_four_column_settings_together(self):
+        """Test all four optional column settings together."""
+        validator = SettingsValidator()
+        data = {
+            'show_positions_gained': True,
+            'show_best_lap': True,
+            'show_last_lap': True,
+            'show_delta': True
+        }
+        result = validator.validate_and_coerce(data)
+        assert result['show_positions_gained'] is True
+        assert result['show_best_lap'] is True
+        assert result['show_last_lap'] is True
+        assert result['show_delta'] is True
+
+    def test_complete_settings_with_all_columns(self):
+        """Test complete settings including all optional columns."""
+        validator = SettingsValidator()
+        data = {
+            'width': 500,
+            'opacity': 0.8,
+            'show_division_gap': True,
+            'show_positions_gained': True,
+            'show_best_lap': True,
+            'show_last_lap': True,
+            'show_delta': True,
+            'font_size': 'Large'
+        }
+        result = validator.validate_and_coerce(data)
+        assert result['width'] == 500
+        assert result['opacity'] == 0.8
+        assert result['show_division_gap'] is True
+        assert result['show_positions_gained'] is True
+        assert result['show_best_lap'] is True
+        assert result['show_last_lap'] is True
+        assert result['show_delta'] is True
+        assert result['font_size'] == 'Large'

@@ -47,9 +47,13 @@ The iRacing League Overlay is a real-time race position display application buil
 Centralized configuration constants for the entire application.
 
 **Classes:**
-- `UIConfig` - UI-related constants (colors, fonts, sizes)
+- `UIColors` - Color palette constants
+- `UIDimensions` - Window and UI element dimensions
+- `ColumnLayout` - Column stretch factors for driver list
+- `Timing` - Timing and refresh rate constants
+- `UIConfig` - UI-related constants (colors, fonts, sizes, division colors)
 - `FileConfig` - File paths and names
-- `TelemetryConfig` - Telemetry update rates and thresholds
+- `TelemetryConfig` - Telemetry update rates, iRacing SDK constants (MAX_CARS=64, MAX_CAR_INDEX=63), session flags
 
 **Purpose**: Single source of truth for configuration values, making it easy to adjust behavior without changing code.
 
@@ -147,7 +151,7 @@ Unified data structure for driver information during a session.
 **Key Features:**
 - Dataclass with type hints for all fields
 - Computed properties: `car_number`, `driver_name`, `car_class_id`, `total_track_position`
-- Direct fields: `car_idx`, `driver_info`, `position`, `division_position`, `division_name`, `division_color`, `gap`, `is_player`, `is_disconnected`, `is_finished`, etc.
+- Direct fields: `car_idx`, `driver_info`, `position`, `division_position`, `starting_position`, `division_name`, `division_color`, `gap`, `delta`, `last_lap`, `best_lap`, `positions_gained`, `is_player`, `is_disconnected`, `is_finished`, etc.
 - Used throughout the codebase as the primary driver data container
 - Eliminates the need for intermediate dicts and parallel data structures
 
@@ -167,6 +171,9 @@ Pure functions for calculating and formatting time/lap gaps.
 - `calculate_time_gap()` - Calculate time difference in seconds
 - `calculate_lap_gap()` - Calculate lap difference
 - `format_gap_display()` - Format gap for UI display
+- `format_delta_display()` - Format lap time delta comparison
+- `format_lap_time()` - Format lap time for display (supports minutes:seconds)
+- `format_positions_gained()` - Format positions gained/lost with arrow indicators (↑/↓)
 
 **Purpose**: Centralize gap calculation logic for consistency and testability.
 
@@ -282,6 +289,7 @@ Racing → Checkered Flag → Drivers Finishing Individually
 - Handles disconnected drivers (restores from DriverState snapshots)
 - Manages finish tracking workflow (moved from TelemetryProcessor)
 - Works directly with DriverState objects (no intermediate dicts)
+- Captures starting grid positions (race sessions only) for positions gained tracking
 
 #### `telemetry_processor.py`
 Main telemetry processing pipeline.
@@ -296,6 +304,7 @@ Main telemetry processing pipeline.
 - Separate finished and racing drivers to prevent position contamination
 - Calculate division positions (sets DriverState.division_position directly)
 - Manage driver snapshots for racing drivers
+- Calculate delta lap times (with mode detection for driving vs spectating)
 - Return List[DriverState] for UI display
 
 **Purpose**: Orchestrate all telemetry processing and coordinate between core modules. Acts as a coordinator rather than implementing low-level logic. Works exclusively with DriverState objects.
@@ -312,10 +321,20 @@ Main telemetry processing pipeline.
 
 **Size**: 640 LOC (reduced from 962 LOC after position calculation extraction)
 
+**Key Methods:**
+- `_is_driving_mode()` - Detects if player is driving vs spectating (checks if player_car_idx ≤ MAX_CAR_INDEX)
+- `_calculate_delta()` - Calculates delta lap times with mode-aware reference selection
+- `_build_race_data_entry()` - Builds DriverState objects with all formatted display strings
+
 **Logging:**
 - Logs session changes (Practice → Qualifying → Race)
 - Logs processing errors with full tracebacks
 - Debug-level logs for non-critical telemetry issues
+
+**Design Note - Delta Calculation:**
+- DRIVING MODE: Compare each driver to player's lap (reference = player)
+- SPECTATING MODE: Compare each driver to their division leader's lap (reference = division leader)
+- Argument order is flipped between modes to maintain consistent color coding (green = faster, red = slower)
 
 **Data Flow:**
 ```

@@ -480,3 +480,103 @@ class TestFormatLapTime:
         """Test decimals are padded correctly."""
         lap_time = GapCalculator.format_lap_time(85.1)
         assert lap_time == "1:25.10"
+
+
+class TestFormatPositionsGained:
+    """Test cases for format_positions_gained method."""
+
+    def test_positions_gained_positive(self):
+        """Test positions gained shows up arrow."""
+        result = GapCalculator.format_positions_gained(
+            current_position=5,
+            starting_position=10
+        )
+        assert result == "↑5"
+
+    def test_positions_gained_single(self):
+        """Test single position gained."""
+        result = GapCalculator.format_positions_gained(
+            current_position=9,
+            starting_position=10
+        )
+        assert result == "↑1"
+
+    def test_positions_lost_negative(self):
+        """Test positions lost shows down arrow."""
+        result = GapCalculator.format_positions_gained(
+            current_position=10,
+            starting_position=5
+        )
+        assert result == "↓5"
+
+    def test_positions_lost_single(self):
+        """Test single position lost."""
+        result = GapCalculator.format_positions_gained(
+            current_position=10,
+            starting_position=9
+        )
+        assert result == "↓1"
+
+    def test_no_change_returns_dash(self):
+        """Test no position change returns em dash."""
+        result = GapCalculator.format_positions_gained(
+            current_position=5,
+            starting_position=5
+        )
+        assert result == "—"
+
+    def test_invalid_current_position_zero(self):
+        """Test zero current position returns em dash."""
+        result = GapCalculator.format_positions_gained(
+            current_position=0,
+            starting_position=10
+        )
+        assert result == "—"
+
+    def test_invalid_current_position_negative(self):
+        """Test negative current position returns em dash."""
+        result = GapCalculator.format_positions_gained(
+            current_position=-1,
+            starting_position=10
+        )
+        assert result == "—"
+
+    def test_invalid_starting_position_zero(self):
+        """Test zero starting position returns em dash."""
+        result = GapCalculator.format_positions_gained(
+            current_position=5,
+            starting_position=0
+        )
+        assert result == "—"
+
+    def test_invalid_starting_position_negative(self):
+        """Test negative starting position returns em dash."""
+        result = GapCalculator.format_positions_gained(
+            current_position=5,
+            starting_position=-1
+        )
+        assert result == "—"
+
+    def test_both_positions_invalid(self):
+        """Test both invalid positions returns em dash."""
+        result = GapCalculator.format_positions_gained(
+            current_position=0,
+            starting_position=0
+        )
+        assert result == "—"
+
+    def test_large_gains(self):
+        """Test large position gains."""
+        result = GapCalculator.format_positions_gained(
+            current_position=1,
+            starting_position=20
+        )
+        assert result == "↑19"
+
+    def test_large_losses(self):
+        """Test large position losses."""
+        result = GapCalculator.format_positions_gained(
+            current_position=20,
+            starting_position=1
+        )
+        assert result == "↓19"
