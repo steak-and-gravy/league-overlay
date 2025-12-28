@@ -30,8 +30,8 @@ class UIDimensions:
     TITLE_BAR_HEIGHT: int = 30
     SIZE_GRIP_SIZE: int = 20
     CLOSE_BUTTON_WIDTH: int = 25
-    SETTINGS_DIALOG_WIDTH: int = 620
-    SETTINGS_DIALOG_HEIGHT: int = 450
+    SETTINGS_DIALOG_WIDTH: int = 630
+    SETTINGS_DIALOG_HEIGHT: int = 480
 
 
 @dataclass(frozen=True)
@@ -134,8 +134,7 @@ class TelemetryConfig:
     MAX_REFRESH_RATE: float = 3.0
 
     # iRacing SDK constants
-    MAX_CARS: int = 64
-    MAX_CAR_INDEX: int = 63  # Valid car indices are 0-63
+    MAX_CARS: int = 63
     INACTIVE_POSITION: int = 0
     INVALID_LAP: int = -1
     INVALID_LAP_PCT: float = -1.0

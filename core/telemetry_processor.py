@@ -370,7 +370,7 @@ class TelemetryProcessor:
             True if player is driving (player_car_idx is valid), False if spectating
         """
         player_car_idx = self.position_calculator.player_car_idx
-        return player_car_idx is not None and player_car_idx <= TELEMETRY_CONFIG.MAX_CAR_INDEX
+        return player_car_idx is not None and player_car_idx < TELEMETRY_CONFIG.MAX_CARS
 
     def _calculate_delta(self, driver_lap_time: float, all_drivers_with_colors: List[Dict],
                         car_idx_last_lap: list, current_driver_color: str, car_idx: int) -> str:

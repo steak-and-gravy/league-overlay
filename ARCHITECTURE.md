@@ -53,7 +53,7 @@ Centralized configuration constants for the entire application.
 - `Timing` - Timing and refresh rate constants
 - `UIConfig` - UI-related constants (colors, fonts, sizes, division colors)
 - `FileConfig` - File paths and names
-- `TelemetryConfig` - Telemetry update rates, iRacing SDK constants (MAX_CARS=64, MAX_CAR_INDEX=63), session flags
+- `TelemetryConfig` - Telemetry update rates, iRacing SDK constants (MAX_CARS=63), session flags
 
 **Purpose**: Single source of truth for configuration values, making it easy to adjust behavior without changing code.
 
@@ -324,7 +324,7 @@ Main telemetry processing pipeline.
 **Size**: 640 LOC (reduced from 962 LOC after position calculation extraction)
 
 **Key Methods:**
-- `_is_driving_mode()` - Detects if player is driving vs spectating (checks if player_car_idx ≤ MAX_CAR_INDEX)
+- `_is_driving_mode()` - Detects if player is driving vs spectating (checks if player_car_idx < MAX_CARS)
 - `_calculate_delta()` - Calculates delta lap times with mode-aware reference selection
 - `_build_race_data_entry()` - Builds DriverState objects with all formatted display strings
 

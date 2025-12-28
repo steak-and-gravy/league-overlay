@@ -47,8 +47,8 @@ class SettingsDialog(QDialog):
         # Config section
         config_group = QFrame()
         config_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
-        config_group.setMinimumWidth(295)
-        config_group.setMaximumWidth(295)
+        config_group.setMinimumWidth(300)
+        config_group.setMaximumWidth(300)
         config_layout = QVBoxLayout(config_group)
         config_layout.setSpacing(8)
 
@@ -93,7 +93,6 @@ class SettingsDialog(QDialog):
             }
         """)
         self.populate_league_dropdown()
-        self.league_combo.currentIndexChanged.connect(self.on_league_selected)
         league_row.addWidget(self.league_combo, 1)
         config_layout.addLayout(league_row)
 
@@ -144,13 +143,17 @@ class SettingsDialog(QDialog):
         buttons_row.addWidget(self.save_local_btn)
 
         config_layout.addLayout(buttons_row)
+
+        # Now connect the league dropdown signal handler and update button states
+        self.league_combo.currentIndexChanged.connect(self.on_league_selected)
+        self._update_refresh_button()
         left_column.addWidget(config_group)
 
         # Division colors (moved to left column)
         colors_group = QFrame()
         colors_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
-        colors_group.setMinimumWidth(295)
-        colors_group.setMaximumWidth(295)
+        colors_group.setMinimumWidth(300)
+        colors_group.setMaximumWidth(300)
         colors_layout = QVBoxLayout(colors_group)
         colors_layout.setSpacing(8)
 
@@ -293,8 +296,8 @@ class SettingsDialog(QDialog):
         # Window settings (moved to right column)
         window_group = QFrame()
         window_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
-        window_group.setMinimumWidth(295)
-        window_group.setMaximumWidth(295)
+        window_group.setMinimumWidth(300)
+        window_group.setMaximumWidth(300)
         window_layout = QVBoxLayout(window_group)
         window_layout.setSpacing(8)
         
