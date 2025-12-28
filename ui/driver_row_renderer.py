@@ -387,11 +387,11 @@ class DriverRowRenderer:
         """
         # Determine color based on positions gained/lost
         if driver.positions_gained.startswith("↑"):
-            # Gained positions - green
-            positions_color = "#00FF00"
+            # Gained positions - use faster_color (green by default)
+            positions_color = self.parent.settings.faster_color
         elif driver.positions_gained.startswith("↓"):
-            # Lost positions - red
-            positions_color = "#FF0000"
+            # Lost positions - use slower_color (red by default)
+            positions_color = self.parent.settings.slower_color
         else:
             # No change or invalid - use default color
             positions_color = text_color

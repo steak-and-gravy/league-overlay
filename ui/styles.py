@@ -43,8 +43,8 @@ class DarkColorStyle(ColorStyleStrategy):
     def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
         text_color = driver.division_color
         gap_color = "white"
-        delta_faster_color = "#00FF00"  # Bright green - good contrast on black
-        delta_slower_color = "#FF6666"  # Bright red - good contrast on black
+        delta_faster_color = parent.settings.faster_color
+        delta_slower_color = parent.settings.slower_color
 
         if driver.is_player:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
@@ -78,8 +78,8 @@ class AlternateColorStyle(ColorStyleStrategy):
         bg_style = f"background-color: {parent.get_bg_color(base_bg)};"
         text_color = "#000000"
         gap_color = "#000000"
-        delta_faster_color = "#006400"  # Dark green - good contrast on bright backgrounds
-        delta_slower_color = "#8B0000"  # Dark red - good contrast on bright backgrounds
+        delta_faster_color = parent.settings.faster_color
+        delta_slower_color = parent.settings.slower_color
         label_bg = parent.get_bg_color(base_bg)
 
         if driver.is_player:
@@ -132,8 +132,8 @@ class OutlineColorStyle(ColorStyleStrategy):
     def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
         text_color = driver.division_color
         gap_color = "white"
-        delta_faster_color = "#00FF00"  # Bright green - good contrast on black
-        delta_slower_color = "#FF6666"  # Bright red - good contrast on black
+        delta_faster_color = parent.settings.faster_color
+        delta_slower_color = parent.settings.slower_color
         label_bg = "transparent"
         label_border = "border: none;"
 
@@ -167,8 +167,8 @@ class DefaultColorStyle(ColorStyleStrategy):
     def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
         text_color = driver.division_color
         gap_color = "white"
-        delta_faster_color = "#00FF00"  # Bright green - good contrast on black
-        delta_slower_color = "#FF6666"  # Bright red - good contrast on black
+        delta_faster_color = parent.settings.faster_color
+        delta_slower_color = parent.settings.slower_color
         label_bg = parent.get_bg_color('#000000')
         label_border = ''
         position_bg = parent.get_bg_color('#FF0000')

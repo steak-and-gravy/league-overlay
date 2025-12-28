@@ -171,11 +171,11 @@ class SettingsDialog(QDialog):
             color_row.setSpacing(5)
 
             div_label = QLabel(f"{division}:")
-            div_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 50px;")
+            div_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 95px;")
             color_row.addWidget(div_label)
 
             color_btn = QPushButton()
-            color_btn.setFixedSize(104, 30)  # 30% wider than original 80px
+            color_btn.setFixedSize(72, 18)
             color_btn.setStyleSheet(f"""
                 QPushButton {{
                     background-color: {color};
@@ -203,6 +203,85 @@ class SettingsDialog(QDialog):
 
             color_row.addStretch()
             colors_layout.addLayout(color_row)
+
+        # Add performance indicator colors section
+        colors_layout.addSpacing(8)
+
+        perf_colors_title = QLabel("Performance Indicator Colors")
+        perf_colors_title.setStyleSheet("font-weight: bold; font-size: 10pt; border: none; color: white;")
+        colors_layout.addWidget(perf_colors_title)
+
+        # Faster color (green by default)
+        faster_color_row = QHBoxLayout()
+        faster_color_row.setSpacing(5)
+
+        faster_label = QLabel("Faster/Gained:")
+        faster_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 95px;")
+        faster_color_row.addWidget(faster_label)
+
+        self.faster_color_btn = QPushButton()
+        self.faster_color_btn.setFixedSize(72, 18)
+        self.faster_color_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.parent_overlay.settings.faster_color};
+                border: 2px solid #555555;
+            }}
+            QPushButton:hover {{
+                border: 2px solid #777777;
+            }}
+        """)
+        self.faster_color_btn.clicked.connect(lambda: self.choose_performance_color('faster'))
+        faster_color_row.addWidget(self.faster_color_btn)
+
+        self.faster_color_value_label = QLabel(self.parent_overlay.settings.faster_color)
+        self.faster_color_value_label.setStyleSheet("""
+            border: none;
+            color: white;
+            font-size: 9pt;
+            background-color: #404040;
+            padding: 2px 4px;
+            min-width: 60px;
+        """)
+        faster_color_row.addWidget(self.faster_color_value_label)
+
+        faster_color_row.addStretch()
+        colors_layout.addLayout(faster_color_row)
+
+        # Slower color (red by default)
+        slower_color_row = QHBoxLayout()
+        slower_color_row.setSpacing(5)
+
+        slower_label = QLabel("Slower/Lost:")
+        slower_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 95px;")
+        slower_color_row.addWidget(slower_label)
+
+        self.slower_color_btn = QPushButton()
+        self.slower_color_btn.setFixedSize(72, 18)
+        self.slower_color_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.parent_overlay.settings.slower_color};
+                border: 2px solid #555555;
+            }}
+            QPushButton:hover {{
+                border: 2px solid #777777;
+            }}
+        """)
+        self.slower_color_btn.clicked.connect(lambda: self.choose_performance_color('slower'))
+        slower_color_row.addWidget(self.slower_color_btn)
+
+        self.slower_color_value_label = QLabel(self.parent_overlay.settings.slower_color)
+        self.slower_color_value_label.setStyleSheet("""
+            border: none;
+            color: white;
+            font-size: 9pt;
+            background-color: #404040;
+            padding: 2px 4px;
+            min-width: 60px;
+        """)
+        slower_color_row.addWidget(self.slower_color_value_label)
+
+        slower_color_row.addStretch()
+        colors_layout.addLayout(slower_color_row)
 
         left_column.addWidget(colors_group)
         left_column.addStretch()
@@ -578,6 +657,49 @@ class SettingsDialog(QDialog):
             """)
             self.color_value_labels[division].setText(new_color)
 
+    def choose_performance_color(self, color_type):
+        """Open color picker to customize performance indicator colors.
+
+        Args:
+            color_type: Either 'faster' or 'slower'
+        """
+        if color_type == 'faster':
+            current_color = self.parent_overlay.settings.faster_color
+            title = "Choose Faster/Gained Color"
+        else:  # slower
+            current_color = self.parent_overlay.settings.slower_color
+            title = "Choose Slower/Lost Color"
+
+        color = QColorDialog.getColor(QColor(current_color), self, title)
+
+        if color.isValid():
+            new_color = color.name()
+
+            if color_type == 'faster':
+                self.parent_overlay.settings.faster_color = new_color
+                self.faster_color_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {new_color};
+                        border: 2px solid #555555;
+                    }}
+                    QPushButton:hover {{
+                        border: 2px solid #777777;
+                    }}
+                """)
+                self.faster_color_value_label.setText(new_color)
+            else:  # slower
+                self.parent_overlay.settings.slower_color = new_color
+                self.slower_color_btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {new_color};
+                        border: 2px solid #555555;
+                    }}
+                    QPushButton:hover {{
+                        border: 2px solid #777777;
+                    }}
+                """)
+                self.slower_color_value_label.setText(new_color)
+
     def _update_status_message(self):
         """Update the status label with current driver count."""
         driver_count = len(self.parent_overlay.division_manager.driver_colors.get('drivers', []))
@@ -894,7 +1016,32 @@ class SettingsDialog(QDialog):
                         }}
                     """)
                     self.color_value_labels[division].setText(color)
-            
+
+            # Reset performance indicator colors
+            self.parent_overlay.settings.faster_color = "#00FF00"  # Green
+            self.faster_color_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: #00FF00;
+                    border: 2px solid #555555;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #777777;
+                }}
+            """)
+            self.faster_color_value_label.setText("#00FF00")
+
+            self.parent_overlay.settings.slower_color = "#FF0000"  # Red
+            self.slower_color_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: #FF0000;
+                    border: 2px solid #555555;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #777777;
+                }}
+            """)
+            self.slower_color_value_label.setText("#FF0000")
+
             self.parent_overlay.settings.opacity = 0.5
             self.parent_overlay.update_all_backgrounds()
 

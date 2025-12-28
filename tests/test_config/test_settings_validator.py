@@ -737,3 +737,120 @@ class TestNewColumnSettings:
         assert result['show_last_lap'] is True
         assert result['show_delta'] is True
         assert result['font_size'] == 'Large'
+
+
+class TestPerformanceIndicatorColors:
+    """Test cases for faster_color and slower_color settings."""
+
+    def test_faster_color_default(self):
+        """Test faster_color defaults to green (#00FF00)."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['faster_color'] == "#00FF00"
+
+    def test_slower_color_default(self):
+        """Test slower_color defaults to red (#FF0000)."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['slower_color'] == "#FF0000"
+
+    def test_faster_color_valid_hex(self):
+        """Test faster_color accepts valid hex color."""
+        validator = SettingsValidator()
+        data = {'faster_color': '#FF8C00'}
+        result = validator.validate_and_coerce(data)
+        assert result['faster_color'] == '#FF8C00'
+
+    def test_slower_color_valid_hex(self):
+        """Test slower_color accepts valid hex color."""
+        validator = SettingsValidator()
+        data = {'slower_color': '#0000FF'}
+        result = validator.validate_and_coerce(data)
+        assert result['slower_color'] == '#0000FF'
+
+    def test_faster_color_invalid_hex_returns_default(self):
+        """Test invalid faster_color returns default green."""
+        validator = SettingsValidator()
+        data = {'faster_color': 'not-a-color'}
+        result = validator.validate_and_coerce(data)
+        assert result['faster_color'] == "#00FF00"
+
+    def test_slower_color_invalid_hex_returns_default(self):
+        """Test invalid slower_color returns default red."""
+        validator = SettingsValidator()
+        data = {'slower_color': 'invalid'}
+        result = validator.validate_and_coerce(data)
+        assert result['slower_color'] == "#FF0000"
+
+    def test_faster_color_missing_hash_returns_default(self):
+        """Test faster_color without # returns default."""
+        validator = SettingsValidator()
+        data = {'faster_color': 'FF8C00'}
+        result = validator.validate_and_coerce(data)
+        assert result['faster_color'] == "#00FF00"
+
+    def test_slower_color_wrong_length_returns_default(self):
+        """Test slower_color with wrong length returns default."""
+        validator = SettingsValidator()
+        data = {'slower_color': '#FF00'}
+        result = validator.validate_and_coerce(data)
+        assert result['slower_color'] == "#FF0000"
+
+    def test_faster_color_invalid_type_returns_default(self):
+        """Test faster_color with invalid type returns default."""
+        validator = SettingsValidator()
+        data = {'faster_color': 12345}
+        result = validator.validate_and_coerce(data)
+        assert result['faster_color'] == "#00FF00"
+
+    def test_slower_color_none_returns_default(self):
+        """Test slower_color None returns default."""
+        validator = SettingsValidator()
+        data = {'slower_color': None}
+        result = validator.validate_and_coerce(data)
+        assert result['slower_color'] == "#FF0000"
+
+    def test_both_colors_custom(self):
+        """Test both performance colors can be customized together."""
+        validator = SettingsValidator()
+        data = {
+            'faster_color': '#0FC436',
+            'slower_color': '#FFA500'
+        }
+        result = validator.validate_and_coerce(data)
+        assert result['faster_color'] == '#0FC436'
+        assert result['slower_color'] == '#FFA500'
+
+    def test_colors_with_alpha_channel(self):
+        """Test colors support RGBA format (#RRGGBBAA)."""
+        validator = SettingsValidator()
+        data = {
+            'faster_color': '#00FF00FF',
+            'slower_color': '#FF0000FF'
+        }
+        result = validator.validate_and_coerce(data)
+        assert result['faster_color'] == '#00FF00FF'
+        assert result['slower_color'] == '#FF0000FF'
+
+    def test_complete_settings_with_colors(self):
+        """Test complete settings including performance colors."""
+        validator = SettingsValidator()
+        data = {
+            'width': 500,
+            'opacity': 0.8,
+            'show_best_lap': True,
+            'show_positions_gained': True,
+            'faster_color': '#0000FF',
+            'slower_color': '#FFFF00',
+            'font_size': 'Large'
+        }
+        result = validator.validate_and_coerce(data)
+        assert result['width'] == 500
+        assert result['opacity'] == 0.8
+        assert result['show_best_lap'] is True
+        assert result['show_positions_gained'] is True
+        assert result['faster_color'] == '#0000FF'
+        assert result['slower_color'] == '#FFFF00'
+        assert result['font_size'] == 'Large'
