@@ -89,7 +89,7 @@ If you encounter issues, check `LeagueOverlay.log` in the same directory as the 
 The log file is helpful when reporting bugs or seeking support.
 
 ### Reporting Issues
-Found a bug or have a feature request? Visit the [GitHub Issues page]([https://github.com/steak-and-gravy/league-overlay/issues]).
+Found a bug or have a feature request? Visit the [GitHub Issues page](https://github.com/steak-and-gravy/league-overlay/issues).
 
 ---
 
