@@ -260,7 +260,7 @@ class TelemetryProcessor:
     # RACE DATA BUILDING
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], gap: str, display_position: int, division_color: str, division_name: Optional[str], delta: str = "--", last_lap_time: float = 0.0, best_lap_time: float = 0.0) -> DriverState:
+    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], gap: str, display_position: int, division_color: str, division_name: Optional[str], delta: str = "--", last_lap_time: float = 0.0, best_lap_time: float = 0.0, starting_position: int = 0) -> DriverState:
         """Build a single race data entry for display.
 
         Args:
@@ -273,6 +273,7 @@ class TelemetryProcessor:
             delta: Delta lap time comparison string
             last_lap_time: Driver's last lap time
             best_lap_time: Driver's best lap time
+            starting_position: Driver's starting grid position
 
         Returns:
             DriverState with formatted race data for this driver
@@ -286,6 +287,12 @@ class TelemetryProcessor:
         # Format last lap time for display
         last_lap_display = GapCalculator.format_lap_time(last_lap_time)
 
+        # Format best lap time for display
+        best_lap_display = GapCalculator.format_lap_time(best_lap_time)
+
+        # Format positions gained for display
+        positions_gained_display = GapCalculator.format_positions_gained(display_position, starting_position)
+
         return DriverState(
             car_idx=car_idx,
             driver_info=driver_info,
@@ -297,7 +304,10 @@ class TelemetryProcessor:
             delta=delta,
             last_lap=last_lap_display,
             last_lap_time=last_lap_time,
+            best_lap=best_lap_display,
             best_lap_time=best_lap_time,
+            starting_position=starting_position,
+            positions_gained=positions_gained_display,
             is_player=is_player,
             is_disconnected=is_disconnected
         )
@@ -353,6 +363,15 @@ class TelemetryProcessor:
     # DELTA CALCULATION
     # ═══════════════════════════════════════════════════════════════════════════
 
+    def _is_driving_mode(self) -> bool:
+        """Check if in driving mode (vs spectating mode).
+
+        Returns:
+            True if player is driving (player_car_idx is valid), False if spectating
+        """
+        player_car_idx = self.position_calculator.player_car_idx
+        return player_car_idx is not None and player_car_idx <= TELEMETRY_CONFIG.MAX_CAR_INDEX
+
     def _calculate_delta(self, driver_lap_time: float, all_drivers_with_colors: List[Dict],
                         car_idx_last_lap: list, current_driver_color: str, car_idx: int) -> str:
         """Calculate delta lap time comparison.
@@ -371,11 +390,12 @@ class TelemetryProcessor:
             Formatted delta string (e.g., "+0.5", "-0.3", "--")
         """
         # Determine reference lap time based on driving vs spectating
+        is_driving = self._is_driving_mode()
         player_car_idx = self.position_calculator.player_car_idx
         reference_lap_time = 0.0
         reference_car_idx = None
 
-        if player_car_idx is not None:
+        if is_driving:
             # DRIVING MODE: Compare to player's last lap
             reference_lap_time = car_idx_last_lap[player_car_idx]
             reference_car_idx = player_car_idx
@@ -397,7 +417,16 @@ class TelemetryProcessor:
             return "--"
 
         # Format the delta using GapCalculator
-        return GapCalculator.format_delta_display(driver_lap_time, reference_lap_time)
+        # NOTE: We flip the argument order between driving and spectating modes to maintain
+        # consistent color coding (green = faster, red = slower) from the viewer's perspective:
+        # - DRIVING MODE: Normal order (driver, reference) shows how each driver compares to YOU
+        # - SPECTATING MODE: Flipped order (reference, driver) shows how each driver compares to their leader
+        if is_driving:
+            # DRIVING MODE: Normal calculation (driver vs player)
+            return GapCalculator.format_delta_display(driver_lap_time, reference_lap_time)
+        else:
+            # SPECTATING MODE: Flip the calculation (driver vs division leader)
+            return GapCalculator.format_delta_display(reference_lap_time, driver_lap_time)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # GAP CALCULATION
@@ -666,6 +695,8 @@ class TelemetryProcessor:
                 active_drivers = self.position_calculator.calculate_real_time_positions(drivers)
 
                 if active_drivers:
+                    # Capture starting positions on first race update (before any position changes)
+                    self.race_state_tracker.capture_starting_positions(active_drivers, is_race=True)
                     # Update snapshots for active drivers
                     self._update_race_snapshots(active_drivers)
 
@@ -794,12 +825,15 @@ class TelemetryProcessor:
                     car_idx
                 )
 
+                # Get starting position for positions gained calculation
+                starting_position = self.race_state_tracker.get_starting_position(car_idx)
+
                 # Build and append race data entry
                 driver['position'] = position  # Ensure position is set for helper method (still needed for gap calculations)
                 race_entry = self._build_race_data_entry(
                     driver, division_positions, gap, position,
                     current_driver_color, current_driver_division,
-                    delta, last_lap_time, best_lap_time
+                    delta, last_lap_time, best_lap_time, starting_position
                 )
                 race_data.append(race_entry)
 

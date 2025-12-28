@@ -31,6 +31,8 @@ class RaceStateTracker:
         self.checkered_flag_shown: bool = False
         self.driver_snapshots: Dict[int, DriverState] = {}  # Changed from Dict to DriverState
         self.player_class_car_indices: Optional[Set[int]] = None
+        self.starting_positions: Dict[int, int] = {}  # Maps car_idx to starting grid position
+        self.starting_positions_captured: bool = False
 
     def is_racing(self) -> bool:
         """Check if race is still in progress (checkered not shown yet)."""
@@ -126,6 +128,45 @@ class RaceStateTracker:
         except (KeyError, TypeError):
             logger.warning("FINISH_TRACKING - Failed to cache player class cars")
             self.player_class_car_indices = None
+
+    def capture_starting_positions(self, active_drivers: List[Dict], is_race: bool = True) -> None:
+        """Capture starting grid positions for all drivers (called once at race start).
+
+        Note: Only captures positions during race sessions. Starting positions are not
+        meaningful in practice or qualifying sessions where grid order changes constantly.
+
+        Args:
+            active_drivers: List of driver data dicts with current positions
+            is_race: True if in race session (default True for backward compatibility)
+        """
+        # Only capture starting positions during race sessions
+        if not is_race:
+            return
+
+        if self.starting_positions_captured:
+            return  # Already captured
+
+        # Capture current positions as starting positions
+        for driver in active_drivers:
+            car_idx = driver.get('car_idx')
+            position = driver.get('position', 0)
+            if car_idx is not None and position > 0:
+                self.starting_positions[car_idx] = position
+
+        if self.starting_positions:
+            self.starting_positions_captured = True
+            logger.debug(f"STARTING_POSITIONS - Captured starting positions for {len(self.starting_positions)} drivers")
+
+    def get_starting_position(self, car_idx: int) -> int:
+        """Get starting grid position for a driver.
+
+        Args:
+            car_idx: Car index
+
+        Returns:
+            Starting position (0 if not found)
+        """
+        return self.starting_positions.get(car_idx, 0)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # FINISH STATUS TRACKING

@@ -35,6 +35,8 @@ class AppSettings:
     show_division_gap: bool = True
     show_last_lap: bool = False
     show_delta: bool = False
+    show_best_lap: bool = False
+    show_positions_gained: bool = False
     log_level: str = "INFO"
 
     # Configuration files
@@ -122,6 +124,8 @@ class SettingsManager:
                 'show_division_gap': settings.show_division_gap,
                 'show_last_lap': settings.show_last_lap,
                 'show_delta': settings.show_delta,
+                'show_best_lap': settings.show_best_lap,
+                'show_positions_gained': settings.show_positions_gained,
                 'font_size': settings.font_size,
                 'row_color_style': settings.row_color_style,
                 'log_level': settings.log_level
@@ -167,6 +171,8 @@ class SettingsManager:
             'show_division_gap': settings.show_division_gap,
             'show_last_lap': settings.show_last_lap,
             'show_delta': settings.show_delta,
+            'show_best_lap': settings.show_best_lap,
+            'show_positions_gained': settings.show_positions_gained,
             'font_size': settings.font_size,
             'row_color_style': settings.row_color_style,
             'log_level': settings.log_level

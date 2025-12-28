@@ -433,6 +433,20 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row3)
 
+        checkbox_row4 = QHBoxLayout()
+
+        self.show_best_lap_cb = QCheckBox("Show best lap")
+        self.show_best_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
+        self.show_best_lap_cb.setChecked(self.parent_overlay.settings.show_best_lap)
+        checkbox_row4.addWidget(self.show_best_lap_cb)
+
+        self.show_positions_gained_cb = QCheckBox("Show positions gained")
+        self.show_positions_gained_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
+        self.show_positions_gained_cb.setChecked(self.parent_overlay.settings.show_positions_gained)
+        checkbox_row4.addWidget(self.show_positions_gained_cb)
+
+        window_layout.addLayout(checkbox_row4)
+
         right_column.addWidget(window_group)
 
         # Add columns to main layout with equal stretch factors (1:1 ratio)
@@ -824,8 +838,6 @@ class SettingsDialog(QDialog):
 
                 # Repopulate dropdown to show in recent files
                 self.populate_league_dropdown()
-
-                QMessageBox.information(self, "Success", "Config file created successfully!")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to create config file: {e}")
                 
@@ -842,7 +854,6 @@ class SettingsDialog(QDialog):
             self._load_local_file(file_path)
             # Repopulate dropdown to show in recent files
             self.populate_league_dropdown()
-            QMessageBox.information(self, "Success", "Config file loaded successfully!")
                 
     def reset_to_defaults(self):
         """Reset to default settings"""
@@ -898,6 +909,8 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_division_gap = self.show_division_gap_cb.isChecked()
             self.parent_overlay.settings.show_last_lap = self.show_last_lap_cb.isChecked()
             self.parent_overlay.settings.show_delta = self.show_delta_cb.isChecked()
+            self.parent_overlay.settings.show_best_lap = self.show_best_lap_cb.isChecked()
+            self.parent_overlay.settings.show_positions_gained = self.show_positions_gained_cb.isChecked()
             self.parent_overlay.settings.font_size = self.font_size_combo.currentText()
             self.parent_overlay.settings.row_color_style = self.color_style_combo.currentText()
 

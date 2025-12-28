@@ -540,23 +540,38 @@ class LeagueOverlay(QMainWindow):
         self.header_layout.setSpacing(2)
 
         # Reset all column stretches first (clear old values from hidden columns)
-        for col_idx in range(7):  # Max possible columns (5 base + 2 optional)
+        for col_idx in range(9):  # Max possible columns (5 base + 4 optional)
             self.header_layout.setColumnStretch(col_idx, 0)
 
         # Build column configuration based on settings
-        # Always show: Position | Div Pos | Driver Name | Car Number | Gap
-        # Optional: Last Lap, Delta
+        # Always show: Position | [Positions Gained] | Div Pos | Driver Name | Car Number | Gap | [Best Lap] | [Last Lap] | [Delta]
+        # Columns in brackets are optional
         gap_header = "Div Gap" if self.settings.show_division_gap else "Gap"
 
-        headers = ["Pos", "D-Pos", "Driver", "Car#", gap_header]
-        stretches = [COLUMN_LAYOUT.POS, COLUMN_LAYOUT.DIV_POS, COLUMN_LAYOUT.DRIVER_NAME,
-                     COLUMN_LAYOUT.CAR_NUM, COLUMN_LAYOUT.GAP]
+        headers = ["Pos"]
+        stretches = [COLUMN_LAYOUT.POS]
 
-        # Add optional columns
+        # Optional: Positions Gained
+        if self.settings.show_positions_gained:
+            headers.append("+/-")
+            stretches.append(COLUMN_LAYOUT.POSITIONS_GAINED)
+
+        # Always show columns
+        headers.extend(["D-Pos", "Driver", "Car#", gap_header])
+        stretches.extend([COLUMN_LAYOUT.DIV_POS, COLUMN_LAYOUT.DRIVER_NAME,
+                         COLUMN_LAYOUT.CAR_NUM, COLUMN_LAYOUT.GAP])
+
+        # Optional: Best Lap
+        if self.settings.show_best_lap:
+            headers.append("Best Lap")
+            stretches.append(COLUMN_LAYOUT.BEST_LAP)
+
+        # Optional: Last Lap
         if self.settings.show_last_lap:
             headers.append("Last Lap")
             stretches.append(COLUMN_LAYOUT.LAST_LAP)
 
+        # Optional: Delta
         if self.settings.show_delta:
             headers.append("Delta")
             stretches.append(COLUMN_LAYOUT.DELTA)

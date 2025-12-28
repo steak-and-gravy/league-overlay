@@ -10,6 +10,8 @@ BB’s League Overlay displays live standings and gaps with a focus on divisions
 ## ✨ Features
 - **Live Standings** — Current race position (both overall and within division) with driver number and name.
 - **Gap Tracking** — See the real-time gap to the car ahead in your division.
+- **Positions Gained** — Optional column showing positions gained/lost from starting grid (green ↑ = gained, red ↓ = lost).
+- **Best Lap Times** — Optional column displaying each driver's best lap time this session.
 - **Lap Time Delta** — Optional column showing lap time comparison (green = you're faster, red = you're slower).
 - **Last Lap Times** — Optional column displaying each driver's most recent lap time.
 - **Division System** — Assign drivers to divisions (Pro, ProAm, Am, Rookie) with customizable colors.
@@ -37,7 +39,7 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - Row color style (Default, Dark, Alternate, Outline)
 - Refresh rate
 - Division colors
-- Column visibility (show/hide Last Lap and Delta columns)
+- Column visibility (show/hide Positions Gained, Best Lap, Last Lap, and Delta columns)
 - Log level (DEBUG, INFO, WARNING, ERROR)
 
 ---
@@ -52,6 +54,8 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - **Filter divisions**: Click the division filter button to cycle through views
 - **Assign on-the-fly**: Right-click any driver to change their division
 - **Auto-centering**: The overlay keeps you in view; scroll manually to disable temporarily
+- **Positions Gained column**: Shows positions gained/lost from starting grid with color coding (green for gained, red for lost)
+- **Best Lap column**: Shows each driver's best lap time this session
 - **Delta column**: When driving, compares lap times to your last lap. When spectating, compares to division leader's last lap
 - **Last Lap column**: Shows formatted lap times (e.g., "1:24.56" or "58.34" for times under 60 seconds)
 

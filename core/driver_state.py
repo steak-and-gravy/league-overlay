@@ -71,6 +71,9 @@ class DriverState:
     division_position: int = 0
     """Position within driver's division (1 = division leader)"""
 
+    starting_position: int = 0
+    """Driver's starting grid position (captured at race start)"""
+
     # ═══════════════════════════════════════════════════════════════════════════
     # STATE FLAGS
     # ═══════════════════════════════════════════════════════════════════════════
@@ -106,6 +109,12 @@ class DriverState:
 
     last_lap: str = ""
     """Formatted last lap time for display (e.g., "1:24.5", "--")"""
+
+    best_lap: str = ""
+    """Formatted best lap time for display (e.g., "1:24.5", "--")"""
+
+    positions_gained: str = ""
+    """Formatted positions gained/lost for display (e.g., "↑5", "↓3", "—")"""
 
     # ═══════════════════════════════════════════════════════════════════════════
     # COMPUTED PROPERTIES

@@ -99,3 +99,31 @@ class GapCalculator:
             minutes = int(lap_time // 60)
             seconds = lap_time % 60
             return f"{minutes}:{seconds:05.2f}"
+
+    @staticmethod
+    def format_positions_gained(current_position: int, starting_position: int) -> str:
+        """Format positions gained/lost for display.
+
+        Args:
+            current_position: Driver's current position
+            starting_position: Driver's starting grid position
+
+        Returns:
+            Formatted positions gained string:
+            - "↑5" if gained 5 positions (positive change)
+            - "↓3" if lost 3 positions (negative change)
+            - "—" if no change or invalid data
+        """
+        # Check for invalid positions
+        if current_position <= 0 or starting_position <= 0:
+            return "—"
+
+        # Calculate positions gained (positive = moved up, negative = moved down)
+        gained = starting_position - current_position
+
+        if gained > 0:
+            return f"↑{gained}"
+        elif gained < 0:
+            return f"↓{abs(gained)}"
+        else:
+            return "—"

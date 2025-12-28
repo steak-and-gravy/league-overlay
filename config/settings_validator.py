@@ -139,6 +139,16 @@ class SettingsValidator:
             default=False,  # Match AppSettings default
             field_name='show_delta'
         )
+        validated['show_best_lap'] = self.coerce_bool(
+            data.get('show_best_lap'),
+            default=False,  # Match AppSettings default
+            field_name='show_best_lap'
+        )
+        validated['show_positions_gained'] = self.coerce_bool(
+            data.get('show_positions_gained'),
+            default=False,  # Match AppSettings default
+            field_name='show_positions_gained'
+        )
 
         # Enum fields (limited valid values)
         validated['font_size'] = self.coerce_enum(
