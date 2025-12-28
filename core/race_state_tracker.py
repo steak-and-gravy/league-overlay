@@ -32,7 +32,7 @@ class RaceStateTracker:
         self.driver_snapshots: Dict[int, DriverState] = {}  # Changed from Dict to DriverState
         self.player_class_car_indices: Optional[Set[int]] = None
         self.starting_positions: Dict[int, int] = {}  # Maps car_idx to starting grid position
-        self.starting_positions_captured: bool = False
+        self.starting_positions_loaded: bool = False  # Track if we've attempted to load starting positions
 
     def is_racing(self) -> bool:
         """Check if race is still in progress (checkered not shown yet)."""
@@ -129,42 +129,91 @@ class RaceStateTracker:
             logger.warning("FINISH_TRACKING - Failed to cache player class cars")
             self.player_class_car_indices = None
 
-    def capture_starting_positions(self, active_drivers: List[Dict], is_race: bool = True) -> None:
-        """Capture starting grid positions for all drivers (called once at race start).
+    def load_starting_positions_from_qualify(self) -> None:
+        """Load starting grid positions from QualifyResultsInfo.
 
-        Note: Only captures positions during race sessions. Starting positions are not
-        meaningful in practice or qualifying sessions where grid order changes constantly.
+        This method retrieves the official starting positions from qualifying results
+        stored in the SessionInfo YAML. This is more reliable than capturing positions
+        at race start and works even if the overlay connects mid-race.
 
-        Args:
-            active_drivers: List of driver data dicts with current positions
-            is_race: True if in race session (default True for backward compatibility)
+        Only loads positions during race sessions. Does nothing for practice/qualifying.
         """
-        # Only capture starting positions during race sessions
-        if not is_race:
-            return
+        # Mark that we've attempted to load (prevents infinite retries)
+        self.starting_positions_loaded = True
 
-        if self.starting_positions_captured:
-            return  # Already captured
+        # Clear any existing starting positions
+        self.starting_positions.clear()
 
-        # Capture current positions as starting positions
-        for driver in active_drivers:
-            car_idx = driver.get('car_idx')
-            position = driver.get('position', 0)
-            if car_idx is not None and position > 0:
-                self.starting_positions[car_idx] = position
+        try:
+            # First try QualifyResultsInfo (most reliable source)
+            try:
+                qualify_info = self.ir['QualifyResultsInfo']
+                if qualify_info and 'Results' in qualify_info and qualify_info['Results']:
+                    for result in qualify_info['Results']:
+                        car_idx = result.get('CarIdx')
+                        # Use ClassPosition for multi-class support (0-based, so add 1)
+                        class_position = result.get('ClassPosition')
+                        if car_idx is not None and class_position is not None:
+                            self.starting_positions[car_idx] = class_position + 1
 
-        if self.starting_positions:
-            self.starting_positions_captured = True
-            logger.debug(f"STARTING_POSITIONS - Captured starting positions for {len(self.starting_positions)} drivers")
+                    if self.starting_positions:
+                        logger.debug(f"STARTING_POSITIONS - Loaded {len(self.starting_positions)} starting positions from QualifyResultsInfo")
+                        return
+            except (KeyError, TypeError):
+                pass  # QualifyResultsInfo not available, try SessionInfo fallback
+
+            # Fallback: Look for qualifying session in SessionInfo
+            session_info = self.ir['SessionInfo']
+            if session_info and 'Sessions' in session_info:
+                sessions = session_info['Sessions']
+
+                # Find qualifying session (search backwards for most recent qualifying)
+                qualify_session = None
+                for session in reversed(sessions):
+                    if session.get('SessionType', '').lower() == 'qualify':
+                        qualify_session = session
+                        break
+
+                # If no qualifying session, use practice as fallback
+                if not qualify_session:
+                    for session in reversed(sessions):
+                        if session.get('SessionType', '').lower() == 'practice':
+                            qualify_session = session
+                            break
+
+                if qualify_session and 'ResultsPositions' in qualify_session:
+                    results = qualify_session['ResultsPositions']
+                    if results:
+                        for result in results:
+                            car_idx = result.get('CarIdx')
+                            # Use ClassPosition for multi-class support (0-based, so add 1)
+                            class_position = result.get('ClassPosition')
+                            if car_idx is not None and class_position is not None:
+                                self.starting_positions[car_idx] = class_position + 1
+
+                        if self.starting_positions:
+                            session_type = qualify_session.get('SessionType', 'unknown')
+                            logger.debug(f"STARTING_POSITIONS - Loaded {len(self.starting_positions)} starting positions from {session_type} session")
+                            return
+
+            # If we get here and have no starting positions, log a warning
+            if not self.starting_positions:
+                logger.warning("STARTING_POSITIONS - Could not load starting positions from QualifyResultsInfo or session results")
+
+        except (KeyError, TypeError, IndexError) as e:
+            logger.warning(f"STARTING_POSITIONS - Error loading starting positions: {e}")
 
     def get_starting_position(self, car_idx: int) -> int:
         """Get starting grid position for a driver.
+
+        Starting positions should be loaded at session change via load_starting_positions_from_qualify().
+        This method just returns from the cache.
 
         Args:
             car_idx: Car index
 
         Returns:
-            Starting position (0 if not found)
+            Starting position (0 if not found or not available)
         """
         return self.starting_positions.get(car_idx, 0)
 

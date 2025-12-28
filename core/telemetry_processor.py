@@ -678,6 +678,9 @@ class TelemetryProcessor:
             # Handle session changes
             if self._detect_session_change(session_data):
                 self.reset_fields()
+                # Load starting positions if entering a race session
+                if is_race:
+                    self.race_state_tracker.load_starting_positions_from_qualify()
 
             # Identify player
             self.position_calculator.identify_player(drivers)
@@ -695,8 +698,6 @@ class TelemetryProcessor:
                 active_drivers = self.position_calculator.calculate_real_time_positions(drivers)
 
                 if active_drivers:
-                    # Capture starting positions on first race update (before any position changes)
-                    self.race_state_tracker.capture_starting_positions(active_drivers, is_race=True)
                     # Update snapshots for active drivers
                     self._update_race_snapshots(active_drivers)
 
@@ -825,8 +826,8 @@ class TelemetryProcessor:
                     car_idx
                 )
 
-                # Get starting position for positions gained calculation
-                starting_position = self.race_state_tracker.get_starting_position(car_idx)
+                # Get starting position for positions gained calculation (only during race sessions)
+                starting_position = self.race_state_tracker.get_starting_position(car_idx) if is_race else 0
 
                 # Build and append race data entry
                 driver['position'] = position  # Ensure position is set for helper method (still needed for gap calculations)
