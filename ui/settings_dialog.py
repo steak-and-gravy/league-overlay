@@ -13,7 +13,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
 from config.constants import VERSION, UI_DIMENSIONS, TelemetryConfig
-from config.logging_config import set_log_level
+from config.logging_config import set_log_level, get_logger
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from league_overlay import LeagueOverlay
@@ -765,7 +767,21 @@ class SettingsDialog(QDialog):
                 self._update_refresh_button()
                 return
 
-        # Not found, select first item
+        # Not found - check if it's a valid local file that's not in recent list
+        if current and not current.startswith("official:") and not current.startswith("action:"):
+            if os.path.exists(current):
+                # Add this file to recent configs (at the beginning as most recent)
+                if current not in self.parent_overlay.settings.recent_local_configs:
+                    self.parent_overlay.settings.recent_local_configs.insert(0, current)
+                    self.parent_overlay.settings_manager.save(self.parent_overlay.settings)
+                    logger.info(f"Added legacy config file to recent list: {current}")
+
+                # Re-populate dropdown to include this file
+                self.populate_league_dropdown()
+                return
+
+        # File doesn't exist or is invalid - select first item and log warning
+        logger.warning(f"Current config '{current}' not found or invalid, defaulting to first available option")
         if self.league_combo.count() > 0:
             self.league_combo.setCurrentIndex(0)
             self._update_refresh_button()
@@ -821,8 +837,6 @@ class SettingsDialog(QDialog):
             # Update status message
             self._update_status_message()
 
-            from config.logging_config import get_logger
-            logger = get_logger(__name__)
             logger.info(f"Switched to official league: {league_source}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load official league: {e}")
@@ -852,8 +866,6 @@ class SettingsDialog(QDialog):
             # Update status message
             self._update_status_message()
 
-            from config.logging_config import get_logger
-            logger = get_logger(__name__)
             logger.info(f"Switched to local config: {file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load config file: {e}")
