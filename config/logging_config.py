@@ -2,7 +2,7 @@
 Logging configuration for the League Overlay application.
 
 This module sets up logging to a file in the same directory as the executable,
-overwriting the log file on each application launch.
+with rotating file handler.
 """
 
 import logging
@@ -31,8 +31,8 @@ def setup_logging(log_level=logging.INFO):
 
     log_file = app_dir / "LeagueOverlay.log"
 
-    # Create rotating file handler with 25MB limit (safety against runaway logging)
-    # backupCount=1 keeps 1 backup, rotates continuously (max 50MB total: 25MB * 2 files)
+    # Create rotating file handler with limit (safety against runaway logging)
+    # backupCount=1 keeps 1 backup, rotates continuously
     file_handler = RotatingFileHandler(
         log_file,
         mode='a',  # RotatingFileHandler uses append mode
