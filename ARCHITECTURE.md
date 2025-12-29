@@ -130,7 +130,7 @@ Logging configuration and setup.
 
 **Key Features:**
 - Logs to `LeagueOverlay.log` in same directory as executable
-- Rotating file handler with 25MB max size, 1 backup
+- Rotating file handler with 1MB max size, 1 backup (2MB total)
 - Log level configurable via AppSettings (default: INFO)
 - Works with both compiled exe (Nuitka) and script mode
 - Simple format: `timestamp - module - level - message`
@@ -739,7 +739,7 @@ Telemetry Thread                Main Thread
 - **Location**: Same directory as executable
 - **Managed by**: `logging_config.setup_logging()`
 - **Contents**: Startup info, errors, state changes, version info
-- **Behavior**: 2 file rotation, appends on every execution
+- **Behavior**: Rotating file handler (1MB max per file, 1 backup, 2MB total)
 - **Usage**: Debugging, user support, troubleshooting
 
 #### League Configuration Files (Driver Assignments)

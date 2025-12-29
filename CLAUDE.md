@@ -4,7 +4,7 @@ Real-time iRacing race position overlay with division-based racing.
 
 ## Project Structure
 ```
-/Volumes/shared/
+league-overlay/
 ├── config/              # Settings and constants
 │   ├── constants.py          # UIConfig, FileConfig, TelemetryConfig
 │   ├── settings.py           # AppSettings, SettingsManager
@@ -26,8 +26,8 @@ Real-time iRacing race position overlay with division-based racing.
 │   ├── styles.py                 # Color strategies (Default/Alternate/Outline/Dark)
 │   ├── widgets.py                # Custom Qt widgets
 │   └── auto_center_controller.py # Auto-scrolling controller
-├── league_overlay.py    # Main application (1180 lines, down from 3,299)
-└── LeagueOverlay.log    # Application log (overwrites on each run)
+├── league_overlay.py    # Main application and orchestration
+└── LeagueOverlay.log    # Application log (rotating, 1MB max per file)
 ```
 
 ## Key Concepts
@@ -77,7 +77,6 @@ session_state = self.ir['SessionState'] if 'SessionState' in self.ir else 4  # �
   - Direct fields: `car_idx`, `driver_info`, `position`, `division_position`, `division_name`, `division_color`, `gap`, `is_player`, `is_disconnected`, `is_finished`, etc.
   - Computed properties: `car_number`, `driver_name`, `car_class_id`, `total_track_position`
 - See `core/driver_state.py` for complete list of fields and properties
-- **Note**: Position field was consolidated from separate `official_position` and `real_time_position` fields for simplicity
 
 #### `driver_info` (dict from iRacing API)
 - This is a regular Python dict from iRacing's DriverInfo (stored inside DriverState)
@@ -197,7 +196,7 @@ normalized_ahead_est_time = ahead_est_time / normalize_lap_time_pct
 
 ### Debugging with Logs
 - Log file: `LeagueOverlay.log` (same directory as executable)
-- Appends with rotation (25MB max per file, 1 backup)
+- Appends with rotation (1MB max per file, 1 backup)
 - Contains startup info, exceptions with full tracebacks, state changes
 - Useful for troubleshooting user issues - ask for this file
 - **Tip**: Enable DEBUG log level in Settings for detailed troubleshooting
@@ -284,7 +283,7 @@ lambda pos: self.parent.show_context_menu(driver)  # driver captured by referenc
 - Logging is implemented using Python's `logging` module
 - All modules use `get_logger(__name__)` from `config.logging_config`
 - Logs include: startup info, version, errors with tracebacks, state changes
-- **Log Rotation**: Uses `RotatingFileHandler` with 25MB max size, keeps 1 backup (50MB total max)
+- **Log Rotation**: Uses `RotatingFileHandler` with 1MB max size, keeps 1 backup (2MB total max)
 - **Log Level**: User-configurable via Settings dialog (DEBUG, INFO, WARNING, ERROR)
   - Default: INFO (balanced verbosity)
   - DEBUG: Detailed telemetry/gap calculation debugging
@@ -304,22 +303,27 @@ lambda pos: self.parent.show_context_menu(driver)  # driver captured by referenc
 
 ## Testing
 
-The project includes comprehensive test coverage with **354 tests** (322 passing, 32 skipped) across multiple test suites:
+The project includes comprehensive test coverage with **440+ tests** across multiple test suites:
 
 ### Test Organization
 ```
 tests/
-├── test_core/                    # Core business logic tests
-│   ├── test_race_state_tracker.py    # Finish tracking, multi-class, snapshots
-│   ├── test_telemetry_processor.py   # Driver separation, session tracking, overall gap mode
-│   ├── test_gap_calculator.py        # Gap calculations
-│   ├── test_position_calculator.py   # Position logic
-│   └── test_division_manager.py      # Division management
-├── test_ui/                      # UI component tests
-│   ├── test_driver_row_renderer.py
-│   └── test_widgets.py
-└── conftest.py                   # Shared fixtures
-
+├── test_core/                       # Core business logic tests
+│   ├── test_race_state_tracker.py       # Finish tracking, multi-class, snapshots
+│   ├── test_telemetry_processor.py      # Driver separation, session tracking
+│   ├── test_gap_calculator.py           # Gap calculations
+│   ├── test_position_calculator.py      # Position logic
+│   ├── test_division_manager.py         # Division management
+│   └── test_division_filter.py          # Division filtering logic
+├── test_ui/                         # UI component tests
+│   ├── test_auto_center_controller.py   # Auto-centering behavior
+│   └── test_session_status.py           # Session status formatting
+├── test_integration/                # Integration tests
+│   └── test_telemetry_flow.py           # Full telemetry processing flow
+├── test_config/                     # Configuration tests
+│   ├── test_settings_manager.py         # Settings persistence
+│   └── test_settings_validator.py       # Settings validation
+└── conftest.py                      # Shared fixtures
 ```
 
 ### Running Tests
@@ -336,5 +340,3 @@ pytest --cov=core --cov=ui --cov-report=html
 # Run specific test class
 pytest tests/test_core/test_race_state_tracker.py::TestFinishGapWithPositionSwaps
 ```
-
-For additional testing details, see `PHASE_6_TESTING_AND_DOCUMENTATION.md`
