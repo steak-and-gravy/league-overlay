@@ -255,9 +255,9 @@ class LeagueOverlay(QMainWindow):
         if hasattr(self, 'scroll_content'):
             self.scroll_content.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.BACKGROUND_BLACK)};")
         if hasattr(self, 'size_grip'):
+            # Don't set background in stylesheet - let paintEvent handle it
             self.size_grip.setStyleSheet("""
                 QSizeGrip {
-                    background-color: transparent;
                     border: none;
                     image: none;
                 }
@@ -390,9 +390,9 @@ class LeagueOverlay(QMainWindow):
         self.size_grip = CustomSizeGrip(main_widget)
         self.size_grip.set_parent_window(self)
         self.size_grip.setFixedSize(UI_DIMENSIONS.SIZE_GRIP_SIZE, UI_DIMENSIONS.SIZE_GRIP_SIZE)
+        # Don't set background in stylesheet - let paintEvent handle it
         self.size_grip.setStyleSheet("""
             QSizeGrip {
-                background-color: transparent;
                 border: none;
                 image: none;
             }
@@ -856,6 +856,9 @@ class LeagueOverlay(QMainWindow):
                 self.killTimer(self.hide_timer)
                 self.hide_timer = None
             self.show_top_elements()
+        # Show resize grip when mouse enters
+        if hasattr(self, 'size_grip'):
+            self.size_grip.set_hovered(True)
         super().enterEvent(event)
 
     def leaveEvent(self, event):
@@ -865,6 +868,9 @@ class LeagueOverlay(QMainWindow):
             if self.hide_timer:
                 self.killTimer(self.hide_timer)
             self.hide_timer = self.startTimer(TIMING.AUTO_HIDE_DELAY)
+        # Hide resize grip when mouse leaves
+        if hasattr(self, 'size_grip'):
+            self.size_grip.set_hovered(False)
         super().leaveEvent(event)
 
     def focusInEvent(self, event):
