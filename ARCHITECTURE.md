@@ -321,8 +321,6 @@ Main telemetry processing pipeline.
 - `config.constants`
 - `config.logging_config`
 
-**Size**: 640 LOC (reduced from 962 LOC after position calculation extraction)
-
 **Key Methods:**
 - `_is_driving_mode()` - Detects if player is driving vs spectating (checks if player_car_idx < MAX_CARS)
 - `_calculate_delta()` - Calculates delta lap times with mode-aware reference selection
@@ -391,6 +389,27 @@ Return Sorted List[DriverState]
 5. Result: No gaps, no duplicates, correct order maintained
 
 *Code Location:* `telemetry_processor.py` lines 851-876
+
+#### `update_checker.py`
+Checks for application updates from GitHub.
+
+**Class:**
+- `UpdateChecker`
+
+**Responsibilities:**
+- Fetch latest version from GitHub API
+- Compare versions using semantic versioning
+- Provide download URLs
+
+**Purpose**: Notify users of new versions.
+
+**Dependencies**: `packaging` (for version comparison), `urllib` (for API calls), `config.logging_config`
+
+**Design Features:**
+- Clean API: `check_for_update()` returns dict with update info
+- Configurable timeout for API requests
+- Error handling with graceful degradation
+- Logs update check results (available/not available/failed)
 
 ---
 
@@ -467,9 +486,7 @@ Settings UI dialog.
 - `config.constants`
 - `config.settings`
 
----
-
-#### `ui/auto_center_controller.py`
+#### `auto_center_controller.py`
 Manages auto-centering behavior with manual override.
 
 **Class:**
@@ -487,29 +504,6 @@ Manages auto-centering behavior with manual override.
 **Design Features:**
 - Dependency injection for time function (testable)
 - Clear API: `on_manual_interaction()`, `should_auto_center()`
-
----
-
-#### `core/update_checker.py`
-Checks for application updates from GitHub.
-
-**Class:**
-- `UpdateChecker`
-
-**Responsibilities:**
-- Fetch latest version from GitHub API
-- Compare versions using semantic versioning
-- Provide download URLs
-
-**Purpose**: Notify users of new versions.
-
-**Dependencies**: `packaging` (for version comparison), `urllib` (for API calls), `config.logging_config`
-
-**Design Features:**
-- Clean API: `check_for_update()` returns dict with update info
-- Configurable timeout for API requests
-- Error handling with graceful degradation
-- Logs update check results (available/not available/failed)
 
 ---
 
@@ -534,8 +528,6 @@ Main application entry point and orchestration.
 **Purpose**: Orchestrate all components and manage application lifecycle. Works with DriverState objects from telemetry processor.
 
 **Dependencies**: All other modules
-
-**Size**: 1180 LOC (reduced from 1247 LOC after division filter extraction)
 
 **Threading Model:**
 - **Main Thread**: Qt UI event loop
@@ -787,7 +779,7 @@ Telemetry Thread                Main Thread
 
 ## Testing Architecture
 
-### Unit Tests (349 tests: 317 passing, 32 skipped, ~97% coverage on core modules)
+### Unit Tests (440+ tests)
 
 **Test Organization:**
 ```
