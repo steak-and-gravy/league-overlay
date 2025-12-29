@@ -39,7 +39,7 @@ class TestAppSettingsDefaults:
     def test_default_behavior(self):
         """Test default behavior settings."""
         settings = AppSettings()
-        assert settings.refresh_rate == 2.0
+        assert settings.refresh_rate == 1.0  # Default from AppSettings
         assert settings.hide_headers is False
         assert settings.center_drivers is False
         assert settings.bold_drivers is True
@@ -130,7 +130,7 @@ class TestLoadSettings:
         # Default values for unspecified fields
         assert settings.x == 100
         assert settings.width == 320
-        assert settings.refresh_rate == 2.0
+        assert settings.refresh_rate == 1.0  # Default from AppSettings
 
     def test_load_invalid_json(self, tmp_path):
         """Test loading malformed JSON returns defaults."""

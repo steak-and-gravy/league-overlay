@@ -993,32 +993,31 @@ class SettingsDialog(QDialog):
             self.populate_league_dropdown()
                 
     def reset_to_defaults(self):
-        """Reset to default settings"""
+        """Reset to default settings using AppSettings defaults as single source of truth."""
         reply = QMessageBox.question(
             self,
             "Reset to Defaults",
             "Are you sure you want to reset all settings to their default values?",
             QMessageBox.Yes | QMessageBox.No
         )
-        
+
         if reply == QMessageBox.Yes:
-            self.opacity_slider.setValue(10)  # 0.5
-            self.refresh_slider.setValue(8)  # 2.0 seconds (8 * 0.25)
-            self.hide_headers_cb.setChecked(False)
-            self.center_drivers_cb.setChecked(False)
-            self.bold_drivers_cb.setChecked(True)
-            self.font_size_combo.setCurrentText("Medium")
-            self.color_style_combo.setCurrentText("Default")
-            self.log_level_combo.setCurrentText("INFO")
-            
-            default_colors = {
-                "Pro": "#FF8C00",
-                "ProAm": "#9370DB",
-                "Am": "#45B3E0",
-                "Rookie": "#FF2000"
-            }
-            
-            for division, color in default_colors.items():
+            # Create a fresh AppSettings instance to get defaults
+            from config.settings import AppSettings
+            defaults = AppSettings()
+
+            # Reset UI controls to defaults
+            self.opacity_slider.setValue(int(defaults.opacity * 20))  # Convert 0.5 -> 10
+            self.refresh_slider.setValue(int(defaults.refresh_rate * 4))  # Convert to slider value
+            self.hide_headers_cb.setChecked(defaults.hide_headers)
+            self.center_drivers_cb.setChecked(defaults.center_drivers)
+            self.bold_drivers_cb.setChecked(defaults.bold_drivers)
+            self.font_size_combo.setCurrentText(defaults.font_size)
+            self.color_style_combo.setCurrentText(defaults.row_color_style)
+            self.log_level_combo.setCurrentText(defaults.log_level)
+
+            # Reset division colors from defaults
+            for division, color in defaults.division_colors.items():
                 if division in self.color_buttons:
                     self.parent_overlay.division_manager.division_colors[division] = color
                     self.color_buttons[division].setStyleSheet(f"""
@@ -1032,32 +1031,32 @@ class SettingsDialog(QDialog):
                     """)
                     self.color_value_labels[division].setText(color)
 
-            # Reset performance indicator colors
-            self.parent_overlay.settings.faster_color = "#00FF00"  # Green
+            # Reset performance indicator colors from defaults
+            self.parent_overlay.settings.faster_color = defaults.faster_color
             self.faster_color_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: #00FF00;
+                    background-color: {defaults.faster_color};
                     border: 2px solid #555555;
                 }}
                 QPushButton:hover {{
                     border: 2px solid #777777;
                 }}
             """)
-            self.faster_color_value_label.setText("#00FF00")
+            self.faster_color_value_label.setText(defaults.faster_color)
 
-            self.parent_overlay.settings.slower_color = "#FF0000"  # Red
+            self.parent_overlay.settings.slower_color = defaults.slower_color
             self.slower_color_btn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: #FF0000;
+                    background-color: {defaults.slower_color};
                     border: 2px solid #555555;
                 }}
                 QPushButton:hover {{
                     border: 2px solid #777777;
                 }}
             """)
-            self.slower_color_value_label.setText("#FF0000")
+            self.slower_color_value_label.setText(defaults.slower_color)
 
-            self.parent_overlay.settings.opacity = 0.5
+            self.parent_overlay.settings.opacity = defaults.opacity
             self.parent_overlay.update_all_backgrounds()
 
     def apply_settings(self):

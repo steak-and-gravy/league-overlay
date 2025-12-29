@@ -3,8 +3,11 @@
 This module handles validation and type coercion of settings data loaded from JSON.
 It ensures that settings values are of the correct type and within valid ranges,
 providing graceful fallbacks to defaults when invalid data is encountered.
+
+Defaults are extracted from the AppSettings dataclass to ensure a single source of truth.
 """
 
+from dataclasses import fields, MISSING
 from typing import Optional, Any, List, Dict
 from config.constants import TELEMETRY_CONFIG
 from config.logging_config import get_logger
@@ -20,17 +23,29 @@ class SettingsValidator:
     validation (e.g., ensuring font_size is one of valid values).
 
     All validation errors are logged but don't crash the application.
-    Invalid values are replaced with sensible defaults.
+    Invalid values are replaced with defaults extracted from the AppSettings dataclass.
     """
 
     def __init__(self):
-        """Initialize validator with default values."""
-        self.default_division_colors = {
-            'Pro': '#FF0000',
-            'ProAm': '#0000FF',
-            'Am': '#00FF00',
-            'Rookie': '#FFFF00'
-        }
+        """Initialize validator with defaults extracted from AppSettings dataclass."""
+        # Import here to avoid circular dependency
+        from config.settings import AppSettings
+
+        # Extract defaults from AppSettings dataclass fields
+        self.defaults = {}
+        for field in fields(AppSettings):
+            if field.default is not MISSING:
+                self.defaults[field.name] = field.default
+            elif field.default_factory is not MISSING:
+                self.defaults[field.name] = field.default_factory()
+            else:
+                self.defaults[field.name] = None
+
+        # Special handling for division_colors default (from UI_CONFIG)
+        # This gets set in AppSettings.__post_init__, not in the field default
+        if 'division_colors' in self.defaults and self.defaults['division_colors'] is None:
+            from config.constants import UI_CONFIG
+            self.defaults['division_colors'] = UI_CONFIG.DEFAULT_COLORS.copy()
 
     def validate_and_coerce(self, data: dict) -> dict:
         """Validate and coerce all fields from raw JSON data.
@@ -51,42 +66,42 @@ class SettingsValidator:
         # String fields (optional)
         validated['league_config'] = self.coerce_string(
             data.get('league_config'),
-            default=None,
+            default=self.defaults['league_config'],
             field_name='league_config'
         )
 
         # List fields
         validated['recent_local_configs'] = self.coerce_string_list(
             data.get('recent_local_configs'),
-            default=[],
+            default=self.defaults['recent_local_configs'],
             field_name='recent_local_configs'
         )
 
         # Integer fields (window position and dimensions)
         validated['x'] = self.coerce_int(
             data.get('x'),
-            default=100,
+            default=self.defaults['x'],
             min_val=-10000,  # Allow off-screen positioning
             max_val=10000,
             field_name='x'
         )
         validated['y'] = self.coerce_int(
             data.get('y'),
-            default=100,
+            default=self.defaults['y'],
             min_val=-10000,
             max_val=10000,
             field_name='y'
         )
         validated['width'] = self.coerce_int(
             data.get('width'),
-            default=320,  # Match AppSettings default
+            default=self.defaults['width'],
             min_val=200,
             max_val=2000,
             field_name='width'
         )
         validated['height'] = self.coerce_int(
             data.get('height'),
-            default=350,  # Match AppSettings default
+            default=self.defaults['height'],
             min_val=200,
             max_val=2000,
             field_name='height'
@@ -95,14 +110,14 @@ class SettingsValidator:
         # Float fields
         validated['opacity'] = self.coerce_float(
             data.get('opacity'),
-            default=0.5,  # Match AppSettings default
+            default=self.defaults['opacity'],
             min_val=0.1,
             max_val=1.0,
             field_name='opacity'
         )
         validated['refresh_rate'] = self.coerce_float(
             data.get('refresh_rate'),
-            default=2.0,  # Match AppSettings default
+            default=self.defaults['refresh_rate'],
             min_val=TELEMETRY_CONFIG.MIN_REFRESH_RATE,
             max_val=TELEMETRY_CONFIG.MAX_REFRESH_RATE,
             field_name='refresh_rate'
@@ -111,42 +126,42 @@ class SettingsValidator:
         # Boolean fields
         validated['hide_headers'] = self.coerce_bool(
             data.get('hide_headers'),
-            default=False,
+            default=self.defaults['hide_headers'],
             field_name='hide_headers'
         )
         validated['center_drivers'] = self.coerce_bool(
             data.get('center_drivers'),
-            default=False,  # Match AppSettings default
+            default=self.defaults['center_drivers'],
             field_name='center_drivers'
         )
         validated['bold_drivers'] = self.coerce_bool(
             data.get('bold_drivers'),
-            default=True,  # Match AppSettings default
+            default=self.defaults['bold_drivers'],
             field_name='bold_drivers'
         )
         validated['show_division_gap'] = self.coerce_bool(
             data.get('show_division_gap'),
-            default=True,  # Match AppSettings default
+            default=self.defaults['show_division_gap'],
             field_name='show_division_gap'
         )
         validated['show_last_lap'] = self.coerce_bool(
             data.get('show_last_lap'),
-            default=False,  # Match AppSettings default
+            default=self.defaults['show_last_lap'],
             field_name='show_last_lap'
         )
         validated['show_delta'] = self.coerce_bool(
             data.get('show_delta'),
-            default=False,  # Match AppSettings default
+            default=self.defaults['show_delta'],
             field_name='show_delta'
         )
         validated['show_best_lap'] = self.coerce_bool(
             data.get('show_best_lap'),
-            default=False,  # Match AppSettings default
+            default=self.defaults['show_best_lap'],
             field_name='show_best_lap'
         )
         validated['show_positions_gained'] = self.coerce_bool(
             data.get('show_positions_gained'),
-            default=False,  # Match AppSettings default
+            default=self.defaults['show_positions_gained'],
             field_name='show_positions_gained'
         )
 
@@ -154,19 +169,19 @@ class SettingsValidator:
         validated['font_size'] = self.coerce_enum(
             data.get('font_size'),
             valid_values=["Small", "Medium", "Large", "Extra Large"],
-            default="Medium",
+            default=self.defaults['font_size'],
             field_name='font_size'
         )
         validated['row_color_style'] = self.coerce_enum(
             data.get('row_color_style'),
             valid_values=["Default", "Alternate", "Outline", "Dark"],
-            default="Default",
+            default=self.defaults['row_color_style'],
             field_name='row_color_style'
         )
         validated['log_level'] = self.coerce_enum(
             data.get('log_level'),
             valid_values=["DEBUG", "INFO", "WARNING", "ERROR"],
-            default="INFO",
+            default=self.defaults['log_level'],
             field_name='log_level'
         )
 
@@ -179,12 +194,12 @@ class SettingsValidator:
         # Color fields (performance indicator colors)
         validated['faster_color'] = self.coerce_color(
             data.get('faster_color'),
-            default="#00FF00",  # Green - for faster lap times and positions gained
+            default=self.defaults['faster_color'],
             field_name='faster_color'
         )
         validated['slower_color'] = self.coerce_color(
             data.get('slower_color'),
-            default="#FF0000",  # Red - for slower lap times and positions lost
+            default=self.defaults['slower_color'],
             field_name='slower_color'
         )
 
@@ -406,13 +421,13 @@ class SettingsValidator:
             Dictionary mapping division names to hex color strings
         """
         if value is None:
-            return self.default_division_colors.copy()
+            return self.defaults['division_colors'].copy()
 
         if not isinstance(value, dict):
             logger.warning(
                 f"Field '{field_name}' has invalid type {type(value).__name__}, using defaults"
             )
-            return self.default_division_colors.copy()
+            return self.defaults['division_colors'].copy()
 
         # Validate each color value
         validated_colors = {}
@@ -423,7 +438,7 @@ class SettingsValidator:
 
             if not isinstance(color, str):
                 logger.warning(f"Color for division '{division}' is not a string, using default")
-                validated_colors[division] = self.default_division_colors.get(division, '#FFFFFF')
+                validated_colors[division] = self.defaults['division_colors'].get(division, '#FFFFFF')
                 continue
 
             # Validate hex color format (#RRGGBB or #RRGGBBAA)
@@ -431,7 +446,7 @@ class SettingsValidator:
                 logger.warning(
                     f"Color '{color}' for division '{division}' is not valid hex format, using default"
                 )
-                validated_colors[division] = self.default_division_colors.get(division, '#FFFFFF')
+                validated_colors[division] = self.defaults['division_colors'].get(division, '#FFFFFF')
                 continue
 
             validated_colors[division] = color
@@ -439,7 +454,7 @@ class SettingsValidator:
         # Ensure all required divisions exist
         for division in ['Pro', 'ProAm', 'Am', 'Rookie']:
             if division not in validated_colors:
-                validated_colors[division] = self.default_division_colors[division]
+                validated_colors[division] = self.defaults['division_colors'][division]
 
         return validated_colors
 
