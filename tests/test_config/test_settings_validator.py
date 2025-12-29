@@ -304,7 +304,7 @@ class TestCoerceDivisionColors:
             'Rookie': '#FFFF00'
         }
         result = validator.coerce_division_colors(colors, field_name='division_colors')
-        assert result['Pro'] == '#FF0000'  # Default
+        assert result['Pro'] == validator.defaults['division_colors']['Pro']  # Default from UI_CONFIG
         assert result['ProAm'] == '#00FF00'  # Original
 
     def test_missing_hash_uses_default(self):
@@ -317,7 +317,7 @@ class TestCoerceDivisionColors:
             'Rookie': '#FFFF00'
         }
         result = validator.coerce_division_colors(colors, field_name='division_colors')
-        assert result['Pro'] == '#FF0000'  # Default
+        assert result['Pro'] == validator.defaults['division_colors']['Pro']  # Default from UI_CONFIG
 
     def test_wrong_length_uses_default(self):
         """Test hex with wrong length uses default."""
@@ -329,19 +329,19 @@ class TestCoerceDivisionColors:
             'Rookie': '#FFFF00'
         }
         result = validator.coerce_division_colors(colors, field_name='division_colors')
-        assert result['Pro'] == '#FF0000'  # Default
+        assert result['Pro'] == validator.defaults['division_colors']['Pro']  # Default from UI_CONFIG
 
     def test_non_dict_returns_defaults(self):
         """Test non-dict type returns all defaults."""
         validator = SettingsValidator()
         result = validator.coerce_division_colors("red", field_name='division_colors')
-        assert result == validator.default_division_colors
+        assert result == validator.defaults['division_colors']
 
     def test_none_returns_defaults(self):
         """Test None returns all defaults."""
         validator = SettingsValidator()
         result = validator.coerce_division_colors(None, field_name='division_colors')
-        assert result == validator.default_division_colors
+        assert result == validator.defaults['division_colors']
 
     def test_missing_required_divisions_added(self):
         """Test missing required divisions are added."""
@@ -354,7 +354,7 @@ class TestCoerceDivisionColors:
         assert 'ProAm' in result
         assert 'Am' in result
         assert 'Rookie' in result
-        assert result['ProAm'] == validator.default_division_colors['ProAm']
+        assert result['ProAm'] == validator.defaults['division_colors']['ProAm']
 
     def test_non_string_color_uses_default(self):
         """Test non-string color value uses default."""
@@ -366,7 +366,7 @@ class TestCoerceDivisionColors:
             'Rookie': '#FFFF00'
         }
         result = validator.coerce_division_colors(colors, field_name='division_colors')
-        assert result['Pro'] == '#FF0000'  # Default
+        assert result['Pro'] == validator.defaults['division_colors']['Pro']  # Default from UI_CONFIG
 
     def test_extra_divisions_preserved(self):
         """Test extra divisions beyond the required four are preserved."""
@@ -426,7 +426,7 @@ class TestValidateAndCoerce:
         assert result['opacity'] == 0.9
         assert result['width'] == 320  # Default
         assert result['height'] == 350  # Default
-        assert result['refresh_rate'] == 2.0  # Default
+        assert result['refresh_rate'] == 1.0  # Default from AppSettings
 
     def test_all_invalid_fields_uses_defaults(self):
         """Test all invalid fields uses all defaults."""
@@ -455,7 +455,7 @@ class TestValidateAndCoerce:
         assert result['width'] == 320
         assert result['height'] == 350
         assert result['opacity'] == 0.5
-        assert result['refresh_rate'] == 2.0
+        assert result['refresh_rate'] == 1.0  # Default from AppSettings
 
     def test_type_coercion_integrated(self):
         """Test type coercion works in full pipeline."""

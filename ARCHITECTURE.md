@@ -85,11 +85,12 @@ Settings validation and type coercion.
 **Class:**
 - `SettingsValidator`
 
-**Purpose**: Handle validation and type coercion of settings data loaded from JSON, ensuring values are of correct type and within valid ranges.
+**Purpose**: Handle validation and type coercion of settings data loaded from JSON, ensuring values are of correct type and within valid ranges. Uses dataclass introspection to extract defaults from `AppSettings` as the single source of truth.
 
-**Dependencies**: `config.constants`, `config.logging_config`
+**Dependencies**: `config.constants`, `config.logging_config`, `config.settings` (imported dynamically to avoid circular dependency)
 
 **Key Features:**
+- **Single source of truth**: Extracts all default values from `AppSettings` dataclass via introspection at initialization
 - Type coercion (e.g., "500" string → 500 int, "0.9" → 0.9 float)
 - Range validation and clamping
 - Enum validation for limited valid values
@@ -97,6 +98,7 @@ Settings validation and type coercion.
 - Hex color validation for division colors and performance indicator colors
 - Performance indicator colors: faster_color (default #00FF00 green), slower_color (default #FF0000 red)
 - Graceful fallbacks to defaults on invalid data
+- **No hardcoded defaults**: All defaults dynamically read from `AppSettings` dataclass fields using `dataclasses.fields()`
 
 #### `official_leagues.py`
 Official remotely-managed league configurations.
@@ -478,6 +480,7 @@ Settings UI dialog.
 - Validate user input
 - Emit signals on changes
 - Manage division color pickers and performance indicator color pickers
+- **Reset to defaults**: Creates fresh `AppSettings()` instance to get default values (single source of truth)
 
 **Purpose**: Provide user interface for configuration.
 
@@ -485,6 +488,10 @@ Settings UI dialog.
 - `PySide6`
 - `config.constants`
 - `config.settings`
+
+**Key Features:**
+- Reset button uses `AppSettings()` introspection to get all default values dynamically
+- No hardcoded defaults in UI layer
 
 #### `auto_center_controller.py`
 Manages auto-centering behavior with manual override.
