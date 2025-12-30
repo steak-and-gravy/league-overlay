@@ -474,60 +474,68 @@ class SettingsDialog(QDialog):
         log_level_row.addWidget(self.log_level_combo)
         window_layout.addLayout(log_level_row)
 
-        # Checkboxes in 2x2 grid (left and right columns)
+        # Checkboxes in 2-column grid
+        # Row 1: UI elements
         checkbox_row1 = QHBoxLayout()
+        checkbox_row1.setSpacing(10)
 
         self.hide_headers_cb = QCheckBox("Auto-hide headers")
-        self.hide_headers_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
+        self.hide_headers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.hide_headers_cb.setChecked(self.parent_overlay.settings.hide_headers)
         checkbox_row1.addWidget(self.hide_headers_cb)
 
-        self.center_drivers_cb = QCheckBox("Center driver names")
-        self.center_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
-        self.center_drivers_cb.setChecked(self.parent_overlay.settings.center_drivers)
-        checkbox_row1.addWidget(self.center_drivers_cb)
+        self.show_division_gap_cb = QCheckBox("Show division gap")
+        self.show_division_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_division_gap_cb.setChecked(self.parent_overlay.settings.show_division_gap)
+        checkbox_row1.addWidget(self.show_division_gap_cb)
 
         window_layout.addLayout(checkbox_row1)
 
+        # Row 2: Text display
         checkbox_row2 = QHBoxLayout()
+        checkbox_row2.setSpacing(10)
+
+        self.center_drivers_cb = QCheckBox("Center driver names")
+        self.center_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.center_drivers_cb.setChecked(self.parent_overlay.settings.center_drivers)
+        checkbox_row2.addWidget(self.center_drivers_cb)
 
         self.bold_drivers_cb = QCheckBox("Bold all driver rows")
-        self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
+        self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.bold_drivers_cb.setChecked(self.parent_overlay.settings.bold_drivers)
         checkbox_row2.addWidget(self.bold_drivers_cb)
 
-        self.show_division_gap_cb = QCheckBox("Show division gap")
-        self.show_division_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
-        self.show_division_gap_cb.setChecked(self.parent_overlay.settings.show_division_gap)
-        checkbox_row2.addWidget(self.show_division_gap_cb)
-
         window_layout.addLayout(checkbox_row2)
 
+        # Row 3: Column visibility - Position data
         checkbox_row3 = QHBoxLayout()
+        checkbox_row3.setSpacing(10)
 
-        self.show_last_lap_cb = QCheckBox("Show last lap")
-        self.show_last_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
-        self.show_last_lap_cb.setChecked(self.parent_overlay.settings.show_last_lap)
-        checkbox_row3.addWidget(self.show_last_lap_cb)
+        self.show_positions_gained_cb = QCheckBox("Show positions +/-")
+        self.show_positions_gained_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_positions_gained_cb.setChecked(self.parent_overlay.settings.show_positions_gained)
+        checkbox_row3.addWidget(self.show_positions_gained_cb)
 
         self.show_delta_cb = QCheckBox("Show delta")
-        self.show_delta_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
+        self.show_delta_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_delta_cb.setChecked(self.parent_overlay.settings.show_delta)
         checkbox_row3.addWidget(self.show_delta_cb)
 
         window_layout.addLayout(checkbox_row3)
 
+        # Row 4: Column visibility - Lap times
         checkbox_row4 = QHBoxLayout()
+        checkbox_row4.setSpacing(10)
 
         self.show_best_lap_cb = QCheckBox("Show best lap")
-        self.show_best_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
+        self.show_best_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_best_lap_cb.setChecked(self.parent_overlay.settings.show_best_lap)
         checkbox_row4.addWidget(self.show_best_lap_cb)
 
-        self.show_positions_gained_cb = QCheckBox("Show positions gained")
-        self.show_positions_gained_cb.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 150px;")
-        self.show_positions_gained_cb.setChecked(self.parent_overlay.settings.show_positions_gained)
-        checkbox_row4.addWidget(self.show_positions_gained_cb)
+        self.show_last_lap_cb = QCheckBox("Show last lap")
+        self.show_last_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_last_lap_cb.setChecked(self.parent_overlay.settings.show_last_lap)
+        checkbox_row4.addWidget(self.show_last_lap_cb)
 
         window_layout.addLayout(checkbox_row4)
 
@@ -1012,6 +1020,11 @@ class SettingsDialog(QDialog):
             self.hide_headers_cb.setChecked(defaults.hide_headers)
             self.center_drivers_cb.setChecked(defaults.center_drivers)
             self.bold_drivers_cb.setChecked(defaults.bold_drivers)
+            self.show_division_gap_cb.setChecked(defaults.show_division_gap)
+            self.show_best_lap_cb.setChecked(defaults.show_best_lap)
+            self.show_last_lap_cb.setChecked(defaults.show_last_lap)
+            self.show_delta_cb.setChecked(defaults.show_delta)
+            self.show_positions_gained_cb.setChecked(defaults.show_positions_gained)
             self.font_size_combo.setCurrentText(defaults.font_size)
             self.color_style_combo.setCurrentText(defaults.row_color_style)
             self.log_level_combo.setCurrentText(defaults.log_level)
