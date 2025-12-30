@@ -19,7 +19,6 @@ import re
 import json
 from typing import Dict, List, Optional
 import irsdk
-import requests
 
 # Import from modular structure
 from config.constants import (
