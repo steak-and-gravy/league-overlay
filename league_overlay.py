@@ -195,6 +195,10 @@ class LeagueOverlay(QMainWindow):
         self.hide_timer = None
         self.setMouseTracking(True)
 
+        # Initial auto-hide check - if hide_headers is enabled, hide immediately
+        if self.settings.hide_headers:
+            self.hide_top_elements()
+
     def get_bg_color(self, base_color):
         """Convert a hex color to RGBA format with current window opacity."""
         # Parse hex color
