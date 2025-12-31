@@ -69,6 +69,10 @@ class TelemetryProcessor:
         self.current_session_id: Optional[int] = None
         self.current_session_type: Optional[str] = None
 
+        # Lap time cache - preserves lap times even when drivers go inactive
+        # Maps car_idx -> (best_lap, last_lap)
+        self.lap_time_cache: Dict[int, Tuple[float, float]] = {}
+
     def reset_fields(self) -> None:
         """Clear all session-specific tracking data.
 
@@ -80,6 +84,9 @@ class TelemetryProcessor:
 
         # Clear player identification in position calculator
         self.position_calculator.reset()
+
+        # Clear lap time cache on session change
+        self.lap_time_cache.clear()
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SESSION INFO AND TRACKING
@@ -121,10 +128,31 @@ class TelemetryProcessor:
         except (KeyError, TypeError, IndexError):
             return None
 
+        # Build O(1) lookup dict for results access (done once per telemetry tick)
+        results_lookup = {}
+        fastest_lap_time = float('inf')
+
+        if 'ResultsPositions' in current_session and current_session['ResultsPositions'] is not None:
+            for driver in current_session['ResultsPositions']:
+                car_idx_key = driver.get('CarIdx')
+                if car_idx_key is not None:
+                    results_lookup[car_idx_key] = driver
+
+                    # Also calculate fastest lap during this single pass
+                    best_lap = driver.get('FastestTime', 0)
+                    if 0 < best_lap < fastest_lap_time:
+                        fastest_lap_time = best_lap
+
         session_data = {
             'session_id': session_id,
             'session_type': session_type,
-            'current_session': current_session
+            'current_session': current_session,
+            'results_lookup': results_lookup,  # O(1) lookup dictionary
+            'fastest_lap_time': (
+                fastest_lap_time
+                if fastest_lap_time != float('inf')
+                else TIMING.DEFAULT_LAP_TIME_FALLBACK
+            )
         }
 
         return (drivers, session_data, is_race)
@@ -149,72 +177,111 @@ class TelemetryProcessor:
 
         return False
 
+    def _update_lap_time_cache(self) -> None:
+        """Update lap time cache from telemetry arrays.
+
+        This method reads lap times from ALL car slots (0-63) and updates the cache,
+        preserving lap time data even when drivers go inactive (CarIdxClassPosition == 0).
+
+        The cache persists across frames but is cleared on session change via reset_fields().
+        """
+        try:
+            car_idx_best_lap = self.ir['CarIdxBestLapTime']
+            car_idx_last_lap = self.ir['CarIdxLastLapTime']
+
+            if not car_idx_best_lap or not car_idx_last_lap:
+                return
+
+            # Update cache for all car slots that have valid lap time data
+            for car_idx in range(min(len(car_idx_best_lap), len(car_idx_last_lap))):
+                best_lap = car_idx_best_lap[car_idx]
+                last_lap = car_idx_last_lap[car_idx]
+
+                # Only cache if we have at least one valid lap time
+                # (valid lap times are > 0 and < 999 seconds)
+                if (best_lap > 0 and best_lap < 999) or (last_lap > 0 and last_lap < 999):
+                    # Update or create cache entry
+                    existing = self.lap_time_cache.get(car_idx, (0.0, 0.0))
+
+                    # Keep the better of existing vs new values
+                    # (handles case where telemetry might reset but we want to preserve best times)
+                    cached_best = existing[0]
+                    cached_last = existing[1]
+
+                    # Update best lap if new one is valid and better (or we had no cached value)
+                    if best_lap > 0 and best_lap < 999:
+                        if cached_best == 0.0 or best_lap < cached_best:
+                            cached_best = best_lap
+
+                    # Always update last lap if valid (most recent is what we want)
+                    if last_lap > 0 and last_lap < 999:
+                        cached_last = last_lap
+
+                    self.lap_time_cache[car_idx] = (cached_best, cached_last)
+
+        except (KeyError, TypeError, IndexError) as e:
+            logger.debug(f"Error updating lap time cache: {e}")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SESSION RESULTS AND LAP TIMES
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def get_position_from_results(self, current_session: Dict, car_idx: int) -> int:
+    def get_position_from_results(self, session_data: Dict, car_idx: int) -> int:
         """Look up a car's final position from session results.
 
         Args:
-            current_session: Current session data
+            session_data: Session data dict (includes results_lookup from _get_session_info)
             car_idx: Car index to look up
 
         Returns:
             Position (1-based) or -1 if not found
+
+        Performance: O(1) hash lookup instead of O(n) linear search.
         """
-        try:
-            if 'ResultsPositions' in current_session:
-                for driver in current_session['ResultsPositions']:
-                    if driver.get('CarIdx') == car_idx and 'ClassPosition' in driver:
-                        return driver['ClassPosition'] + 1  # ClassPosition is 0-based
-        except (KeyError, TypeError, IndexError):
-            pass
+        results_lookup = session_data.get('results_lookup', {})
+        driver = results_lookup.get(car_idx)
+
+        if driver and 'ClassPosition' in driver:
+            return driver['ClassPosition'] + 1
+
         return -1
 
-    def get_fastest_lap_time(self, current_session: Dict) -> float:
-        """Find the fastest lap time in the session for gap estimation.
+    def get_fastest_lap_time(self, session_data: Dict) -> float:
+        """Get cached fastest lap time (pre-calculated in _get_session_info).
 
         Uses DEFAULT_LAP_TIME_FALLBACK when no laps recorded yet (session start).
         This prevents divide-by-zero and provides reasonable gap estimates.
 
         Args:
-            current_session: Current session data
+            session_data: Session data dict (includes fastest_lap_time)
 
         Returns:
             Fastest lap time in seconds (default from TIMING.DEFAULT_LAP_TIME_FALLBACK)
+
+        Performance: O(1) cached value instead of O(n) iteration.
         """
-        fastest_time = float('inf')
+        return session_data.get('fastest_lap_time', TIMING.DEFAULT_LAP_TIME_FALLBACK)
 
-        # Check if ResultsPositions exists and is not None (can be None at race start)
-        if 'ResultsPositions' in current_session and current_session['ResultsPositions'] is not None:
-            for driver in current_session['ResultsPositions']:
-                best_lap = driver['FastestTime']
-                if 0 < best_lap < fastest_time:
-                    fastest_time = best_lap
-
-        return fastest_time if fastest_time != float('inf') else TIMING.DEFAULT_LAP_TIME_FALLBACK
-
-    def get_best_lap_from_session_info(self, current_session: Dict, car_idx: int) -> float:
+    def get_best_lap_from_session_info(self, session_data: Dict, car_idx: int) -> float:
         """Look up a specific car's fastest lap time from session results.
 
         Uses DEFAULT_LAP_TIME_FALLBACK as safe fallback when no data available.
 
         Args:
-            current_session: Current session data
+            session_data: Session data dict (includes results_lookup)
             car_idx: Car index to look up
 
         Returns:
             Best lap time in seconds (default from TIMING.DEFAULT_LAP_TIME_FALLBACK)
+
+        Performance: O(1) hash lookup instead of O(n) linear search.
         """
-        try:
-            if 'ResultsPositions' in current_session:
-                for driver in current_session['ResultsPositions']:
-                    if driver.get('CarIdx') == car_idx and 'FastestTime' in driver:
-                        return driver['FastestTime']
-        except (KeyError, TypeError, IndexError):
-            pass
+        results_lookup = session_data.get('results_lookup', {})
+        driver = results_lookup.get(car_idx)
+
+        if driver and 'FastestTime' in driver:
+            return driver['FastestTime']
+
         return TIMING.DEFAULT_LAP_TIME_FALLBACK
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -434,7 +501,7 @@ class TelemetryProcessor:
 
     def _calculate_gap(self, driver: Dict, current_color_position: int, current_driver_color: str,
                       active_drivers: List[Dict], all_drivers_with_colors: List[Dict],
-                      is_race: bool, current_session: Dict,
+                      is_race: bool, session_data: Dict,
                       get_driver_color_fn: Callable, show_division_gap: bool = True) -> str:
         """Calculate gap for a driver to the car ahead.
 
@@ -451,7 +518,7 @@ class TelemetryProcessor:
             active_drivers: List of all active drivers
             all_drivers_with_colors: List of drivers with color info
             is_race: True if in race session
-            current_session: Current session data
+            session_data: Session data dict (includes current_session and lookup caches)
             get_driver_color_fn: Function to get driver's division color
             show_division_gap: If True, show gap to car ahead in same division. If False, show gap to any car ahead.
 
@@ -477,15 +544,15 @@ class TelemetryProcessor:
         # Live racing - calculate real-time gap
         if is_race:
             return self._calculate_live_race_gap(driver, current_driver_color, active_drivers,
-                                                current_session, get_driver_color_fn, show_division_gap)
+                                                session_data, get_driver_color_fn, show_division_gap)
 
         # Practice/Qualifying - use best lap times
         return self._calculate_practice_gap(car_idx, current_color_position, current_driver_color,
-                                           all_drivers_with_colors, current_session, show_division_gap)
+                                           all_drivers_with_colors, session_data, show_division_gap)
 
     def _calculate_live_race_gap(self, driver: Dict, current_driver_color: str,
                                 active_drivers: List[Dict],
-                                current_session: Dict, get_driver_color_fn: Callable,
+                                session_data: Dict, get_driver_color_fn: Callable,
                                 show_division_gap: bool = True) -> str:
         """Calculate live gap during a race.
 
@@ -493,7 +560,7 @@ class TelemetryProcessor:
             driver: Current driver data
             current_driver_color: Driver's division color
             active_drivers: List of all active drivers
-            current_session: Current session data
+            session_data: Session data dict (includes current_session and lookup caches)
             get_driver_color_fn: Function to get driver's division color
             show_division_gap: If True, compare to car ahead in same division. If False, compare to any car ahead.
 
@@ -572,7 +639,7 @@ class TelemetryProcessor:
         else:
             # Estimate gap based on track position difference as fallback
             position_diff = comparison_drivers[current_pos_index - 1]['total_track_position'] - driver['total_track_position']
-            time_gap_raw = position_diff * self.get_fastest_lap_time(current_session)
+            time_gap_raw = position_diff * self.get_fastest_lap_time(session_data)
 
         # Calculate exact lap distance difference for lap-based gaps
         lap_gap = GapCalculator.calculate_lap_gap(comparison_drivers[current_pos_index - 1]['total_track_position'], driver['total_track_position'])
@@ -595,7 +662,7 @@ class TelemetryProcessor:
 
     def _calculate_practice_gap(self, car_idx: int, current_color_position: int,
                                current_driver_color: str, all_drivers_with_colors: List[Dict],
-                               current_session: Dict, show_division_gap: bool = True) -> str:
+                               session_data: Dict, show_division_gap: bool = True) -> str:
         """Calculate gap for practice/qualifying based on best lap times.
 
         Args:
@@ -603,7 +670,7 @@ class TelemetryProcessor:
             current_color_position: Position within division
             current_driver_color: Division color
             all_drivers_with_colors: List of drivers with color info
-            current_session: Current session data
+            session_data: Session data dict (includes current_session and lookup caches)
             show_division_gap: If True, compare to car ahead in same division. If False, compare to any car ahead.
 
         Returns:
@@ -641,8 +708,8 @@ class TelemetryProcessor:
                 return ""
 
             car_ahead_idx = all_drivers_with_colors[current_idx - 1]['car_idx']
-        current_best = self.get_best_lap_from_session_info(current_session, car_idx)
-        ahead_best = self.get_best_lap_from_session_info(current_session, car_ahead_idx)
+        current_best = self.get_best_lap_from_session_info(session_data, car_idx)
+        ahead_best = self.get_best_lap_from_session_info(session_data, car_ahead_idx)
 
         if current_best > 0 and ahead_best > 0:
             # Calculate gap (current - ahead, so positive = behind)
@@ -682,6 +749,9 @@ class TelemetryProcessor:
                 if is_race:
                     self.race_state_tracker.load_starting_positions_from_qualify()
 
+            # Update lap time cache (preserves lap times even when drivers go inactive)
+            self._update_lap_time_cache()
+
             # Identify player
             self.position_calculator.identify_player(drivers)
 
@@ -704,7 +774,7 @@ class TelemetryProcessor:
                     # Handle disconnected/retired drivers
                     self.race_state_tracker.handle_disconnected_drivers(
                         active_drivers,
-                        current_session,
+                        session_data,
                         self.get_position_from_results
                     )
 
@@ -714,7 +784,7 @@ class TelemetryProcessor:
                         for car_idx in self.race_state_tracker.finished_drivers:
                             snapshot = self.race_state_tracker.get_snapshot(car_idx)
                             if snapshot:
-                                official_position = self.get_position_from_results(current_session, car_idx)
+                                official_position = self.get_position_from_results(session_data, car_idx)
                                 if official_position > 0:
                                     snapshot.position = official_position
 
@@ -732,7 +802,7 @@ class TelemetryProcessor:
                             driver['final_position'] = snapshot.position
                         else:
                             # Fallback to live telemetry if no snapshot
-                            driver['final_position'] = self.get_position_from_results(current_session, driver['car_idx'])
+                            driver['final_position'] = self.get_position_from_results(session_data, driver['car_idx'])
                             driver['position'] = driver['final_position']
                     finished_drivers.sort(key=lambda x: x.get('final_position', 999))
 
@@ -797,7 +867,7 @@ class TelemetryProcessor:
 
                 if self.race_state_tracker.is_driver_finished(car_idx):
                     # Use pre-calculated final_position if available, otherwise fetch from results
-                    position = driver.get('final_position', self.get_position_from_results(current_session, car_idx))
+                    position = driver.get('final_position', self.get_position_from_results(session_data, car_idx))
                 else:
                     position = driver.get('position', 0)
 
@@ -809,13 +879,14 @@ class TelemetryProcessor:
                 gap = self._calculate_gap(
                     driver, current_color_position, current_driver_color,
                     active_drivers, all_drivers_with_colors,
-                    is_race, current_session,
+                    is_race, session_data,
                     get_driver_color_fn, show_division_gap
                 )
 
-                # Get lap time data for this driver
-                last_lap_time = car_idx_last_lap[car_idx]
-                best_lap_time = car_idx_best_lap[car_idx]
+                # Get lap time data from cache (preserves times when driver goes inactive)
+                cached_times = self.lap_time_cache.get(car_idx, (0.0, 0.0))
+                best_lap_time = cached_times[0]
+                last_lap_time = cached_times[1]
 
                 # Calculate delta lap time comparison
                 delta = self._calculate_delta(

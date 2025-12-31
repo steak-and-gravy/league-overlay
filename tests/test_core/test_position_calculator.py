@@ -15,8 +15,21 @@ from core.position_calculator import PositionCalculator
 
 
 def make_drivers_dict(drivers_list):
-    """Helper to convert drivers list to dict (matching new API)."""
-    return {driver['CarIdx']: driver for driver in drivers_list}
+    """Helper to convert drivers list to dict (matching new API).
+
+    Also adds default CarNumber and UserName if not present to support
+    the pace car/spectator filtering logic.
+    """
+    result = {}
+    for driver in drivers_list:
+        # Add default CarNumber if not present (use CarIdx as default)
+        if 'CarNumber' not in driver:
+            driver['CarNumber'] = str(driver['CarIdx'])
+        # Add default UserName if not present
+        if 'UserName' not in driver:
+            driver['UserName'] = f"Driver {driver['CarIdx']}"
+        result[driver['CarIdx']] = driver
+    return result
 
 
 class TestInitialization:
@@ -539,3 +552,115 @@ class TestIntegration:
         assert len(result) == 2
         assert result[0]['car_idx'] == 1  # 10.8
         assert result[1]['car_idx'] == 2  # 10.5
+
+
+class TestPaceCarAndSpectatorFiltering:
+    """Test cases for pace car and spectator filtering."""
+
+    def test_filters_pace_car_by_name(self):
+        """Test pace car filtered out by name."""
+        mock_ir = MagicMock()
+        calculator = PositionCalculator(mock_ir)
+
+        drivers = [
+            {'CarIdx': 0, 'UserName': 'Pace Car', 'CarNumber': '0', 'CarClassID': 11},
+            {'CarIdx': 1, 'UserID': '101', 'UserName': 'Driver 1', 'CarNumber': '1', 'CarClassID': 2}
+        ]
+
+        live_data = {
+            'CarIdxLap': [10, 10],
+            'CarIdxLapDistPct': [0.5, 0.5],
+            'CarIdxClassPosition': [-1, 1]  # Pace car has -1
+        }
+
+        mock_ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        result = calculator.calculate_real_time_positions(make_drivers_dict(drivers))
+
+        # Should only include real driver, not pace car
+        assert len(result) == 1
+        assert result[0]['car_idx'] == 1
+
+    def test_filters_spectator_by_missing_car_number(self):
+        """Test spectators filtered by missing car number."""
+        mock_ir = MagicMock()
+        calculator = PositionCalculator(mock_ir)
+
+        drivers = [
+            {'CarIdx': 0, 'UserID': '999', 'UserName': 'Spectator', 'CarNumber': '', 'CarClassID': 2},
+            {'CarIdx': 1, 'UserID': '101', 'UserName': 'Driver 1', 'CarNumber': '1', 'CarClassID': 2}
+        ]
+
+        live_data = {
+            'CarIdxLap': [10, 10],
+            'CarIdxLapDistPct': [0.5, 0.5],
+            'CarIdxClassPosition': [-1, 1]
+        }
+
+        mock_ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        result = calculator.calculate_real_time_positions(make_drivers_dict(drivers))
+
+        # Should only include real driver, not spectator
+        assert len(result) == 1
+        assert result[0]['car_idx'] == 1
+
+    def test_filters_spectator_by_zero_car_number(self):
+        """Test spectators filtered by car number '0'."""
+        mock_ir = MagicMock()
+        calculator = PositionCalculator(mock_ir)
+
+        drivers = [
+            {'CarIdx': 0, 'UserID': '999', 'UserName': 'Spectator', 'CarNumber': '0', 'CarClassID': 2},
+            {'CarIdx': 1, 'UserID': '101', 'UserName': 'Driver 1', 'CarNumber': '1', 'CarClassID': 2}
+        ]
+
+        live_data = {
+            'CarIdxLap': [10, 10],
+            'CarIdxLapDistPct': [0.5, 0.5],
+            'CarIdxClassPosition': [-1, 1]
+        }
+
+        mock_ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        result = calculator.calculate_real_time_positions(make_drivers_dict(drivers))
+
+        # Should only include real driver, not spectator with car number '0'
+        assert len(result) == 1
+        assert result[0]['car_idx'] == 1
+
+    def test_spectator_class_filtering_multiclass(self):
+        """Test spectator sees only selected class in multi-class race."""
+        mock_ir = MagicMock()
+        mock_ir.__getitem__.return_value = 0  # Spectator is car 0
+
+        calculator = PositionCalculator(mock_ir)
+
+        drivers = [
+            {'CarIdx': 0, 'UserID': '999', 'UserName': 'Spectator', 'CarNumber': '', 'CarClassID': 2},  # GT4 spectator
+            {'CarIdx': 1, 'UserID': '101', 'UserName': 'Driver 1', 'CarNumber': '1', 'CarClassID': 1},  # GT3
+            {'CarIdx': 2, 'UserID': '102', 'UserName': 'Driver 2', 'CarNumber': '2', 'CarClassID': 2},  # GT4
+            {'CarIdx': 3, 'UserID': '103', 'UserName': 'Driver 3', 'CarNumber': '3', 'CarClassID': 2}   # GT4
+        ]
+
+        # Identify player (spectator with GT4 class)
+        calculator.identify_player(make_drivers_dict(drivers))
+        assert calculator.player_car_idx == 0
+        assert calculator.player_car_class_id == 2  # GT4
+
+        # Calculate positions
+        live_data = {
+            'CarIdxLap': [10, 10, 10, 10],
+            'CarIdxLapDistPct': [0.5, 0.9, 0.8, 0.7],
+            'CarIdxClassPosition': [-1, 1, 1, 2]
+        }
+
+        mock_ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        result = calculator.calculate_real_time_positions(make_drivers_dict(drivers))
+
+        # Should only include GT4 cars (class 2), not spectator or GT3
+        assert len(result) == 2
+        assert all(d['driver_info']['CarClassID'] == 2 for d in result)
+        assert result[0]['car_idx'] == 2
+        assert result[1]['car_idx'] == 3
