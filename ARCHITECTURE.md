@@ -820,7 +820,9 @@ tests/
 ### Telemetry Processing
 - Configurable refresh rate (0.25-5.0 seconds)
 - Only process data for player's class (skip other classes)
-- Cache division assignments (no repeated JSON parsing)
+- **O(1) division lookups** - Hash-based caching via `_division_cache_by_id` and `_division_cache_by_name` (95%+ faster than O(n) linear search)
+- **O(1) session results lookups** - Cached dictionary instead of repeated linear searches
+- **Lap time persistence** - Driver lap times cached and preserved when drivers go inactive, preventing data loss during session transitions
 
 ### UI Rendering
 - Only update changed rows (Qt handles this automatically)

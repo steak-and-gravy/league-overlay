@@ -572,3 +572,155 @@ class TestEdgeCases:
 
         division = manager.get_driver_division(driver_info)
         assert division == long_division
+
+
+class TestDivisionCaching:
+    """Test cases for O(1) division lookup caching."""
+
+    def test_cache_built_on_load(self, tmp_path):
+        """Test division cache is built when config is loaded."""
+        config_file = tmp_path / "divisions.json"
+        config_data = {
+            'drivers': [
+                {'id': '123', 'name': 'Driver 1', 'division': 'Pro'},
+                {'id': '456', 'name': 'Driver 2', 'division': 'ProAm'}
+            ]
+        }
+
+        with open(config_file, 'w') as f:
+            json.dump(config_data, f)
+
+        settings_file = tmp_path / "settings.json"
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(settings_file)
+        )
+
+        # Verify cache was built
+        assert '123' in manager._division_cache_by_id
+        assert '456' in manager._division_cache_by_id
+        assert 'Driver 1' in manager._division_cache_by_name
+        assert 'Driver 2' in manager._division_cache_by_name
+
+    def test_cache_lookup_by_id(self, tmp_path):
+        """Test division lookup uses cache by UserID."""
+        config_file = tmp_path / "divisions.json"
+        config_data = {
+            'drivers': [
+                {'id': '123', 'name': 'Driver 1', 'division': 'Pro'}
+            ]
+        }
+
+        with open(config_file, 'w') as f:
+            json.dump(config_data, f)
+
+        settings_file = tmp_path / "settings.json"
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(settings_file)
+        )
+
+        # Lookup by UserID should use cache
+        driver_info = {'UserID': '123', 'UserName': 'Different Name'}
+        division = manager.get_driver_division(driver_info)
+
+        assert division == 'Pro'
+        assert manager._division_cache_by_id['123'] == 'Pro'
+
+    def test_cache_lookup_by_name_fallback(self, tmp_path):
+        """Test division lookup falls back to name cache if ID not found."""
+        config_file = tmp_path / "divisions.json"
+        config_data = {
+            'drivers': [
+                {'name': 'Driver 1', 'division': 'Pro'}  # No ID
+            ]
+        }
+
+        with open(config_file, 'w') as f:
+            json.dump(config_data, f)
+
+        settings_file = tmp_path / "settings.json"
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(settings_file)
+        )
+
+        # Lookup by UserName should use name cache
+        driver_info = {'UserName': 'Driver 1'}
+        division = manager.get_driver_division(driver_info)
+
+        assert division == 'Pro'
+        assert manager._division_cache_by_name['Driver 1'] == 'Pro'
+
+    def test_cache_rebuilt_after_set_division(self, tmp_path):
+        """Test cache is rebuilt when driver division is changed."""
+        config_file = tmp_path / "divisions.json"
+        settings_file = tmp_path / "settings.json"
+
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(settings_file)
+        )
+
+        # Add a driver
+        driver_info = {'UserID': '123', 'UserName': 'Driver 1'}
+        manager.set_driver_division(driver_info, 'Pro')
+
+        # Verify cache has the entry
+        assert manager._division_cache_by_id['123'] == 'Pro'
+        assert manager._division_cache_by_name['Driver 1'] == 'Pro'
+
+        # Update the driver's division
+        manager.set_driver_division(driver_info, 'ProAm')
+
+        # Verify cache was rebuilt with new value
+        assert manager._division_cache_by_id['123'] == 'ProAm'
+        assert manager._division_cache_by_name['Driver 1'] == 'ProAm'
+
+    def test_cache_rebuilt_after_removing_driver(self, tmp_path):
+        """Test cache is rebuilt when driver is removed."""
+        config_file = tmp_path / "divisions.json"
+        settings_file = tmp_path / "settings.json"
+
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(settings_file)
+        )
+
+        # Add a driver
+        driver_info = {'UserID': '123', 'UserName': 'Driver 1'}
+        manager.set_driver_division(driver_info, 'Pro')
+
+        # Verify cache has the entry
+        assert '123' in manager._division_cache_by_id
+
+        # Remove the driver (set to Default)
+        manager.set_driver_division(driver_info, 'Default')
+
+        # Verify cache was rebuilt without the entry
+        assert '123' not in manager._division_cache_by_id
+        assert 'Driver 1' not in manager._division_cache_by_name
+
+    def test_cache_handles_drivers_without_division(self, tmp_path):
+        """Test cache ignores drivers without division assigned."""
+        config_file = tmp_path / "divisions.json"
+        config_data = {
+            'drivers': [
+                {'id': '123', 'name': 'Driver 1'},  # No division
+                {'id': '456', 'name': 'Driver 2', 'division': 'Pro'}
+            ]
+        }
+
+        with open(config_file, 'w') as f:
+            json.dump(config_data, f)
+
+        settings_file = tmp_path / "settings.json"
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(settings_file)
+        )
+
+        # Cache should only have driver with division
+        assert '123' not in manager._division_cache_by_id
+        assert '456' in manager._division_cache_by_id
+        assert manager._division_cache_by_id['456'] == 'Pro'

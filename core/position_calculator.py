@@ -54,7 +54,7 @@ class PositionCalculator:
                 driver = drivers.get(self.player_car_idx)
                 if driver:
                     class_id = driver.get('CarClassID')
-                    if class_id is not None:  # Only set if we actually got a valid class ID
+                    if class_id is not None:
                         self.player_car_class_id = class_id
                         logger.info(f"Player class ID identified: {self.player_car_class_id} for car {self.player_car_idx}")
                     else:
@@ -81,12 +81,22 @@ class PositionCalculator:
         active_drivers = []
 
         for car_idx in range(len(car_idx_class_position)):
-            # Position 0 means car is not active/participating
-            if car_idx_class_position[car_idx] == 0:
-                continue
-
             driver_info = drivers.get(car_idx)
             if not driver_info:
+                continue
+
+            # Filter out pace car by name
+            driver_name = driver_info.get('UserName', '')
+            if 'pace car' in driver_name.lower():
+                continue
+
+            # Filter out spectators (they have no car number)
+            car_number = driver_info.get('CarNumber', '')
+            if not car_number or car_number == '0':
+                continue
+
+            # Position 0 means car is not active/participating
+            if car_idx_class_position[car_idx] == 0:
                 continue
 
             # Multi-class support: only show cars in the player's class
@@ -145,13 +155,23 @@ class PositionCalculator:
         active_drivers = []
 
         for car_idx in range(len(car_idx_class_position)):
-            # Position 0 means car is not active/participating
-            if car_idx_class_position[car_idx] == 0:
-                continue
-
             driver_info = drivers.get(car_idx)
 
             if not driver_info:
+                continue
+
+            # Filter out pace car by name
+            driver_name = driver_info.get('UserName', '')
+            if 'pace car' in driver_name.lower():
+                continue
+
+            # Filter out spectators (they have no car number)
+            car_number = driver_info.get('CarNumber', '')
+            if not car_number or car_number == '0':
+                continue
+
+            # Position 0 means car is not active/participating
+            if car_idx_class_position[car_idx] == 0:
                 continue
 
             if self.player_car_class_id is not None:

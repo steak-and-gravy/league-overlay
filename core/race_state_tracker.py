@@ -312,7 +312,7 @@ class RaceStateTracker:
                     official_position = car_idx_class_position[car_idx] if car_idx < len(car_idx_class_position) else 0
                     self.mark_driver_finished(car_idx, official_position)
 
-    def handle_disconnected_drivers(self, active_drivers: List[Dict], current_session: Dict,
+    def handle_disconnected_drivers(self, active_drivers: List[Dict], session_data: Dict,
                                    get_position_from_results_fn: Callable) -> None:
         """Handle drivers who have disconnected or retired from the race.
 
@@ -321,7 +321,7 @@ class RaceStateTracker:
 
         Args:
             active_drivers: List of active driver data (modified in place)
-            current_session: Current session data from telemetry
+            session_data: Session data dict from telemetry processor
             get_position_from_results_fn: Function to get position from session results
         """
         active_car_indices = {d['car_idx'] for d in active_drivers}
@@ -343,7 +343,7 @@ class RaceStateTracker:
                     driver_state.is_disconnected = True
                 else:
                     # After checkered - get their final position from results, do this every cycle as things can change
-                    driver_state.position = get_position_from_results_fn(current_session, car_idx)
+                    driver_state.position = get_position_from_results_fn(session_data, car_idx)
 
                     # After leader has finished, mark ALL disconnected drivers as finished
                     # This ensures they use ResultsPositions and don't participate in gap-filling
