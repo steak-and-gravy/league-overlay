@@ -1413,7 +1413,7 @@ def main():
     try:
         overlay = LeagueOverlay()
         overlay.show()
-        logger.info("Application window displayed successfully")
+        logger.debug("Application window displayed successfully")
 
         sys.exit(app.exec())
     except Exception as e:
