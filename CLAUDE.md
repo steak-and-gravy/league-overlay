@@ -114,8 +114,10 @@ session_state = self.ir['SessionState'] if 'SessionState' in self.ir else 4  # â
 - Checkered flag waves when leader approaches line, but race continues
 - Tracks each car completing their finish lap individually
 - Locks position + gap when each car crosses line after checkered
-- Implemented in `core/race_state_tracker.py`
+- **Gap Preservation**: Final gaps captured from ResultsPositions and frozen to prevent changes as drivers slow down
+- Implemented in `core/race_state_tracker.py` and `core/telemetry_processor.py`
 - **NEW**: Finish tracking methods moved from TelemetryProcessor to RaceStateTracker for better cohesion
+- **NEW**: Finishing gaps calculated from ResultsPositions data for accurate post-race display
 
 **Snapshots and Disconnected Drivers:**
 - Active drivers come from `PositionCalculator.calculate_real_time_positions()` as DriverState objects with full data including `total_track_position`
@@ -303,7 +305,7 @@ lambda pos: self.parent.show_context_menu(driver)  # driver captured by referenc
 
 ## Testing
 
-The project includes comprehensive test coverage with **440+ tests** across multiple test suites:
+The project includes comprehensive test coverage with **466 tests** across multiple test suites:
 
 ### Test Organization
 ```

@@ -10,6 +10,7 @@ BB’s League Overlay displays live standings and gaps with a focus on divisions
 ## ✨ Features
 - **Live Standings** — Current race position (both overall and within division) with driver number and name.
 - **Gap Tracking** — See the real-time gap to the car ahead in your division.
+- **Post-Race Gap Preservation** — Final gaps frozen at finish line, preventing changes as drivers slow down or continue circulating.
 - **Positions Gained** — Optional column showing positions gained/lost from starting grid (green ↑ = gained, red ↓ = lost).
 - **Best Lap Times** — Optional column displaying each driver's best lap time this session.
 - **Lap Time Delta** — Optional column showing lap time comparison (green = you're faster, red = you're slower).
@@ -118,7 +119,7 @@ This project uses a modular architecture with clear separation of concerns:
 │   ├── styles.py                 # Color schemes
 │   ├── widgets.py                # Custom Qt widgets
 │   └── auto_center_controller.py # Auto-scroll logic
-├── tests/               # Test suites (349 tests: 317 passing, 32 skipped)
+├── tests/               # Test suites (466 tests)
 └── league_overlay.py    # Main application entry point
 ```
 
@@ -133,7 +134,7 @@ For AI-Assisted development, see [CLAUDE.md](CLAUDE.md) for project context.
 - **PySide6** - Qt framework for UI
 - **pyirsdk** - iRacing SDK Python wrapper for telemetry access
 - **Nuitka** - Python-to-executable compilation
-- **pytest** - Testing framework (349 comprehensive tests)
+- **pytest** - Testing framework (466 comprehensive tests)
 
 ---
 
