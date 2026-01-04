@@ -50,6 +50,7 @@ Centralized configuration constants for the entire application.
 - `UIColors` - Color palette constants
 - `UIDimensions` - Window and UI element dimensions
 - `ColumnLayout` - Column stretch factors for driver list
+- `ColumnMinWidths` - Minimum pixel widths for columns to prevent misalignment at small window sizes
 - `Timing` - Timing and refresh rate constants
 - `UIConfig` - UI-related constants (colors, fonts, sizes, division colors)
 - `FileConfig` - File paths and names
@@ -271,6 +272,7 @@ State machine for tracking race finish status.
 - Track checkered flag state
 - Mark individual drivers as finished
 - Store finish snapshots (DriverState objects)
+- Capture and preserve final gaps from ResultsPositions data
 - Recalculate division gaps after each finish
 - Handle finish tracking for entire race
 - Manage disconnected driver restoration
@@ -288,6 +290,7 @@ Racing → Checkered Flag → Drivers Finishing Individually
 
 **Key Features:**
 - Locks position/gap when driver crosses line after checkered
+- Preserves final gaps from ResultsPositions to prevent changes as drivers slow down
 - Recalculates division-based gaps after each finish
 - Stores DriverState snapshots for finished drivers
 - Handles disconnected drivers (restores from DriverState snapshots)
@@ -307,6 +310,7 @@ Main telemetry processing pipeline.
 - Handle session changes (using SessionID from WeekendInfo + session_type)
 - Separate finished and racing drivers to prevent position contamination
 - Calculate division positions (sets DriverState.division_position directly)
+- Calculate finishing gaps from ResultsPositions data for post-race accuracy
 - Manage driver snapshots for racing drivers
 - Calculate delta lap times (with mode detection for driving vs spectating)
 - Return List[DriverState] for UI display
@@ -527,6 +531,7 @@ Main application entry point and orchestration.
 - Manage Qt main window
 - Run telemetry loop in background thread
 - Handle UI updates via signals (receives List[DriverState])
+- Dynamically adjust header margins based on scrollbar visibility for column alignment
 - Coordinate auto-centering
 - Manage context menus (DriverState context menus)
 - Handle session changes
@@ -546,6 +551,7 @@ Main application entry point and orchestration.
 - `_handle_telemetry_update()` - Session change detection and state sync
 - `_update_ui()` - Render race data to UI
 - `_center_on_player()` - Auto-scrolling logic
+- `adjust_header_margins()` - Dynamic header margin adjustment for scrollbar alignment
 
 ---
 
@@ -786,7 +792,7 @@ Telemetry Thread                Main Thread
 
 ## Testing Architecture
 
-### Unit Tests (440+ tests)
+### Unit Tests (466 tests)
 
 **Test Organization:**
 ```
