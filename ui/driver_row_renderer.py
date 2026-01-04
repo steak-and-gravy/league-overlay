@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Dict
 from PySide6.QtWidgets import QWidget, QLabel, QGridLayout, QSizePolicy
 from PySide6.QtCore import Qt
 
-from config.constants import COLUMN_LAYOUT
+from config.constants import COLUMN_LAYOUT, COLUMN_MIN_WIDTHS
 from core.driver_state import DriverState
 from .styles import DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, DarkColorStyle
 
@@ -175,6 +175,7 @@ class DriverRowRenderer:
             }}
         """)
         pos_label.setAlignment(Qt.AlignCenter)
+        pos_label.setMinimumWidth(COLUMN_MIN_WIDTHS.POS)
         pos_label.setContextMenuPolicy(Qt.CustomContextMenu)
         pos_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
@@ -199,6 +200,7 @@ class DriverRowRenderer:
             }}
         """)
         div_pos_label.setAlignment(Qt.AlignCenter)
+        div_pos_label.setMinimumWidth(COLUMN_MIN_WIDTHS.DIV_POS)
         div_pos_label.setContextMenuPolicy(Qt.CustomContextMenu)
         div_pos_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
@@ -223,6 +225,7 @@ class DriverRowRenderer:
             }}
         """)
         car_label.setAlignment(Qt.AlignCenter)
+        car_label.setMinimumWidth(COLUMN_MIN_WIDTHS.CAR_NUM)
         car_label.setContextMenuPolicy(Qt.CustomContextMenu)
         car_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
@@ -246,6 +249,7 @@ class DriverRowRenderer:
         """)
         name_label.setAlignment(name_align | Qt.AlignVCenter)
         name_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        name_label.setMinimumWidth(COLUMN_MIN_WIDTHS.DRIVER_NAME)
         name_label.setWordWrap(False)
         name_label.setContextMenuPolicy(Qt.CustomContextMenu)
         name_label.customContextMenuRequested.connect(
@@ -267,6 +271,7 @@ class DriverRowRenderer:
             }}
         """)
         gap_label.setAlignment(Qt.AlignCenter)
+        gap_label.setMinimumWidth(COLUMN_MIN_WIDTHS.GAP)
         gap_label.setContextMenuPolicy(Qt.CustomContextMenu)
         gap_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
@@ -307,6 +312,7 @@ class DriverRowRenderer:
             }}
         """)
         delta_label.setAlignment(Qt.AlignCenter)
+        delta_label.setMinimumWidth(COLUMN_MIN_WIDTHS.DELTA)
         delta_label.setContextMenuPolicy(Qt.CustomContextMenu)
         delta_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
@@ -336,6 +342,7 @@ class DriverRowRenderer:
             }}
         """)
         last_lap_label.setAlignment(Qt.AlignCenter)
+        last_lap_label.setMinimumWidth(COLUMN_MIN_WIDTHS.LAST_LAP)
         last_lap_label.setContextMenuPolicy(Qt.CustomContextMenu)
         last_lap_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
@@ -366,6 +373,7 @@ class DriverRowRenderer:
             }}
         """)
         best_lap_label.setAlignment(Qt.AlignCenter)
+        best_lap_label.setMinimumWidth(COLUMN_MIN_WIDTHS.BEST_LAP)
         best_lap_label.setContextMenuPolicy(Qt.CustomContextMenu)
         best_lap_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
@@ -407,6 +415,7 @@ class DriverRowRenderer:
             }}
         """)
         positions_gained_label.setAlignment(Qt.AlignCenter)
+        positions_gained_label.setMinimumWidth(COLUMN_MIN_WIDTHS.POSITIONS_GAINED)
         positions_gained_label.setContextMenuPolicy(Qt.CustomContextMenu)
         positions_gained_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)

@@ -65,7 +65,7 @@ class DarkColorStyle(ColorStyleStrategy):
             'delta_slower_color': delta_slower_color,
             'label_bg': label_bg,
             'label_border': '',
-            'layout_margins': (2, 2, 2, 2),
+            'layout_margins': (0, 2, 0, 2),
             'layout_spacing': 2
         }
 
@@ -105,7 +105,7 @@ class AlternateColorStyle(ColorStyleStrategy):
                 'delta_slower_color': delta_slower_color,
                 'label_bg': label_bg,
                 'label_border': '',
-                'layout_margins': (2, 2, 2, 2),
+                'layout_margins': (0, 2, 0, 2),
                 'layout_spacing': 2
             }
         else:
@@ -121,7 +121,7 @@ class AlternateColorStyle(ColorStyleStrategy):
                 'delta_slower_color': delta_slower_color,
                 'label_bg': label_bg,
                 'label_border': '',
-                'layout_margins': (2, 2, 2, 2),
+                'layout_margins': (0, 2, 0, 2),
                 'layout_spacing': 2
             }
 
@@ -156,8 +156,8 @@ class OutlineColorStyle(ColorStyleStrategy):
             'delta_slower_color': delta_slower_color,
             'label_bg': label_bg,
             'label_border': label_border,
-            'layout_margins': (3, 2, 3, 2),
-            'layout_spacing': 0
+            'layout_margins': (0, 2, 0, 2),
+            'layout_spacing': 2
         }
 
 
@@ -193,7 +193,7 @@ class DefaultColorStyle(ColorStyleStrategy):
             'delta_slower_color': delta_slower_color,
             'label_bg': label_bg,  # Default background (driver name, gap)
             'label_border': label_border,
-            'layout_margins': (2, 2, 2, 2),
+            'layout_margins': (0, 2, 0, 2),
             'layout_spacing': 2,
             # Special styling for specific labels
             'position_bg': position_bg,  # Red background for position

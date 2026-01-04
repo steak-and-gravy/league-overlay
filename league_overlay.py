@@ -23,7 +23,7 @@ import irsdk
 # Import from modular structure
 from config.constants import (
     UI_CONFIG, FILE_CONFIG, VERSION,
-    UI_COLORS, UI_DIMENSIONS, COLUMN_LAYOUT, TIMING, TELEMETRY_CONFIG
+    UI_COLORS, UI_DIMENSIONS, COLUMN_LAYOUT, COLUMN_MIN_WIDTHS, TIMING, TELEMETRY_CONFIG
 )
 from config.settings import SettingsManager
 from config.logging_config import setup_logging, get_logger
@@ -367,6 +367,9 @@ class LeagueOverlay(QMainWindow):
         self.header_frame = QWidget()
         self.header_frame.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.HEADER_DARK_GRAY)};")
         self.header_layout = QGridLayout(self.header_frame)
+        # Force header to match scroll area width by setting size policy
+        from PySide6.QtWidgets import QSizePolicy
+        self.header_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.create_headers()
         self.main_layout.addWidget(self.header_frame)
         
@@ -375,12 +378,15 @@ class LeagueOverlay(QMainWindow):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll_area.setFrameShape(QScrollArea.NoFrame)  # Remove any frame that might affect width
         self.update_scroll_area_style()
 
         # Scrollable content
         self.scroll_content = QWidget()
         self.scroll_content.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.BACKGROUND_BLACK)};")
         self.scroll_layout = QVBoxLayout(self.scroll_content)
+        # Use 5px margins - scrollbar will reduce viewport by 6px, giving same content width as header
+        # Header: W - 16px (5+11 margins), Scroll: (W - 6px scrollbar) - 10px (5+5 margins) = W - 16px ✓
         self.scroll_layout.setContentsMargins(5, 5, 5, 5)
         self.scroll_layout.setSpacing(self.get_font_size('spacing'))
         self.scroll_layout.addStretch()
@@ -417,7 +423,9 @@ class LeagueOverlay(QMainWindow):
             QScrollBar:vertical {{
                 background: {self.get_bg_color(UI_COLORS.SCROLLBAR_GRAY)};
                 width: 6px;
-                margin: 0px;
+                margin: 0px 0px 0px 0px;
+                subcontrol-position: right;
+                subcontrol-origin: margin;
             }}
             QScrollBar::handle:vertical {{
                 background: {UI_COLORS.BUTTON_GRAY};
@@ -538,8 +546,8 @@ class LeagueOverlay(QMainWindow):
             if item.widget():
                 item.widget().deleteLater()
 
-        # Add padding on right to account for scrollbar (6px scrollbar + 5px margin)
-        self.header_layout.setContentsMargins(5, 2, 11, 2)
+        # Set base margins - will be dynamically adjusted based on scrollbar visibility
+        self.header_layout.setContentsMargins(5, 2, 5, 2)
         self.header_layout.setSpacing(2)
 
         # Reset all column stretches first (clear old values from hidden columns)
@@ -583,6 +591,20 @@ class LeagueOverlay(QMainWindow):
         for col_idx, stretch in enumerate(stretches):
             self.header_layout.setColumnStretch(col_idx, stretch)
 
+        # Define minimum widths mapping from header text to constant
+        min_width_map = {
+            "Pos": COLUMN_MIN_WIDTHS.POS,
+            "+/-": COLUMN_MIN_WIDTHS.POSITIONS_GAINED,
+            "D-Pos": COLUMN_MIN_WIDTHS.DIV_POS,
+            "Driver": COLUMN_MIN_WIDTHS.DRIVER_NAME,
+            "Car#": COLUMN_MIN_WIDTHS.CAR_NUM,
+            "Gap": COLUMN_MIN_WIDTHS.GAP,
+            "Div Gap": COLUMN_MIN_WIDTHS.DIV_GAP,
+            "Best Lap": COLUMN_MIN_WIDTHS.BEST_LAP,
+            "Last Lap": COLUMN_MIN_WIDTHS.LAST_LAP,
+            "Delta": COLUMN_MIN_WIDTHS.DELTA
+        }
+
         # Create header labels
         for i, header in enumerate(headers):
             label = QLabel(header)
@@ -595,6 +617,9 @@ class LeagueOverlay(QMainWindow):
                 }}
             """)
             label.setAlignment(Qt.AlignCenter)
+            # Set same minimum widths as detail rows for consistent column sizing
+            if header in min_width_map:
+                label.setMinimumWidth(min_width_map[header])
             self.header_layout.addWidget(label, 0, i)
 
     def _update_header_labels(self):
@@ -695,6 +720,10 @@ class LeagueOverlay(QMainWindow):
                 rect.width() - self.size_grip.width(),
                 rect.height() - self.size_grip.height()
             )
+
+        # Adjust header margins based on scrollbar visibility (may change during resize)
+        if hasattr(self, 'header_layout'):
+            self.adjust_header_margins()
 
     def load_settings(self):
         """Load user preferences from disk."""
@@ -1263,7 +1292,23 @@ class LeagueOverlay(QMainWindow):
             self.center_on_player(data)
 
         self.displayed_data = data.copy()
-    
+
+        # Adjust header margins to match scroll area width (accounting for scrollbar)
+        self.adjust_header_margins()
+
+    def adjust_header_margins(self):
+        """Adjust header right margin based on scrollbar visibility to maintain column alignment."""
+        # Check if vertical scrollbar is visible
+        scrollbar = self.scroll_area.verticalScrollBar()
+        scrollbar_visible = scrollbar.isVisible()
+
+        # Base margins: (5, 2, 5, 2)
+        # When scrollbar is visible (6px wide), add 6px to right margin to match reduced viewport
+        # Header: (5, 2, 11, 2) = W - 16px content
+        # Scroll: (W - 6px scrollbar) - 10px (5+5 margins) = W - 16px content
+        right_margin = 11 if scrollbar_visible else 5
+        self.header_layout.setContentsMargins(5, 2, right_margin, 2)
+
     def show_context_menu(self, driver: DriverState):
         """Display right-click menu to assign driver to a division."""
         menu = QMenu(self)
