@@ -358,8 +358,8 @@ class TelemetryProcessor:
         # Format best lap time for display
         best_lap_display = GapCalculator.format_lap_time(best_lap_time)
 
-        # Format positions gained for display (compare class positions, not overall positions)
-        positions_gained_display = GapCalculator.format_positions_gained(current_color_position, starting_position)
+        # Format positions gained for display (compare overall positions)
+        positions_gained_display = GapCalculator.format_positions_gained(display_position, starting_position)
 
         return DriverState(
             car_idx=car_idx,
