@@ -1,6 +1,7 @@
 """Race finish state tracking and snapshot management."""
 
 from typing import Dict, Set, Optional, Callable, List
+import threading
 import irsdk
 
 from config.constants import TELEMETRY_CONFIG
@@ -22,12 +23,24 @@ class RaceStateTracker:
         self.ir = ir
         self.player_car_class_id: Optional[int] = None
         self.player_class_car_indices: Optional[Set[int]] = None
+        self._retry_timer: Optional[threading.Timer] = None
+        self._max_retry_attempts: int = 12  # 12 attempts * 5 seconds = 60 seconds max
+        self._retry_count: int = 0
         self.reset()
+
+    def __del__(self) -> None:
+        """Cleanup when object is destroyed."""
+        self._cancel_retry_timer()
 
     def reset(self) -> None:
         """Reset all finish tracking state (called on session change)."""
+        # Cancel any pending retry timer
+        self._cancel_retry_timer()
+        self._retry_count = 0
+
         self.leader_finished: bool = False
         self.finished_drivers: Set[int] = set()
+        self.finish_laps: Dict[int, int] = {}  # Maps car_idx to lap they finished on
         self.checkered_flag_shown: bool = False
         self.driver_snapshots: Dict[int, DriverState] = {}  # Changed from Dict to DriverState
         self.player_class_car_indices: Optional[Set[int]] = None
@@ -48,16 +61,18 @@ class RaceStateTracker:
         """Check if checkered flag has shown."""
         return self.checkered_flag_shown
 
-    def mark_driver_finished(self, car_idx: int, official_position: int) -> None:
+    def mark_driver_finished(self, car_idx: int, official_position: int, finish_lap: int = 0) -> None:
         """Mark a driver as having completed their finish lap.
 
         Args:
             car_idx: Car index of the finishing driver
             official_position: Official finishing position
+            finish_lap: The lap number they finished on (used for ResultsPositions sync detection)
         """
         if car_idx not in self.finished_drivers:
-            logger.debug(f"MARK_FINISHED - Car {car_idx} marked as finished: position={official_position}")
+            logger.debug(f"MARK_FINISHED - Car {car_idx} marked as finished: position={official_position}, finish_lap={finish_lap}")
             self.finished_drivers.add(car_idx)
+            self.finish_laps[car_idx] = finish_lap
 
             # Store final position in snapshot and mark as finished
             if car_idx in self.driver_snapshots:
@@ -69,6 +84,17 @@ class RaceStateTracker:
         """Check if a driver has finished their race."""
         return car_idx in self.finished_drivers
 
+    def get_finish_lap(self, car_idx: int) -> Optional[int]:
+        """Get the lap number a driver finished on.
+
+        Args:
+            car_idx: Car index
+
+        Returns:
+            Lap number they finished on, or None if not finished
+        """
+        return self.finish_laps.get(car_idx)
+
     def update_snapshot(self, car_idx: int, driver_state: DriverState) -> None:
         """Update or create driver snapshot with current state.
 
@@ -76,7 +102,10 @@ class RaceStateTracker:
             car_idx: Car index
             driver_state: DriverState object to store
         """
+        was_existing = car_idx in self.driver_snapshots
         self.driver_snapshots[car_idx] = driver_state
+        if self.checkered_flag_shown:
+            logger.debug(f"SNAPSHOT - Car {car_idx}: {'Updated' if was_existing else 'Created'} snapshot with lap={driver_state.current_lap}")
 
     def get_snapshot(self, car_idx: int) -> Optional[DriverState]:
         """Get stored snapshot for a driver.
@@ -110,6 +139,30 @@ class RaceStateTracker:
         """
         self.player_car_class_id = player_car_class_id
 
+    def _cancel_retry_timer(self) -> None:
+        """Cancel any pending retry timer."""
+        if self._retry_timer is not None:
+            self._retry_timer.cancel()
+            self._retry_timer = None
+
+    def _schedule_retry(self) -> None:
+        """Schedule a retry attempt to load starting positions after 5 seconds."""
+        if self._retry_count >= self._max_retry_attempts:
+            logger.warning(f"STARTING_POSITIONS - Max retry attempts ({self._max_retry_attempts}) reached, giving up")
+            return
+
+        self._retry_count += 1
+        logger.debug(f"STARTING_POSITIONS - Scheduling retry attempt {self._retry_count}/{self._max_retry_attempts} in 5 seconds")
+        self._retry_timer = threading.Timer(5.0, self._retry_load_starting_positions)
+        self._retry_timer.daemon = True  # Allow program to exit even if timer is pending
+        self._retry_timer.start()
+
+    def _retry_load_starting_positions(self) -> None:
+        """Retry loading starting positions (called by timer)."""
+        logger.debug(f"STARTING_POSITIONS - Retry attempt {self._retry_count}/{self._max_retry_attempts}")
+        self.starting_positions_loaded = False  # Reset flag to allow retry
+        self.load_starting_positions_from_qualify()
+
     def _cache_player_class_cars(self) -> None:
         """Cache which cars are in player's class to avoid repeated lookups during finish tracking."""
         if self.player_car_class_id is None:
@@ -136,6 +189,9 @@ class RaceStateTracker:
         stored in the SessionInfo YAML. This is more reliable than capturing positions
         at race start and works even if the overlay connects mid-race.
 
+        If loading fails, automatically schedules a retry attempt after 5 seconds
+        (up to 12 attempts = 60 seconds total).
+
         Only loads positions during race sessions. Does nothing for practice/qualifying.
         """
         # Mark that we've attempted to load (prevents infinite retries)
@@ -153,11 +209,13 @@ class RaceStateTracker:
                         car_idx = result.get('CarIdx')
                         # Use ClassPosition for multi-class support (0-based, so add 1)
                         class_position = result.get('ClassPosition')
-                        if car_idx is not None and class_position is not None:
+                        if car_idx is not None and class_position is not None and class_position >= 0:
                             self.starting_positions[car_idx] = class_position + 1
 
                     if self.starting_positions:
-                        logger.debug(f"STARTING_POSITIONS - Loaded {len(self.starting_positions)} starting positions from QualifyResultsInfo")
+                        logger.info(f"STARTING_POSITIONS - Loaded {len(self.starting_positions)} starting positions from QualifyResultsInfo")
+                        # Cancel any pending retries since we succeeded
+                        self._cancel_retry_timer()
                         return
             except (KeyError, TypeError):
                 pass  # QualifyResultsInfo not available, try SessionInfo fallback
@@ -188,20 +246,24 @@ class RaceStateTracker:
                             car_idx = result.get('CarIdx')
                             # Use ClassPosition for multi-class support (0-based, so add 1)
                             class_position = result.get('ClassPosition')
-                            if car_idx is not None and class_position is not None:
+                            if car_idx is not None and class_position is not None and class_position >= 0:
                                 self.starting_positions[car_idx] = class_position + 1
 
                         if self.starting_positions:
                             session_type = qualify_session.get('SessionType', 'unknown')
-                            logger.debug(f"STARTING_POSITIONS - Loaded {len(self.starting_positions)} starting positions from {session_type} session")
+                            logger.info(f"STARTING_POSITIONS - Loaded {len(self.starting_positions)} starting positions from {session_type} session")
+                            # Cancel any pending retries since we succeeded
+                            self._cancel_retry_timer()
                             return
 
-            # If we get here and have no starting positions, log a warning
+            # If we get here and have no starting positions, log a warning and schedule retry
             if not self.starting_positions:
-                logger.warning("STARTING_POSITIONS - Could not load starting positions from QualifyResultsInfo or session results")
+                logger.info("STARTING_POSITIONS - Could not load starting positions from QualifyResultsInfo or session results")
+                self._schedule_retry()
 
         except (KeyError, TypeError, IndexError) as e:
             logger.warning(f"STARTING_POSITIONS - Error loading starting positions: {e}")
+            self._schedule_retry()
 
     def get_starting_position(self, car_idx: int) -> int:
         """Get starting grid position for a driver.
@@ -301,16 +363,22 @@ class RaceStateTracker:
 
                 driver_state = self.get_snapshot(car_idx)
                 if driver_state is None:
+                    logger.debug(f"FINISH_TRACKING - Car {car_idx}: No snapshot, skipping")
                     continue
 
                 prev_lap = driver_state.current_lap
                 current_lap = car_idx_lap[car_idx]
 
+                logger.debug(f"FINISH_TRACKING - Car {car_idx}: prev_lap={prev_lap}, current_lap={current_lap}")
+
                 # When lap counter increments, driver has crossed finish line and completed race
                 if current_lap > prev_lap:
                     # Capture the official position at the moment they finish
                     official_position = car_idx_class_position[car_idx] if car_idx < len(car_idx_class_position) else 0
-                    self.mark_driver_finished(car_idx, official_position)
+                    # Store prev_lap as finish_lap because ResultsPositions.LapsComplete shows laps COMPLETED (not current lap number)
+                    # When CarIdxLap goes 8->9, they completed lap 8, and ResultsPositions will show LapsComplete=8
+                    logger.debug(f"FINISH_TRACKING - Car {car_idx}: LAP INCREMENT DETECTED! Marking as finished with position={official_position}, finish_lap={prev_lap} (completed)")
+                    self.mark_driver_finished(car_idx, official_position, finish_lap=prev_lap)
 
     def handle_disconnected_drivers(self, active_drivers: List[Dict], session_data: Dict,
                                    get_position_from_results_fn: Callable) -> None:
@@ -347,7 +415,7 @@ class RaceStateTracker:
 
                     # After leader has finished, mark ALL disconnected drivers as finished
                     # This ensures they use ResultsPositions and don't participate in gap-filling
-                    if self.has_leader_finished():
+                    if self.has_leader_finished() and not self.is_driver_finished(car_idx):
                         driver_state.is_finished = True
                         self.finished_drivers.add(car_idx)
                         logger.debug(f"DISCONNECT - Car {car_idx} marked as finished after leader finished, position={driver_state.position}")

@@ -37,15 +37,30 @@ class UIDimensions:
 @dataclass(frozen=True)
 class ColumnLayout:
     """Column stretch factors for driver list."""
-    POS: int = 11
-    POSITIONS_GAINED: int = 11
-    DIV_POS: int = 11
-    CAR_NUM: int = 13
-    DRIVER_NAME: int = 37
-    GAP: int = 16
-    BEST_LAP: int = 16
-    DELTA: int = 13
-    LAST_LAP: int = 16
+    POS: int = 7
+    POSITIONS_GAINED: int = 7
+    DIV_POS: int = 7
+    CAR_NUM: int = 8
+    DRIVER_NAME: int = 28
+    GAP: int = 11
+    BEST_LAP: int = 11
+    DELTA: int = 10
+    LAST_LAP: int = 11
+
+
+@dataclass(frozen=True)
+class ColumnMinWidths:
+    """Minimum pixel widths for columns to prevent misalignment at small window sizes."""
+    POS: int = 25
+    POSITIONS_GAINED: int = 30
+    DIV_POS: int = 35
+    CAR_NUM: int = 35
+    DRIVER_NAME: int = 60
+    GAP: int = 45
+    DIV_GAP: int = 50  # Slightly wider for "Div Gap" text
+    BEST_LAP: int = 55
+    DELTA: int = 45
+    LAST_LAP: int = 55
 
 
 @dataclass(frozen=True)
@@ -162,6 +177,7 @@ class TelemetryConfig:
 UI_COLORS = UIColors()
 UI_DIMENSIONS = UIDimensions()
 COLUMN_LAYOUT = ColumnLayout()
+COLUMN_MIN_WIDTHS = ColumnMinWidths()
 TIMING = Timing()
 UI_CONFIG = UIConfig()
 FILE_CONFIG = FileConfig()
