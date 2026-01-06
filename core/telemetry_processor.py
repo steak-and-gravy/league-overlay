@@ -177,6 +177,35 @@ class TelemetryProcessor:
 
         return False
 
+    def _prepopulate_lap_time_cache_from_results(self, session_data: Dict) -> None:
+        """Prepopulate lap time cache from ResultsPositions on session start.
+
+        This allows the overlay to show lap times immediately when joining a session,
+        rather than waiting for drivers to complete laps after the overlay starts.
+
+        Args:
+            session_data: Session data dict containing results_lookup
+        """
+        results_lookup = session_data.get('results_lookup', {})
+        if not results_lookup:
+            return
+
+        for car_idx, result_data in results_lookup.items():
+            # Get lap times from ResultsPositions
+            best_lap = result_data.get('FastestTime', 0.0)
+            last_lap = result_data.get('LastTime', 0.0)
+
+            # Only cache if we have at least one valid lap time
+            if (best_lap > 0 and best_lap < 999) or (last_lap > 0 and last_lap < 999):
+                # Don't overwrite existing cache (in case we're re-joining)
+                if car_idx not in self.lap_time_cache:
+                    valid_best = best_lap if (best_lap > 0 and best_lap < 999) else 0.0
+                    valid_last = last_lap if (last_lap > 0 and last_lap < 999) else 0.0
+                    self.lap_time_cache[car_idx] = (valid_best, valid_last)
+
+        if self.lap_time_cache:
+            logger.debug(f"Prepopulated lap time cache with {len(self.lap_time_cache)} drivers from ResultsPositions")
+
     def _update_lap_time_cache(self) -> None:
         """Update lap time cache from telemetry arrays.
 
@@ -967,6 +996,8 @@ class TelemetryProcessor:
             # Handle session changes
             if self._detect_session_change(session_data):
                 self.reset_fields()
+                # Prepopulate lap time cache from ResultsPositions
+                self._prepopulate_lap_time_cache_from_results(session_data)
                 # Load starting positions if entering a race session
                 if is_race:
                     self.race_state_tracker.load_starting_positions_from_qualify()
@@ -1106,9 +1137,14 @@ class TelemetryProcessor:
                 )
 
                 # Get lap time data from cache (preserves times when driver goes inactive)
-                cached_times = self.lap_time_cache.get(car_idx, (0.0, 0.0))
-                best_lap_time = cached_times[0]
-                last_lap_time = cached_times[1]
+                # For restored drivers from ResultsPositions, use their lap times from the driver dict
+                if 'best_lap_time' in driver and 'last_lap_time' in driver:
+                    best_lap_time = driver['best_lap_time']
+                    last_lap_time = driver['last_lap_time']
+                else:
+                    cached_times = self.lap_time_cache.get(car_idx, (0.0, 0.0))
+                    best_lap_time = cached_times[0]
+                    last_lap_time = cached_times[1]
 
                 # Calculate delta lap time comparison
                 delta = self._calculate_delta(
