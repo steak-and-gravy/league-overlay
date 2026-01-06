@@ -98,6 +98,11 @@ class GapCalculator:
         else:
             minutes = int(lap_time // 60)
             seconds = lap_time % 60
+            # Handle rounding: if seconds rounds to 60.00, increment minutes
+            # This prevents displaying "1:60.00" for 119.999 seconds
+            if seconds >= 59.995:  # Will round to 60.00 with .2f formatting
+                minutes += 1
+                seconds = 0.0
             return f"{minutes}:{seconds:05.2f}"
 
     @staticmethod

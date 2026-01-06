@@ -2,6 +2,37 @@
 
 Real-time iRacing race position overlay with division-based racing.
 
+## ⚠️ PRE-CODE CHECKLIST - READ THIS FIRST!
+
+**Before writing ANY code, check the relevant sections below:**
+
+- [ ] **Accessing `self.ir` or `live_data`?** → Read ["IRSDK DATA ACCESS"](#0-irsdk-data-access-important) section
+  - NEVER use `.get()` on iRSDK objects
+  - NEVER use `in` operator on iRSDK objects
+  - ALWAYS use bracket notation with try/except
+
+- [ ] **Working with driver positions?** → Read ["POSITIONING"](#1-positioning) section
+  - Understand the unified `position` field
+  - Know the difference between real-time vs official positions
+
+- [ ] **Calculating or displaying gaps?** → Read ["GAP CALCULATION"](#2-gap-calculation) section
+  - Check time gap vs lap gap logic
+  - Understand division gap vs overall gap
+
+- [ ] **Working with DriverState objects?** → Read ["DRIVER STATE"](#3-driver-state-unified-data-structure) section
+  - Use attribute access, not `.get()`
+  - Understand finish tracking and disconnection flags
+
+- [ ] **Handling disconnected/finished drivers?** → Read ["RACE STATE TRACKING"](#4-race-state-tracking-finish-detection) section
+  - Understand the finish state machine
+  - Know how snapshots work
+
+**Common Mistakes to Avoid:**
+1. ❌ `self.ir.get('SessionState', 4)` → ✅ Use try/except with bracket notation
+2. ❌ `if 'SessionState' in self.ir:` → ✅ Use try/except
+3. ❌ `driver.get('position')` on DriverState → ✅ Use `driver.position`
+4. ❌ Modifying position after finish → ✅ Positions lock when drivers finish
+
 ## Project Structure
 ```
 league-overlay/

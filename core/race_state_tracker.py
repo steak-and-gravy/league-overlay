@@ -46,6 +46,7 @@ class RaceStateTracker:
         self.player_class_car_indices: Optional[Set[int]] = None
         self.starting_positions: Dict[int, int] = {}  # Maps car_idx to starting grid position
         self.starting_positions_loaded: bool = False  # Track if we've attempted to load starting positions
+        self.results_restored_drivers: Set[int] = set()  # Track which drivers we've logged as restored from ResultsPositions
 
     def is_racing(self) -> bool:
         """Check if race is still in progress (checkered not shown yet)."""
@@ -444,3 +445,59 @@ class RaceStateTracker:
                 # Only show disconnected drivers if they have a valid position or race is ongoing
                 if self.ir['SessionState'] < 5 or driver_state.position >= 0:
                     active_drivers.append(disconnected_driver)
+
+        # Also check ResultsPositions for drivers who participated but don't have snapshots
+        # (e.g., drivers who were on track before overlay started, or disconnected before joining as spectator)
+        results_lookup = session_data.get('results_lookup', {})
+        if results_lookup:
+            try:
+                driver_info_data = self.ir['DriverInfo']
+                drivers = driver_info_data['Drivers'] if driver_info_data else []
+            except (KeyError, TypeError):
+                drivers = []
+            drivers_dict = {driver.get('CarIdx'): driver for driver in drivers if driver.get('CarIdx') is not None}
+
+            for car_idx, result_data in results_lookup.items():
+                # Skip if already in active drivers or has a snapshot
+                if car_idx in active_car_indices or self.get_snapshot(car_idx) is not None:
+                    continue
+
+                # Get driver info from DriverInfo
+                driver_info = drivers_dict.get(car_idx)
+                if not driver_info:
+                    continue
+
+                # Multi-class support: only include drivers in player's class
+                if self.player_car_class_id is not None:
+                    driver_class_id = driver_info.get('CarClassID')
+                    if driver_class_id != self.player_car_class_id:
+                        continue
+
+                # Get position from results
+                position = get_position_from_results_fn(session_data, car_idx)
+                if position <= 0:
+                    continue
+
+                # Get lap times from ResultsPositions
+                best_lap_time = result_data.get('FastestTime', 0.0)
+                last_lap_time = result_data.get('LastTime', 0.0)
+
+                # Create driver entry for this previously-active driver
+                results_driver = {
+                    'car_idx': car_idx,
+                    'driver_info': driver_info,
+                    'position': position,
+                    'current_lap': result_data.get('LapsComplete', 0),
+                    'lap_pct': 0.0,
+                    'total_track_position': result_data.get('LapsComplete', 0),
+                    'disconnected': True,  # Not currently active in telemetry
+                    'best_lap_time': best_lap_time,
+                    'last_lap_time': last_lap_time,
+                }
+
+                active_drivers.append(results_driver)
+
+                # Only log once per driver (avoid spamming logs every telemetry cycle)
+                if car_idx not in self.results_restored_drivers:
+                    self.results_restored_drivers.add(car_idx)
+                    logger.debug(f"RESULTS_RESTORE - Added driver {car_idx} from ResultsPositions at position {position}")
