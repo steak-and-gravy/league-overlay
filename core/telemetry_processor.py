@@ -73,6 +73,9 @@ class TelemetryProcessor:
         # Maps car_idx -> (best_lap, last_lap)
         self.lap_time_cache: Dict[int, Tuple[float, float]] = {}
 
+        # Pit stop tracking - maps car_idx to last pit lap number
+        self.pit_tracking: Dict[int, int] = {}
+
     def reset_fields(self) -> None:
         """Clear all session-specific tracking data.
 
@@ -87,6 +90,12 @@ class TelemetryProcessor:
 
         # Clear lap time cache on session change
         self.lap_time_cache.clear()
+
+        # Clear pit tracking on session change
+        self.pit_tracking.clear()
+
+        # Reset prepopulation retry tracking
+        self.prepopulate_retry_count = 0
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SESSION INFO AND TRACKING
@@ -177,11 +186,10 @@ class TelemetryProcessor:
 
         return False
 
-    def _prepopulate_lap_time_cache_from_results(self, session_data: Dict) -> None:
-        """Prepopulate lap time cache from ResultsPositions on session start.
+    def _populate_lap_time_cache_from_results(self, session_data: Dict) -> None:
+        """Populate lap time cache from ResultsPositions.
 
-        This allows the overlay to show lap times immediately when joining a session,
-        rather than waiting for drivers to complete laps after the overlay starts.
+        This allows the overlay to show lap times immediately when joining a session.
 
         Args:
             session_data: Session data dict containing results_lookup
@@ -197,59 +205,41 @@ class TelemetryProcessor:
 
             # Only cache if we have at least one valid lap time
             if (best_lap > 0 and best_lap < 999) or (last_lap > 0 and last_lap < 999):
-                # Don't overwrite existing cache (in case we're re-joining)
-                if car_idx not in self.lap_time_cache:
-                    valid_best = best_lap if (best_lap > 0 and best_lap < 999) else 0.0
-                    valid_last = last_lap if (last_lap > 0 and last_lap < 999) else 0.0
-                    self.lap_time_cache[car_idx] = (valid_best, valid_last)
+                valid_best = best_lap if (best_lap > 0 and best_lap < 999) else 0.0
+                valid_last = last_lap if (last_lap > 0 and last_lap < 999) else 0.0
+                self.lap_time_cache[car_idx] = (valid_best, valid_last)
 
-        if self.lap_time_cache:
-            logger.debug(f"Prepopulated lap time cache with {len(self.lap_time_cache)} drivers from ResultsPositions")
+    def _update_pit_tracking(self) -> None:
+        """Update pit tracking by monitoring CarIdxOnPitRoad transitions.
 
-    def _update_lap_time_cache(self) -> None:
-        """Update lap time cache from telemetry arrays.
-
-        This method reads lap times from ALL car slots (0-63) and updates the cache,
-        preserving lap time data even when drivers go inactive (CarIdxClassPosition == 0).
-
-        The cache persists across frames but is cleared on session change via reset_fields().
+        Detects when cars exit pit road (True → False transition) and records
+        the current lap number. This is used for Last Pit Lap and Out Lap columns.
         """
         try:
-            car_idx_best_lap = self.ir['CarIdxBestLapTime']
-            car_idx_last_lap = self.ir['CarIdxLastLapTime']
+            car_idx_on_pit_road = self.ir['CarIdxOnPitRoad']
+            car_idx_lap = self.ir['CarIdxLap']
 
-            if not car_idx_best_lap or not car_idx_last_lap:
+            if not car_idx_on_pit_road or not car_idx_lap:
                 return
 
-            # Update cache for all car slots that have valid lap time data
-            for car_idx in range(min(len(car_idx_best_lap), len(car_idx_last_lap))):
-                best_lap = car_idx_best_lap[car_idx]
-                last_lap = car_idx_last_lap[car_idx]
+            for car_idx in range(min(len(car_idx_on_pit_road), len(car_idx_lap))):
+                current_on_pit = car_idx_on_pit_road[car_idx]
+                current_lap = car_idx_lap[car_idx]
 
-                # Only cache if we have at least one valid lap time
-                # (valid lap times are > 0 and < 999 seconds)
-                if (best_lap > 0 and best_lap < 999) or (last_lap > 0 and last_lap < 999):
-                    # Update or create cache entry
-                    existing = self.lap_time_cache.get(car_idx, (0.0, 0.0))
-
-                    # Keep the better of existing vs new values
-                    # (handles case where telemetry might reset but we want to preserve best times)
-                    cached_best = existing[0]
-                    cached_last = existing[1]
-
-                    # Update best lap if new one is valid and better (or we had no cached value)
-                    if best_lap > 0 and best_lap < 999:
-                        if cached_best == 0.0 or best_lap < cached_best:
-                            cached_best = best_lap
-
-                    # Always update last lap if valid (most recent is what we want)
-                    if last_lap > 0 and last_lap < 999:
-                        cached_last = last_lap
-
-                    self.lap_time_cache[car_idx] = (cached_best, cached_last)
+                # Track when car exits pit road (transition from pit to track)
+                # We use a sentinel value of -1 to indicate "on pit road currently"
+                if current_on_pit:
+                    # Car is on pit road - mark as -1 (sentinel)
+                    self.pit_tracking[car_idx] = -1
+                elif self.pit_tracking.get(car_idx) == -1 and not current_on_pit:
+                    # Car just exited pit road (was -1, now False)
+                    # Record the lap they're now on (the out lap)
+                    self.pit_tracking[car_idx] = current_lap
+                # If car is not on pit road and we have no record, don't update
+                # (haven't seen them pit yet this session)
 
         except (KeyError, TypeError, IndexError) as e:
-            logger.debug(f"Error updating lap time cache: {e}")
+            logger.debug(f"Error updating pit tracking: {e}")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SESSION RESULTS AND LAP TIMES
@@ -356,7 +346,7 @@ class TelemetryProcessor:
     # RACE DATA BUILDING
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], gap: str, display_position: int, division_color: str, division_name: Optional[str], delta: str = "--", last_lap_time: float = 0.0, best_lap_time: float = 0.0, starting_position: int = 0) -> DriverState:
+    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], gap: str, display_position: int, division_color: str, division_name: Optional[str], delta: str = "--", last_lap_time: float = 0.0, best_lap_time: float = 0.0, starting_position: int = 0, irating: int = 0, lic_level: int = 0, lic_sublevel: int = 0) -> DriverState:
         """Build a single race data entry for display.
 
         Args:
@@ -390,6 +380,16 @@ class TelemetryProcessor:
         # Format positions gained for display (compare overall positions)
         positions_gained_display = GapCalculator.format_positions_gained(display_position, starting_position)
 
+        # Format new columns using GapCalculator
+        irating_display = GapCalculator.format_irating(irating)
+        safety_rating_display = GapCalculator.format_safety_rating(lic_level, lic_sublevel)
+        combined_rating_display = GapCalculator.format_combined_rating(irating, lic_level, lic_sublevel)
+
+        # Calculate last pit lap and out lap indicator
+        last_pit_lap_num = self.pit_tracking.get(car_idx, 0)
+        current_lap = driver.get('current_lap', 0)
+        pit_lap_display = GapCalculator.format_pit_lap(current_lap, last_pit_lap_num)
+
         return DriverState(
             car_idx=car_idx,
             driver_info=driver_info,
@@ -405,6 +405,11 @@ class TelemetryProcessor:
             best_lap_time=best_lap_time,
             starting_position=starting_position,
             positions_gained=positions_gained_display,
+            irating=irating_display,
+            safety_rating=safety_rating_display,
+            combined_rating=combined_rating_display,
+            lic_level=lic_level,
+            pit_lap=pit_lap_display,
             is_player=is_player,
             is_disconnected=is_disconnected
         )
@@ -991,19 +996,20 @@ class TelemetryProcessor:
                 return None
 
             drivers, session_data, is_race = session_info
-            current_session = session_data['current_session']
 
             # Handle session changes
             if self._detect_session_change(session_data):
                 self.reset_fields()
-                # Prepopulate lap time cache from ResultsPositions
-                self._prepopulate_lap_time_cache_from_results(session_data)
                 # Load starting positions if entering a race session
                 if is_race:
                     self.race_state_tracker.load_starting_positions_from_qualify()
 
-            # Update lap time cache (preserves lap times even when drivers go inactive)
-            self._update_lap_time_cache()
+            # Update lap time cache
+            self._populate_lap_time_cache_from_results(session_data)
+
+            # Update pit tracking only during race sessions (practice/qualifying don't need pit tracking)
+            if is_race:
+                self._update_pit_tracking()
 
             # Identify player
             self.position_calculator.identify_player(drivers)
@@ -1158,12 +1164,30 @@ class TelemetryProcessor:
                 # Get starting position for positions gained calculation (only during race sessions)
                 starting_position = self.race_state_tracker.get_starting_position(car_idx) if is_race else 0
 
+                # Extract new column data from driver info (with fallback values)
+                driver_info = drivers.get(car_idx, {})
+                try:
+                    irating = driver_info['IRating']
+                except (KeyError, TypeError):
+                    irating = 0
+
+                try:
+                    lic_level = driver_info['LicLevel']
+                except (KeyError, TypeError):
+                    lic_level = 0
+
+                try:
+                    lic_sublevel = driver_info['LicSubLevel']
+                except (KeyError, TypeError):
+                    lic_sublevel = 0
+
                 # Build and append race data entry
                 driver['position'] = position  # Ensure position is set for helper method (still needed for gap calculations)
                 race_entry = self._build_race_data_entry(
                     driver, division_positions, gap, position,
                     current_driver_color, current_driver_division,
-                    delta, last_lap_time, best_lap_time, starting_position
+                    delta, last_lap_time, best_lap_time, starting_position,
+                    irating, lic_level, lic_sublevel
                 )
                 race_data.append(race_entry)
 

@@ -48,6 +48,7 @@ Centralized configuration constants for the entire application.
 
 **Classes:**
 - `UIColors` - Color palette constants
+- `LicenseColors` - License class background colors (R/D/C/B/A/P)
 - `UIDimensions` - Window and UI element dimensions
 - `ColumnLayout` - Column stretch factors for driver list
 - `ColumnMinWidths` - Minimum pixel widths for columns to prevent misalignment at small window sizes
@@ -156,7 +157,7 @@ Unified data structure for driver information during a session.
 **Key Features:**
 - Dataclass with type hints for all fields
 - Computed properties: `car_number`, `driver_name`, `car_class_id`, `total_track_position`
-- Direct fields: `car_idx`, `driver_info`, `position`, `division_position`, `starting_position`, `division_name`, `division_color`, `gap`, `delta`, `last_lap`, `best_lap`, `positions_gained`, `is_player`, `is_disconnected`, `is_finished`, etc.
+- Direct fields: `car_idx`, `driver_info`, `position`, `division_position`, `starting_position`, `division_name`, `division_color`, `gap`, `delta`, `last_lap`, `best_lap`, `positions_gained`, `is_player`, `is_disconnected`, `is_finished`, etc., `irating`, `safety_rating`, `combined_rating`, `lic_level`, `last_pit_lap`, `out_lap`, `pit_lap`
 - Used throughout the codebase as the primary driver data container
 - Eliminates the need for intermediate dicts and parallel data structures
 
@@ -179,6 +180,13 @@ Pure functions for calculating and formatting time/lap gaps.
 - `format_delta_display()` - Format lap time delta comparison
 - `format_lap_time()` - Format lap time for display (supports minutes:seconds)
 - `format_positions_gained()` - Format positions gained/lost with arrow indicators (↑/↓)
+- `format_irating()` - Format iRating rounded to hundreds with k suffix
+- `format_safety_rating()` - Format license level + sublevel (e.g., "A2.5")
+- `format_combined_rating()` - Combine safety rating + iRating (e.g., "A 2.5  6.0k")
+- `format_last_pit_lap()` - Format last pit lap (e.g., "L12")
+- `format_out_lap()` - Format out lap indicator ("OUT" or "")
+- `format_pit_lap()` - Combined pit lap column (shows "OUT" or "L12")
+- `get_license_background_color()` - Get license class background color
 
 **Purpose**: Centralize gap calculation logic for consistency and testability.
 
@@ -792,7 +800,7 @@ Telemetry Thread                Main Thread
 
 ## Testing Architecture
 
-### Unit Tests (466 tests)
+### Unit Tests (485 tests)
 
 **Test Organization:**
 ```
@@ -804,6 +812,7 @@ tests/
 │   └── test_settings_validator.py      # 58 tests
 └── test_core/
     ├── test_gap_calculator.py          # 36 tests
+│   ├── test_gap_calculator_combined_columns.py  # 40 tests (combined rating, pit lap, license colors)
     ├── test_division_manager.py        # 27 tests
     ├── test_division_filter.py         # 29 tests
     ├── test_position_calculator.py     # 26 tests

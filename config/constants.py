@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 
 # Application version
-VERSION = "0.9.8.8"
+VERSION = "0.9.8.9"
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,17 @@ class UIColors:
     CLOSE_BUTTON_RED: str = '#cc0000'
     CLOSE_BUTTON_HOVER_RED: str = '#ff0000'
     DIVISION_HIGHLIGHT_GREEN: str = '#0FC436'
+
+
+@dataclass(frozen=True)
+class LicenseColors:
+    """Background colors for license class ratings (R, D, C, B, A, P)."""
+    ROOKIE: str = '#8B0000'      # Dark Red (R 1-4)
+    D_CLASS: str = "#A55B00"     # Dark Orange (D 5-8)
+    C_CLASS: str = '#DAA520'     # Goldenrod (C 9-12)
+    B_CLASS: str = '#006400'     # Dark Green (B 13-16)
+    A_CLASS: str = '#00008B'     # Dark Blue (A 17-20)
+    PRO: str = '#4B0082'         # Indigo (P 21-24)
 
 
 @dataclass(frozen=True)
@@ -46,6 +57,8 @@ class ColumnLayout:
     BEST_LAP: int = 11
     DELTA: int = 10
     LAST_LAP: int = 11
+    RATING: int = 13  # Combined iRating + Safety Rating column
+    PIT_LAP: int = 9  # Combined Last Pit + Out Lap column
 
 
 @dataclass(frozen=True)
@@ -61,6 +74,8 @@ class ColumnMinWidths:
     BEST_LAP: int = 55
     DELTA: int = 45
     LAST_LAP: int = 55
+    RATING: int = 70  # Combined iRating + Safety Rating column (needs more width)
+    PIT_LAP: int = 45  # Combined Last Pit + Out Lap column
 
 
 @dataclass(frozen=True)
@@ -175,6 +190,7 @@ class TelemetryConfig:
 
 # Global configuration instances
 UI_COLORS = UIColors()
+LICENSE_COLORS = LicenseColors()
 UI_DIMENSIONS = UIDimensions()
 COLUMN_LAYOUT = ColumnLayout()
 COLUMN_MIN_WIDTHS = ColumnMinWidths()

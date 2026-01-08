@@ -37,6 +37,8 @@ class AppSettings:
     show_delta: bool = False
     show_best_lap: bool = False
     show_positions_gained: bool = False
+    show_rating: bool = False  # Combined iRating + Safety Rating column
+    show_pit_lap: bool = False  # Combined Last Pit + Out Lap column
     log_level: str = "INFO"
 
     # Performance indicator colors
@@ -130,6 +132,8 @@ class SettingsManager:
                 'show_delta': settings.show_delta,
                 'show_best_lap': settings.show_best_lap,
                 'show_positions_gained': settings.show_positions_gained,
+                'show_rating': settings.show_rating,
+                'show_pit_lap': settings.show_pit_lap,
                 'font_size': settings.font_size,
                 'row_color_style': settings.row_color_style,
                 'log_level': settings.log_level,
@@ -179,6 +183,8 @@ class SettingsManager:
             'show_delta': settings.show_delta,
             'show_best_lap': settings.show_best_lap,
             'show_positions_gained': settings.show_positions_gained,
+            'show_rating': settings.show_rating,
+            'show_pit_lap': settings.show_pit_lap,
             'font_size': settings.font_size,
             'row_color_style': settings.row_color_style,
             'log_level': settings.log_level,
