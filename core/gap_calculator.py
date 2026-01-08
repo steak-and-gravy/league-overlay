@@ -1,6 +1,7 @@
 """Calculate and format time/distance gaps between cars."""
 
 from typing import Optional
+import math
 
 
 class GapCalculator:
@@ -132,3 +133,148 @@ class GapCalculator:
             return f"↓{abs(gained)}"
         else:
             return "—"
+
+    @staticmethod
+    def format_irating(irating: int) -> str:
+        """Format iRating for display.
+
+        Args:
+            irating: Driver's iRating (e.g., 6010)
+
+        Returns:
+            Formatted iRating string:
+            - "6.0k" for 6010 (rounded down to nearest hundred)
+            - "1.5k" for 1523
+            - "0.8k" for 847 (always use k format, even under 1000)
+            - "—" if invalid (0 or negative)
+        """
+        if irating <= 0:
+            return "—"
+
+        # Round down to nearest hundred
+        rounded = math.floor(irating / 100) * 100
+
+        # Always format with k suffix
+        return f"{rounded / 1000:.1f}k"
+
+    @staticmethod
+    def format_safety_rating(lic_level: int, lic_sublevel: int) -> str:
+        """Format safety rating for display.
+
+        Args:
+            lic_level: License level (1-24 where R=1-4, D=5-8, C=9-12, B=13-16, A=17-20, P=21-24)
+            lic_sublevel: License sublevel (0-399 representing x.xx, e.g., 247 = 2.47)
+
+        Returns:
+            Formatted safety rating string (e.g., "A2.5", "B3.2", "R1.0")
+            - "—" if invalid (level <= 0)
+        """
+        if lic_level <= 0:
+            return "—"
+
+        # Map license level to letter
+        if 1 <= lic_level <= 4:
+            letter = "R"
+        elif 5 <= lic_level <= 8:
+            letter = "D"
+        elif 9 <= lic_level <= 12:
+            letter = "C"
+        elif 13 <= lic_level <= 16:
+            letter = "B"
+        elif 17 <= lic_level <= 20:
+            letter = "A"
+        elif 21 <= lic_level <= 24:
+            letter = "P"
+        else:
+            return "—"  # Invalid level
+
+        # Convert sublevel to decimal rounded down (247 → 2.47 → round to 2.4)
+        # lic_sublevel is 0-399 representing x.xx
+        decimal_value = lic_sublevel / 100.0
+
+        # Round down to nearest 0.1
+        rounded = math.floor(decimal_value * 10) / 10
+
+        return f"{letter}{rounded:.1f}"
+
+    @staticmethod
+    def format_combined_rating(irating: int, lic_level: int, lic_sublevel: int) -> str:
+        """Combine safety rating and iRating into single display string.
+
+        Format: "A 2.5  3.0k" (license letter + sublevel + spaces + iRating with k suffix)
+
+        Args:
+            irating: Driver's iRating (e.g., 6010)
+            lic_level: License level (1-24 where R=1-4, D=5-8, C=9-12, B=13-16, A=17-20, P=21-24)
+            lic_sublevel: License sublevel (0-399 representing x.xx, e.g., 247 = 2.47)
+
+        Returns:
+            Formatted combined rating string (e.g., "A 2.5  3.0k")
+            - "—" if invalid data
+        """
+        # Get safety rating component
+        sr = GapCalculator.format_safety_rating(lic_level, lic_sublevel)
+        if sr == "—":
+            return "—"
+
+        # Get iRating component (with k suffix)
+        ir = GapCalculator.format_irating(irating)
+        if ir == "—":
+            return "—"
+
+        # Combine with double space separator: "A 2.5  3.0k"
+        return f"{sr}  {ir}"
+
+    @staticmethod
+    def format_pit_lap(current_lap: int, last_pit_lap: int) -> str:
+        """Format pit lap column (combines Last Pit and Out Lap).
+
+        Shows "OUT" during out lap, otherwise shows last pit lap number.
+
+        Args:
+            current_lap: Driver's current lap number
+            last_pit_lap: Lap number when driver last pitted (0 if haven't pitted)
+
+        Returns:
+            "OUT" if on out lap (current_lap == last_pit_lap + 1)
+            "L12" if pitted but not on out lap
+            "—" if haven't pitted yet
+        """
+        # Check if haven't pitted
+        if last_pit_lap <= 0:
+            return "—"
+
+        # Check if on out lap (first lap after pitting)
+        if current_lap == last_pit_lap + 1:
+            return "OUT"
+
+        # Show last pit lap number
+        return f"L{last_pit_lap}"
+
+    @staticmethod
+    def get_license_background_color(lic_level: int) -> str:
+        """Get background color for license class.
+
+        Args:
+            lic_level: License level (1-24)
+
+        Returns:
+            Hex color string for license class background
+        """
+        from config.constants import LICENSE_COLORS
+
+        # Map license level to color
+        if 1 <= lic_level <= 4:
+            return LICENSE_COLORS.ROOKIE
+        elif 5 <= lic_level <= 8:
+            return LICENSE_COLORS.D_CLASS
+        elif 9 <= lic_level <= 12:
+            return LICENSE_COLORS.C_CLASS
+        elif 13 <= lic_level <= 16:
+            return LICENSE_COLORS.B_CLASS
+        elif 17 <= lic_level <= 20:
+            return LICENSE_COLORS.A_CLASS
+        elif 21 <= lic_level <= 24:
+            return LICENSE_COLORS.PRO
+        else:
+            return '#000000'  # Black for invalid/unknown

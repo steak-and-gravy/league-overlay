@@ -854,3 +854,211 @@ class TestPerformanceIndicatorColors:
         assert result['faster_color'] == '#0000FF'
         assert result['slower_color'] == '#FFFF00'
         assert result['font_size'] == 'Large'
+
+
+class TestNewDriverInfoColumns:
+    """Test cases for new driver info column settings (iRating, SR, Last Pit, Out Lap, Car)."""
+
+    def test_show_rating_default_false(self):
+        """Test show_rating defaults to False."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['show_rating'] is False
+
+    def test_show_rating_default_false(self):
+        """Test show_rating defaults to False."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['show_rating'] is False
+
+    def test_show_pit_lap_default_false(self):
+        """Test show_pit_lap defaults to False."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['show_pit_lap'] is False
+
+    def test_show_pit_lap_default_false(self):
+        """Test show_pit_lap defaults to False."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['show_pit_lap'] is False
+
+    def test_show_rating_true(self):
+        """Test show_rating can be set to True."""
+        validator = SettingsValidator()
+        data = {'show_rating': True}
+        result = validator.validate_and_coerce(data)
+        assert result['show_rating'] is True
+
+    def test_show_rating_true(self):
+        """Test show_rating can be set to True."""
+        validator = SettingsValidator()
+        data = {'show_rating': True}
+        result = validator.validate_and_coerce(data)
+        assert result['show_rating'] is True
+
+    def test_show_pit_lap_true(self):
+        """Test show_pit_lap can be set to True."""
+        validator = SettingsValidator()
+        data = {'show_pit_lap': True}
+        result = validator.validate_and_coerce(data)
+        assert result['show_pit_lap'] is True
+
+    def test_show_pit_lap_true(self):
+        """Test show_pit_lap can be set to True."""
+        validator = SettingsValidator()
+        data = {'show_pit_lap': True}
+        result = validator.validate_and_coerce(data)
+        assert result['show_pit_lap'] is True
+
+    def test_show_rating_string_coercion(self):
+        """Test show_rating string coercion."""
+        validator = SettingsValidator()
+        data = {'show_rating': "true"}
+        result = validator.validate_and_coerce(data)
+        assert result['show_rating'] is True
+
+    def test_show_rating_string_coercion(self):
+        """Test show_rating string coercion."""
+        validator = SettingsValidator()
+        data = {'show_rating': "false"}
+        result = validator.validate_and_coerce(data)
+        assert result['show_rating'] is False
+
+    def test_show_pit_lap_numeric_coercion(self):
+        """Test show_pit_lap numeric coercion."""
+        validator = SettingsValidator()
+        data = {'show_pit_lap': 1}
+        result = validator.validate_and_coerce(data)
+        assert result['show_pit_lap'] is True
+
+    def test_show_pit_lap_numeric_coercion(self):
+        """Test show_pit_lap numeric coercion."""
+        validator = SettingsValidator()
+        data = {'show_pit_lap': 0}
+        result = validator.validate_and_coerce(data)
+        assert result['show_pit_lap'] is False
+
+    def test_all_four_new_settings_together(self):
+        """Test all four new driver info settings can be set together."""
+        validator = SettingsValidator()
+        data = {
+            'show_rating': True,
+            'show_rating': True,
+            'show_pit_lap': True,
+            'show_pit_lap': True
+        }
+        result = validator.validate_and_coerce(data)
+        assert result['show_rating'] is True
+        assert result['show_rating'] is True
+        assert result['show_pit_lap'] is True
+        assert result['show_pit_lap'] is True
+
+    def test_show_rating_invalid_returns_default(self):
+        """Test invalid show_rating value returns default."""
+        validator = SettingsValidator()
+        data = {'show_rating': 'maybe'}
+        result = validator.validate_and_coerce(data)
+        assert result['show_rating'] is False
+
+    def test_complete_settings_with_all_nine_optional_columns(self):
+        """Test complete settings including all 9 optional columns (4 existing + 5 new).
+
+        This test verifies backward compatibility - settings files can be loaded
+        with any combination of old and new column settings.
+        """
+        validator = SettingsValidator()
+        data = {
+            'width': 600,
+            'opacity': 0.9,
+            # Existing optional columns
+            'show_positions_gained': True,
+            'show_best_lap': True,
+            'show_last_lap': True,
+            'show_delta': True,
+            # New optional columns
+            'show_rating': True,
+            'show_rating': True,
+            'show_pit_lap': True,
+            'show_pit_lap': True,
+            'show_car_manufacturer': True,
+            'font_size': 'Large'
+        }
+        result = validator.validate_and_coerce(data)
+        assert result['width'] == 600
+        assert result['opacity'] == 0.9
+        # Verify existing columns
+        assert result['show_positions_gained'] is True
+        assert result['show_best_lap'] is True
+        assert result['show_last_lap'] is True
+        assert result['show_delta'] is True
+        # Verify new columns
+        assert result['show_rating'] is True
+        assert result['show_rating'] is True
+        assert result['show_pit_lap'] is True
+        assert result['show_pit_lap'] is True
+        assert result['font_size'] == 'Large'
+
+    def test_backward_compatibility_old_config_without_new_columns(self):
+        """Test backward compatibility - old config files without new columns.
+
+        This test simulates loading a config file that was created before the
+        new columns were added. All new settings should default to False.
+        This is the CRITICAL test that would have caught the original bug.
+        """
+        validator = SettingsValidator()
+        # Simulate an old config file with only the original settings
+        data = {
+            'width': 500,
+            'opacity': 0.8,
+            'show_division_gap': True,
+            'show_positions_gained': True,
+            'show_best_lap': False,
+            'show_last_lap': True,
+            'show_delta': False
+            # NOTE: New columns (show_rating, etc.) are NOT in this config
+        }
+        result = validator.validate_and_coerce(data)
+
+        # Verify old settings are preserved
+        assert result['width'] == 500
+        assert result['opacity'] == 0.8
+        assert result['show_division_gap'] is True
+        assert result['show_positions_gained'] is True
+        assert result['show_best_lap'] is False
+        assert result['show_last_lap'] is True
+        assert result['show_delta'] is False
+
+        # CRITICAL: Verify new settings default to False
+        # Without the fix in settings_validator.py, these would be missing
+        # from the validated dict, causing KeyError when constructing AppSettings
+        assert result['show_rating'] is False
+        assert result['show_rating'] is False
+        assert result['show_pit_lap'] is False
+        assert result['show_pit_lap'] is False
+
+    def test_partial_new_columns_in_config(self):
+        """Test loading config with only some of the new columns.
+
+        Simulates a scenario where a user manually edited their config
+        and only added some of the new settings.
+        """
+        validator = SettingsValidator()
+        data = {
+            'show_rating': True,
+            'show_rating': True,
+            # show_pit_lap, show_pit_lap not present
+        }
+        result = validator.validate_and_coerce(data)
+
+        # Present settings should be True
+        assert result['show_rating'] is True
+        assert result['show_rating'] is True
+
+        # Missing settings should default to False
+        assert result['show_pit_lap'] is False
+        assert result['show_pit_lap'] is False

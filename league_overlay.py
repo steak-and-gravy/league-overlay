@@ -551,11 +551,11 @@ class LeagueOverlay(QMainWindow):
         self.header_layout.setSpacing(2)
 
         # Reset all column stretches first (clear old values from hidden columns)
-        for col_idx in range(9):  # Max possible columns (5 base + 4 optional)
+        for col_idx in range(11):  # Max possible columns (5 base + 6 optional)
             self.header_layout.setColumnStretch(col_idx, 0)
 
         # Build column configuration based on settings
-        # Always show: Position | [Positions Gained] | Div Pos | Driver Name | Car Number | Gap | [Best Lap] | [Last Lap] | [Delta]
+        # Column order: Pos | [+/-] | D-Pos | Driver | [Rating] | Car# | Gap | [Best] | [Last] | [Delta] | [Pit]
         # Columns in brackets are optional
         gap_header = "Div Gap" if self.settings.show_division_gap else "Gap"
 
@@ -567,10 +567,26 @@ class LeagueOverlay(QMainWindow):
             headers.append("+/-")
             stretches.append(COLUMN_LAYOUT.POSITIONS_GAINED)
 
-        # Always show columns
-        headers.extend(["D-Pos", "Driver", "Car#", gap_header])
-        stretches.extend([COLUMN_LAYOUT.DIV_POS, COLUMN_LAYOUT.DRIVER_NAME,
-                         COLUMN_LAYOUT.CAR_NUM, COLUMN_LAYOUT.GAP])
+        # D-Pos (always shown)
+        headers.append("D-Pos")
+        stretches.append(COLUMN_LAYOUT.DIV_POS)
+
+        # Driver (always shown)
+        headers.append("Driver")
+        stretches.append(COLUMN_LAYOUT.DRIVER_NAME)
+
+        # Optional: Combined Rating (iRating + Safety Rating)
+        if self.settings.show_rating:
+            headers.append("Rating")
+            stretches.append(COLUMN_LAYOUT.RATING)
+
+        # Car# (moved to after Rating)
+        headers.append("Car#")
+        stretches.append(COLUMN_LAYOUT.CAR_NUM)
+
+        # Gap (always shown)
+        headers.append(gap_header)
+        stretches.append(COLUMN_LAYOUT.GAP)
 
         # Optional: Best Lap
         if self.settings.show_best_lap:
@@ -587,6 +603,11 @@ class LeagueOverlay(QMainWindow):
             headers.append("Delta")
             stretches.append(COLUMN_LAYOUT.DELTA)
 
+        # Optional: Pit Lap (combined Last Pit + Out Lap)
+        if self.settings.show_pit_lap:
+            headers.append("Pit")
+            stretches.append(COLUMN_LAYOUT.PIT_LAP)
+
         # Apply column stretches
         for col_idx, stretch in enumerate(stretches):
             self.header_layout.setColumnStretch(col_idx, stretch)
@@ -597,12 +618,14 @@ class LeagueOverlay(QMainWindow):
             "+/-": COLUMN_MIN_WIDTHS.POSITIONS_GAINED,
             "D-Pos": COLUMN_MIN_WIDTHS.DIV_POS,
             "Driver": COLUMN_MIN_WIDTHS.DRIVER_NAME,
+            "Rating": COLUMN_MIN_WIDTHS.RATING,
             "Car#": COLUMN_MIN_WIDTHS.CAR_NUM,
             "Gap": COLUMN_MIN_WIDTHS.GAP,
             "Div Gap": COLUMN_MIN_WIDTHS.DIV_GAP,
             "Best Lap": COLUMN_MIN_WIDTHS.BEST_LAP,
             "Last Lap": COLUMN_MIN_WIDTHS.LAST_LAP,
-            "Delta": COLUMN_MIN_WIDTHS.DELTA
+            "Delta": COLUMN_MIN_WIDTHS.DELTA,
+            "Pit": COLUMN_MIN_WIDTHS.PIT_LAP
         }
 
         # Create header labels
@@ -1057,6 +1080,12 @@ class LeagueOverlay(QMainWindow):
 
             if self.settings.show_last_lap:
                 changes = changes or (new_driver.last_lap != old_driver.last_lap)
+
+            # Note: Combined Rating (iRating + Safety Rating) doesn't change during a session, so we skip checking it
+            # This saves ~0.02ms per frame when the rating column is enabled
+
+            if self.settings.show_pit_lap:
+                changes = changes or (new_driver.pit_lap != old_driver.pit_lap)
 
             if changes:
                 return True

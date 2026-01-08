@@ -164,6 +164,16 @@ class SettingsValidator:
             default=self.defaults['show_positions_gained'],
             field_name='show_positions_gained'
         )
+        validated['show_rating'] = self.coerce_bool(
+            data.get('show_rating'),
+            default=self.defaults['show_rating'],
+            field_name='show_rating'
+        )
+        validated['show_pit_lap'] = self.coerce_bool(
+            data.get('show_pit_lap'),
+            default=self.defaults['show_pit_lap'],
+            field_name='show_pit_lap'
+        )
 
         # Enum fields (limited valid values)
         validated['font_size'] = self.coerce_enum(

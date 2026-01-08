@@ -116,6 +116,21 @@ class DriverState:
     positions_gained: str = ""
     """Formatted positions gained/lost for display (e.g., "↑5", "↓3", "—")"""
 
+    irating: str = ""
+    """Formatted iRating for display (e.g., "6.0k", "1.5k", "0.8k")"""
+
+    safety_rating: str = ""
+    """Formatted safety rating for display (e.g., "A2.5", "B3.2")"""
+
+    combined_rating: str = ""
+    """Formatted combined rating for display (e.g., "A 2.5  3.0k")"""
+
+    lic_level: int = 0
+    """License level (1-24) for background color lookup"""
+
+    pit_lap: str = ""
+    """Formatted combined pit lap (shows OUT during out lap, L12 otherwise)"""
+
     # ═══════════════════════════════════════════════════════════════════════════
     # COMPUTED PROPERTIES
     # ═══════════════════════════════════════════════════════════════════════════

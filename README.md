@@ -16,6 +16,8 @@ BB’s League Overlay displays live standings and gaps with a focus on divisions
 - **Lap Time Delta** — Optional column showing lap time comparison (green = you're faster, red = you're slower).
 - **Last Lap Times** — Optional column displaying each driver's most recent lap time.
 - **Division System** — Assign drivers to divisions (Pro, ProAm, Am, Rookie) with customizable colors.
+- **Driver Rating** — Optional column showing iRating + Safety Rating combined (e.g., "A 2.5  6.0k") with license class background colors.
+- **Pit Strategy** — Optional column showing last pit lap or "OUT" during out lap (orange when on out lap).
 - **Division Filtering** — Toggle between viewing all divisions, your division only, or specific divisions (if spectating).
 - **Multi-Class Support** — Automatically filters to your car class in multi-class races.
 - **Auto-Centering** — Keeps you in view with intelligent timeout after manual scrolling.
@@ -40,8 +42,9 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - Row color style (Default, Dark, Alternate, Outline)
 - Refresh rate
 - Division colors
+- License class colors (for Rating column background)
 - Performance indicator colors (faster/gained and slower/lost)
-- Column visibility (show/hide Positions Gained, Best Lap, Last Lap, and Delta columns)
+- Column visibility (show/hide Positions Gained, Best Lap, Last Lap, Delta, Rating, and Pit Lap columns)
 - Log level (DEBUG, INFO, WARNING, ERROR)
 
 ---
@@ -60,6 +63,8 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - **Best Lap column**: Shows each driver's best lap time this session
 - **Delta column**: When driving, compares lap times to your last lap. When spectating, compares to division leader's last lap
 - **Last Lap column**: Shows formatted lap times (e.g., "1:24.56" or "58.34" for times under 60 seconds)
+- **Rating column**: Shows combined iRating + Safety Rating (e.g., "A 2.5  6.0k") with license class background colors (R=dark red, D=orange, C=gold, B=green, A=blue, P=indigo)
+- **Pit Lap column**: Shows last pit lap (e.g., "L12") or "OUT" in orange during out lap
 
 ---
 
@@ -119,7 +124,7 @@ This project uses a modular architecture with clear separation of concerns:
 │   ├── styles.py                 # Color schemes
 │   ├── widgets.py                # Custom Qt widgets
 │   └── auto_center_controller.py # Auto-scroll logic
-├── tests/               # Test suites (466 tests)
+├── tests/               # Test suites (485 tests)
 └── league_overlay.py    # Main application entry point
 ```
 
@@ -134,7 +139,7 @@ For AI-Assisted development, see [CLAUDE.md](CLAUDE.md) for project context.
 - **PySide6** - Qt framework for UI
 - **pyirsdk** - iRacing SDK Python wrapper for telemetry access
 - **Nuitka** - Python-to-executable compilation
-- **pytest** - Testing framework (466 comprehensive tests)
+- **pytest** - Testing framework (485 comprehensive tests)
 
 ---
 

@@ -539,6 +539,25 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row4)
 
+        # Row 5: Column visibility - Driver info and pit strategy
+        checkbox_row5 = QHBoxLayout()
+        checkbox_row5.setSpacing(10)
+
+        self.show_rating_cb = QCheckBox("Show rating")
+        self.show_rating_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_rating_cb.setChecked(self.parent_overlay.settings.show_rating)
+        checkbox_row5.addWidget(self.show_rating_cb)
+
+        self.show_pit_lap_cb = QCheckBox("Show pit lap")
+        self.show_pit_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_pit_lap_cb.setChecked(self.parent_overlay.settings.show_pit_lap)
+        checkbox_row5.addWidget(self.show_pit_lap_cb)
+
+        window_layout.addLayout(checkbox_row5)
+
+        # Spacer after last checkbox row
+        window_layout.addSpacing(10)
+
         right_column.addWidget(window_group)
 
         # Add columns to main layout with equal stretch factors (1:1 ratio)
@@ -1085,6 +1104,8 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_delta = self.show_delta_cb.isChecked()
             self.parent_overlay.settings.show_best_lap = self.show_best_lap_cb.isChecked()
             self.parent_overlay.settings.show_positions_gained = self.show_positions_gained_cb.isChecked()
+            self.parent_overlay.settings.show_rating = self.show_rating_cb.isChecked()
+            self.parent_overlay.settings.show_pit_lap = self.show_pit_lap_cb.isChecked()
             self.parent_overlay.settings.font_size = self.font_size_combo.currentText()
             self.parent_overlay.settings.row_color_style = self.color_style_combo.currentText()
 

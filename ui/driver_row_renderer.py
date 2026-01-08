@@ -59,7 +59,7 @@ class DriverRowRenderer:
         layout.setSpacing(styling['layout_spacing'])
 
         # Build column configuration based on settings
-        # Always show: Position | [Positions Gained] | Div Pos | Driver Name | Car Number | Gap | [Best Lap] | [Last Lap] | [Delta]
+        # Column order: Pos | [+/-] | D-Pos | Driver | [Rating] | Car# | Gap | [Best] | [Last] | [Delta] | [Pit]
         # Columns in brackets are optional
 
         # Start with base columns
@@ -70,31 +70,47 @@ class DriverRowRenderer:
         positions_gained_col = None
         div_pos_col = None
         name_col = None
-        car_col = None
+        rating_col = None
+        car_num_col = None
         gap_col = None
         best_lap_col = None
         last_lap_col = None
         delta_col = None
+        pit_lap_col = None
 
-        # Optional: Positions Gained (column 1, between Pos and D-Pos)
+        # Optional: Positions Gained
         if self.parent.settings.show_positions_gained:
             stretches.append(COLUMN_LAYOUT.POSITIONS_GAINED)
             positions_gained_col = current_col
             current_col += 1
 
-        # Always show: Div Pos, Driver Name, Car Number, Gap
-        stretches.extend([COLUMN_LAYOUT.DIV_POS, COLUMN_LAYOUT.DRIVER_NAME,
-                         COLUMN_LAYOUT.CAR_NUM, COLUMN_LAYOUT.GAP])
+        # D-Pos (always shown)
+        stretches.append(COLUMN_LAYOUT.DIV_POS)
         div_pos_col = current_col
         current_col += 1
+
+        # Driver (always shown)
+        stretches.append(COLUMN_LAYOUT.DRIVER_NAME)
         name_col = current_col
         current_col += 1
-        car_col = current_col
+
+        # Optional: Combined Rating (iRating + Safety Rating)
+        if self.parent.settings.show_rating:
+            stretches.append(COLUMN_LAYOUT.RATING)
+            rating_col = current_col
+            current_col += 1
+
+        # Car# (moved to after Rating)
+        stretches.append(COLUMN_LAYOUT.CAR_NUM)
+        car_num_col = current_col
         current_col += 1
+
+        # Gap (always shown)
+        stretches.append(COLUMN_LAYOUT.GAP)
         gap_col = current_col
         current_col += 1
 
-        # Optional: Best Lap (before Last Lap)
+        # Optional: Best Lap
         if self.parent.settings.show_best_lap:
             stretches.append(COLUMN_LAYOUT.BEST_LAP)
             best_lap_col = current_col
@@ -112,6 +128,12 @@ class DriverRowRenderer:
             delta_col = current_col
             current_col += 1
 
+        # Optional: Pit Lap (combined Last Pit + Out Lap)
+        if self.parent.settings.show_pit_lap:
+            stretches.append(COLUMN_LAYOUT.PIT_LAP)
+            pit_lap_col = current_col
+            current_col += 1
+
         # Apply column stretches
         for col_idx, stretch in enumerate(stretches):
             layout.setColumnStretch(col_idx, stretch)
@@ -126,21 +148,37 @@ class DriverRowRenderer:
         if positions_gained_col is not None:
             self._create_positions_gained_label(layout, driver, gap_color, label_bg, label_border, font_weight, positions_gained_col)
 
-        # Always show columns
+        # Always show: Division Position
         self._create_division_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, div_pos_col)
+
+        # Always show: Driver Name
         self._create_driver_name_label(layout, driver, text_color, label_bg, label_border, font_weight, name_col)
-        self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_col)
+
+        # Optional: Combined Rating (iRating + Safety Rating with license color background)
+        if rating_col is not None:
+            self._create_combined_rating_label(layout, driver, text_color, label_bg, label_border, font_weight, rating_col)
+
+        # Always show: Car Number (moved to after Rating)
+        self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_num_col)
+
+        # Always show: Gap
         self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, gap_col)
 
-        # Optional columns
+        # Optional: Best Lap
         if best_lap_col is not None:
             self._create_best_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, best_lap_col)
 
+        # Optional: Last Lap
         if last_lap_col is not None:
             self._create_last_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, last_lap_col)
 
+        # Optional: Delta
         if delta_col is not None:
             self._create_delta_label(layout, driver, delta_faster_color, delta_slower_color, gap_color, label_bg, label_border, font_weight, delta_col)
+
+        # Optional: Pit Lap (combined Last Pit + Out Lap)
+        if pit_lap_col is not None:
+            self._create_pit_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, pit_lap_col)
 
         # Set context menu for row widget
         row_widget.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -421,3 +459,78 @@ class DriverRowRenderer:
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(positions_gained_label, 0, column)
+
+    def _create_combined_rating_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
+                                       label_bg: str, label_border: str, font_weight: str, column: int) -> None:
+        """Create combined rating label (iRating + Safety Rating) with license class background color.
+
+        Format: "A 2.5  3.0k" (license + sublevel + space + iRating with k suffix)
+        Background color matches license class (R=red, D=orange, C=gold, B=green, A=blue, P=indigo)
+
+        Args:
+            layout: Grid layout to add label to
+            driver: Driver state containing combined rating
+            text_color: Text color
+            label_bg: Background color (IGNORED - uses license class color instead)
+            label_border: Border style
+            font_weight: Font weight
+            column: Column index to place label
+        """
+        from core.gap_calculator import GapCalculator
+
+        # Get license class background color
+        rating_bg = GapCalculator.get_license_background_color(driver.lic_level)
+
+        rating_label = QLabel(driver.combined_rating)
+        rating_label.setStyleSheet(f"""
+            QLabel {{
+                color: white;
+                background-color: {rating_bg};
+                font-size: {self.parent.get_font_size('data')};
+                font-weight: {font_weight};
+                {label_border}
+            }}
+        """)
+        rating_label.setAlignment(Qt.AlignCenter)
+        rating_label.setMinimumWidth(COLUMN_MIN_WIDTHS.RATING)
+        rating_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        rating_label.customContextMenuRequested.connect(
+            lambda pos, d=driver: self.parent.show_context_menu(d)
+        )
+        layout.addWidget(rating_label, 0, column)
+
+    def _create_pit_lap_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
+                              label_bg: str, label_border: str, font_weight: str, column: int) -> None:
+        """Create pit lap label (combined Last Pit + Out Lap).
+
+        Shows "OUT" in orange during out lap, otherwise shows last pit lap number "L12".
+
+        Args:
+            layout: Grid layout to add label to
+            driver: Driver state containing pit lap display
+            text_color: Default text color
+            label_bg: Background color
+            label_border: Border style
+            font_weight: Font weight
+            column: Column index to place label
+        """
+        # Use orange color (#FF8200) when showing "OUT", otherwise use default color
+        pit_lap_color = "#FF8200" if driver.pit_lap == "OUT" else text_color
+
+        pit_lap_label = QLabel(driver.pit_lap)
+        pit_lap_label.setStyleSheet(f"""
+            QLabel {{
+                color: {pit_lap_color};
+                background-color: {label_bg};
+                font-size: {self.parent.get_font_size('data')};
+                font-weight: {font_weight};
+                {label_border}
+            }}
+        """)
+        pit_lap_label.setAlignment(Qt.AlignCenter)
+        pit_lap_label.setMinimumWidth(COLUMN_MIN_WIDTHS.PIT_LAP)
+        pit_lap_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        pit_lap_label.customContextMenuRequested.connect(
+            lambda pos, d=driver: self.parent.show_context_menu(d)
+        )
+        layout.addWidget(pit_lap_label, 0, column)
