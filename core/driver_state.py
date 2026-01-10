@@ -153,6 +153,11 @@ class DriverState:
     def driver_name(self) -> str:
         """Driver name from driver info."""
         return self.driver_info.get('UserName', '')
+    
+    @property
+    def team_name(self) -> str:
+        """Team name from driver info."""
+        return self.driver_info.get('TeamName', '')
 
     @property
     def car_class_id(self) -> Optional[int]:

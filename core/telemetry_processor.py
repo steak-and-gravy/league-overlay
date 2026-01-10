@@ -75,6 +75,7 @@ class TelemetryProcessor:
 
         # Pit stop tracking - maps car_idx to last pit lap number
         self.pit_tracking: Dict[int, int] = {}
+        self.temp_pit_tracking: Dict[int, int] = {}
 
     def reset_fields(self) -> None:
         """Clear all session-specific tracking data.
@@ -217,24 +218,37 @@ class TelemetryProcessor:
         """
         try:
             car_idx_on_pit_road = self.ir['CarIdxOnPitRoad']
+            car_idx_track_surface = self.ir['CarIdxTrackSurface']
             car_idx_lap = self.ir['CarIdxLap']
 
-            if not car_idx_on_pit_road or not car_idx_lap:
+            if not car_idx_on_pit_road or not car_idx_lap or not car_idx_track_surface:
                 return
-
-            for car_idx in range(min(len(car_idx_on_pit_road), len(car_idx_lap))):
+            
+            for car_idx in range(min(len(car_idx_on_pit_road), len(car_idx_lap), len(car_idx_track_surface))):
                 current_on_pit = car_idx_on_pit_road[car_idx]
+                current_in_stall = car_idx_track_surface[car_idx]
                 current_lap = car_idx_lap[car_idx]
-
+                if self.pit_tracking.get(car_idx, -1) >= 0:
+                    # hold last pit lap in case this is a drive-through
+                    self.temp_pit_tracking[car_idx] = self.pit_tracking.get(car_idx)
                 # Track when car exits pit road (transition from pit to track)
                 # We use a sentinel value of -1 to indicate "on pit road currently"
-                if current_on_pit:
-                    # Car is on pit road - mark as -1 (sentinel)
-                    self.pit_tracking[car_idx] = -1
-                elif self.pit_tracking.get(car_idx) == -1 and not current_on_pit:
+                # Another value of -2 to indicate they stopped in the pit stall
+                if current_in_stall == 1: # 1 = InPitStall
+                    # Car is in pit stall - mark as -2 (sentinel)
+                    # This is important as we will only park it as an out lap if they actually stopped in the stall
+                    self.pit_tracking[car_idx] = -2
+                elif current_on_pit:
+                    # Car is on pit road - mark as -1 (sentinel) unless they have already been in the pit stall, then leave -2
+                    if self.pit_tracking.get(car_idx) != -2:
+                        self.pit_tracking[car_idx] = -1
+                elif self.pit_tracking.get(car_idx, 0) < 0 and not current_on_pit:
                     # Car just exited pit road (was -1, now False)
-                    # Record the lap they're now on (the out lap)
-                    self.pit_tracking[car_idx] = current_lap
+                    # Record the lap they're now on (the out lap) if they stopped in the pit stall
+                    if self.pit_tracking[car_idx] == -2:
+                        self.pit_tracking[car_idx] = current_lap
+                    else:
+                        self.pit_tracking[car_idx] = self.temp_pit_tracking.get(car_idx, 0)
                 # If car is not on pit road and we have no record, don't update
                 # (haven't seen them pit yet this session)
 

@@ -274,7 +274,7 @@ class DriverRowRenderer:
                                   label_bg: str, label_border: str, font_weight: str, column: int = 3) -> None:
         """Create driver name label."""
         name_align = Qt.AlignCenter if self.parent.settings.center_drivers else Qt.AlignLeft
-        name_label = QLabel(driver.driver_name)
+        name_label = QLabel(driver.team_name if driver.team_name > "" else driver.driver_name)
         name_label.setStyleSheet(f"""
             QLabel {{
                 color: {text_color};
