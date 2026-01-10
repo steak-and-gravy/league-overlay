@@ -241,11 +241,13 @@ class GapCalculator:
             "—" if haven't pitted yet
         """
         # Check if haven't pitted
-        if last_pit_lap <= 0:
+        if last_pit_lap == 0:
             return "—"
-
-        # Check if on out lap (first lap after pitting)
-        if current_lap == last_pit_lap + 1:
+        # On pit road
+        elif last_pit_lap < 0:
+            return "PIT"
+        # Check if on out lap (first lap after pitting, same lap as pit lap since we track pit lap when exiting pits)
+        elif current_lap == last_pit_lap:
             return "OUT"
 
         # Show last pit lap number

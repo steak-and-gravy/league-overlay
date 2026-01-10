@@ -259,7 +259,7 @@ class RaceStateTracker:
 
             # If we get here and have no starting positions, log a warning and schedule retry
             if not self.starting_positions:
-                logger.info("STARTING_POSITIONS - Could not load starting positions from QualifyResultsInfo or session results")
+                logger.info("STARTING_POSITIONS - Could not load starting positions from QualifyResultsInfo")
                 self._schedule_retry()
 
         except (KeyError, TypeError, IndexError) as e:
