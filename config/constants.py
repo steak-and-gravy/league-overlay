@@ -48,17 +48,17 @@ class UIDimensions:
 @dataclass(frozen=True)
 class ColumnLayout:
     """Column stretch factors for driver list."""
-    POS: int = 7
-    POSITIONS_GAINED: int = 7
-    DIV_POS: int = 7
-    CAR_NUM: int = 8
-    DRIVER_NAME: int = 28
-    GAP: int = 11
-    BEST_LAP: int = 11
-    DELTA: int = 10
-    LAST_LAP: int = 11
-    RATING: int = 13  # Combined iRating + Safety Rating column
-    PIT_LAP: int = 9  # Combined Last Pit + Out Lap column
+    POS: int = 6
+    POSITIONS_GAINED: int = 6
+    DIV_POS: int = 6
+    CAR_NUM: int = 6
+    DRIVER_NAME: int = 25
+    GAP: int = 9
+    BEST_LAP: int = 9
+    DELTA: int = 6
+    LAST_LAP: int = 9
+    RATING: int = 12
+    PIT_LAP: int = 6
 
 
 @dataclass(frozen=True)
@@ -72,10 +72,10 @@ class ColumnMinWidths:
     GAP: int = 45
     DIV_GAP: int = 50  # Slightly wider for "Div Gap" text
     BEST_LAP: int = 55
-    DELTA: int = 45
+    DELTA: int = 35
     LAST_LAP: int = 55
-    RATING: int = 70  # Combined iRating + Safety Rating column (needs more width)
-    PIT_LAP: int = 45  # Combined Last Pit + Out Lap column
+    RATING: int = 55  # Combined iRating + Safety Rating column
+    PIT_LAP: int = 35  # Combined Last Pit + Out Lap column
 
 
 @dataclass(frozen=True)
