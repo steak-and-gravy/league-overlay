@@ -251,7 +251,7 @@ class LeagueOverlay(QMainWindow):
             self.title_bar.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.HEADER_DARK_GRAY)};")
         if hasattr(self, 'header_frame'):
             self.header_frame.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.HEADER_DARK_GRAY)};")
-            # Update header text when show_division_gap changes
+            # Update header text when show_division changes
             self._update_header_labels()
         if hasattr(self, 'scroll_area'):
             self.update_scroll_area_style()
@@ -555,9 +555,10 @@ class LeagueOverlay(QMainWindow):
             self.header_layout.setColumnStretch(col_idx, 0)
 
         # Build column configuration based on settings
-        # Column order: Pos | [+/-] | D-Pos | Driver | [Rating] | Car# | Gap | [Best] | [Last] | [Delta] | [Pit]
+        # Column order: Pos | [+/-] | D-Pos | Driver | [Rating] | Car# | Gap | Int | [Best] | [Last] | [Delta] | [Pit]
         # Columns in brackets are optional
-        gap_header = "Div Gap" if self.settings.show_division_gap else "Gap"
+        gap_header = "Div Gap" if self.settings.show_division else "Gap"
+        interval_header = "Div Int" if self.settings.show_division else "Int"
 
         headers = ["Pos"]
         stretches = [COLUMN_LAYOUT.POS]
@@ -584,9 +585,15 @@ class LeagueOverlay(QMainWindow):
         headers.append("Car#")
         stretches.append(COLUMN_LAYOUT.CAR_NUM)
 
-        # Gap (always shown)
-        headers.append(gap_header)
-        stretches.append(COLUMN_LAYOUT.GAP)
+        # Gap to leader (optional)
+        if self.settings.show_gap:
+            headers.append(gap_header)
+            stretches.append(COLUMN_LAYOUT.GAP)
+
+        # Interval to car ahead (optional)
+        if self.settings.show_interval:
+            headers.append(interval_header)
+            stretches.append(COLUMN_LAYOUT.INTERVAL)
 
         # Optional: Best Lap
         if self.settings.show_best_lap:
@@ -621,7 +628,9 @@ class LeagueOverlay(QMainWindow):
             "Rating": COLUMN_MIN_WIDTHS.RATING,
             "Car#": COLUMN_MIN_WIDTHS.CAR_NUM,
             "Gap": COLUMN_MIN_WIDTHS.GAP,
-            "Div Gap": COLUMN_MIN_WIDTHS.DIV_GAP,
+            "Gap (Div)": COLUMN_MIN_WIDTHS.GAP,
+            "Int": COLUMN_MIN_WIDTHS.INTERVAL,
+            "Int (Div)": COLUMN_MIN_WIDTHS.INTERVAL,
             "Best Lap": COLUMN_MIN_WIDTHS.BEST_LAP,
             "Last Lap": COLUMN_MIN_WIDTHS.LAST_LAP,
             "Delta": COLUMN_MIN_WIDTHS.DELTA,
@@ -646,17 +655,10 @@ class LeagueOverlay(QMainWindow):
             self.header_layout.addWidget(label, 0, i)
 
     def _update_header_labels(self):
-        """Update header labels when settings change (e.g., show_division_gap toggle)."""
-        if not hasattr(self, 'header_layout'):
-            return
-
-        # Get the 5th column (index 4) which is the gap header
-        gap_label_widget = self.header_layout.itemAtPosition(0, 4)
-        if gap_label_widget:
-            gap_label = gap_label_widget.widget()
-            if gap_label:
-                gap_header = "Div Gap" if self.settings.show_division_gap else "Gap"
-                gap_label.setText(gap_header)
+        """Update header labels when settings change (e.g., show_division toggle)."""
+        # Rebuild headers to reflect current visibility/scope settings
+        if hasattr(self, 'header_layout'):
+            self.create_headers()
 
     def show_version_on_startup(self):
         """Show version on startup"""
@@ -968,7 +970,7 @@ class LeagueOverlay(QMainWindow):
                         # Delegate to TelemetryProcessor
                         race_data = self.telemetry_processor.process_telemetry(
                             get_driver_color_fn=self.division_manager.get_driver_color,
-                            show_division_gap=self.settings.show_division_gap
+                            show_division=self.settings.show_division
                         )
 
                         # Handle the telemetry update (session sync, data update)
@@ -1065,7 +1067,8 @@ class LeagueOverlay(QMainWindow):
 
             # Build comparison based on visible columns
             changes = (new_driver.car_idx != old_driver.car_idx or
-                       new_driver.gap != old_driver.gap or
+                       new_driver.gap_to_leader != old_driver.gap_to_leader or
+                       new_driver.interval != old_driver.interval or
                        new_position != old_position or
                        new_driver.division_position != old_driver.division_position or
                        new_driver.car_number != old_driver.car_number or

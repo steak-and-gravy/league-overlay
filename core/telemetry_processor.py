@@ -360,13 +360,14 @@ class TelemetryProcessor:
     # RACE DATA BUILDING
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], gap: str, display_position: int, division_color: str, division_name: Optional[str], delta: str = "--", last_lap_time: float = 0.0, best_lap_time: float = 0.0, starting_position: int = 0, irating: int = 0, lic_level: int = 0, lic_sublevel: int = 0) -> DriverState:
+    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], interval: str, gap_to_leader: str, display_position: int, division_color: str, division_name: Optional[str], delta: str = "--", last_lap_time: float = 0.0, best_lap_time: float = 0.0, starting_position: int = 0, irating: int = 0, lic_level: int = 0, lic_sublevel: int = 0) -> DriverState:
         """Build a single race data entry for display.
 
         Args:
             driver: Driver data dict
             division_positions: Dict mapping car_idx to division position
-            gap: Gap string to display
+            interval: Interval string to car ahead for display
+            gap_to_leader: Gap string to division/overall leader for display
             display_position: The position to use for display/sorting
             division_color: Hex color code for driver's division
             division_name: Name of driver's division (Pro, ProAm, Am, Rookie, or None)
@@ -411,7 +412,8 @@ class TelemetryProcessor:
             division_position=current_color_position,
             division_color=division_color,
             division_name=division_name,
-            gap=gap if not (is_disconnected and not is_finished) else "(DC)",
+            gap_to_leader=gap_to_leader if not (is_disconnected and not is_finished) else "(DC)",
+            interval=interval if not (is_disconnected and not is_finished) else "(DC)",
             delta=delta,
             last_lap=last_lap_display,
             last_lap_time=last_lap_time,
@@ -548,16 +550,16 @@ class TelemetryProcessor:
     # GAP CALCULATION
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def _calculate_gap(self, driver: Dict, current_color_position: int, current_driver_color: str,
+    def _calculate_interval(self, driver: Dict, current_color_position: int, current_driver_color: str,
                       active_drivers: List[Dict], all_drivers_with_colors: List[Dict],
                       is_race: bool, session_data: Dict,
-                      get_driver_color_fn: Callable, show_division_gap: bool = True) -> str:
-        """Calculate gap for a driver to the car ahead.
+                      get_driver_color_fn: Callable, show_division: bool = True) -> str:
+        """Calculate interval for a driver to the car ahead.
 
-        Handles all gap calculation scenarios:
+        Handles all interval calculation scenarios:
         - Leaders (show "Leader" - division leader or overall leader depending on mode)
-        - Finished drivers (use stored finish gap)
-        - Live racing (calculate real-time gap)
+        - Finished drivers (use stored finish interval)
+        - Live racing (calculate real-time interval)
         - Practice/Qualifying (use best lap times)
 
         Args:
@@ -569,7 +571,7 @@ class TelemetryProcessor:
             is_race: True if in race session
             session_data: Session data dict (includes current_session and lookup caches)
             get_driver_color_fn: Function to get driver's division color
-            show_division_gap: If True, show gap to car ahead in same division. If False, show gap to any car ahead.
+            show_division: If True, show interval to car ahead in same division. If False, show interval to any car ahead.
 
         Returns:
             Gap string for display (e.g., "2.5", "1L", "Leader", "")
@@ -577,7 +579,7 @@ class TelemetryProcessor:
         car_idx = driver['car_idx']
 
         # Check if this driver is a leader
-        if show_division_gap:
+        if show_division:
             # Division leader shows "Leader"
             if current_color_position == 1:
                 return GapCalculator.format_gap_display(is_leader=True)
@@ -588,28 +590,28 @@ class TelemetryProcessor:
 
         # Finished driver (non-leader)
         if self.race_state_tracker.is_driver_finished(car_idx):
-            return self._calculate_finishing_gap_from_results(
+            return self._calculate_finishing_interval_from_results(
                 car_idx,
                 current_driver_color,
                 session_data,
                 get_driver_color_fn,
-                show_division_gap
+                show_division
             )
 
-        # Live racing - calculate real-time gap
+        # Live racing - calculate real-time interval
         if is_race:
-            return self._calculate_live_race_gap(driver, current_driver_color, active_drivers,
-                                                session_data, get_driver_color_fn, show_division_gap)
+            return self._calculate_live_race_interval(driver, current_driver_color, active_drivers,
+                                                session_data, get_driver_color_fn, show_division)
 
         # Practice/Qualifying - use best lap times
-        return self._calculate_practice_gap(car_idx, current_color_position, current_driver_color,
-                                           all_drivers_with_colors, session_data, show_division_gap)
+        return self._calculate_practice_interval(car_idx, current_color_position, current_driver_color,
+                                           all_drivers_with_colors, session_data, show_division)
 
-    def _calculate_live_race_gap(self, driver: Dict, current_driver_color: str,
+    def _calculate_live_race_interval(self, driver: Dict, current_driver_color: str,
                                 active_drivers: List[Dict],
                                 session_data: Dict, get_driver_color_fn: Callable,
-                                show_division_gap: bool = True) -> str:
-        """Calculate live gap during a race.
+                                show_division: bool = True) -> str:
+        """Calculate live interval during a race.
 
         Args:
             driver: Current driver data
@@ -617,15 +619,15 @@ class TelemetryProcessor:
             active_drivers: List of all active drivers
             session_data: Session data dict (includes current_session and lookup caches)
             get_driver_color_fn: Function to get driver's division color
-            show_division_gap: If True, compare to car ahead in same division. If False, compare to any car ahead.
+            show_division: If True, compare to car ahead in same division. If False, compare to any car ahead.
 
         Returns:
-            Gap string
+            Interval string
         """
         car_idx = driver['car_idx']
 
         # Find drivers to compare against
-        if show_division_gap:
+        if show_division:
             # Find all drivers in the same division
             comparison_drivers = []
             for temp_driver in active_drivers:
@@ -709,22 +711,61 @@ class TelemetryProcessor:
         if time_gap_raw is not None and time_gap_raw < 0:
             time_gap_raw = abs(time_gap_raw)
 
-        # Format the gap
-        gap = GapCalculator.format_gap_display(time_gap=time_gap_raw, lap_gap=lap_gap)
+        # Format the interval
+        interval = GapCalculator.format_gap_display(time_gap=time_gap_raw, lap_gap=lap_gap)
 
-        # Store gap continuously in snapshot - used when driver finishes to freeze the display
-        if gap and gap != "":
+        # Store interval continuously in snapshot - used when driver finishes to freeze the display
+        if interval and interval != "":
             driver_state = self.race_state_tracker.get_snapshot(car_idx)
             if driver_state:
-                driver_state.gap = gap
+                driver_state.interval = interval
                 # No need to call update_snapshot - we're modifying the object in place
 
-        return gap
+        return interval
 
-    def _calculate_practice_gap(self, car_idx: int, current_color_position: int,
+    def _calculate_gap_to_leader(self, driver: Dict, position: int, current_color_position: int,
+                           current_driver_color: str, active_drivers: List[Dict],
+                           all_drivers_with_colors: List[Dict], is_race: bool, session_data: Dict,
+                           get_driver_color_fn: Callable, show_division: bool = True) -> str:
+        """Calculate gap for a driver to the division/overall leader.
+
+        Similar to interval calculation but targets the leader instead of car ahead.
+
+        Args:
+            driver: Current driver data dict
+            position: Driver's overall position
+            current_color_position: Driver's position within their division
+            current_driver_color: Driver's division color
+            active_drivers: List of all active drivers
+            all_drivers_with_colors: List of drivers with color info
+            is_race: True if in race session
+            session_data: Session data dict
+            get_driver_color_fn: Function to get driver's division color
+            show_division: If True, gap to division leader. If False, gap to overall leader.
+
+        Returns:
+            Gap string for display (e.g., "2.5", "1L", "Leader", "")
+        """
+        car_idx = driver['car_idx']
+
+        # Check if this driver is the leader
+        if show_division:
+            if current_color_position == 1:
+                return GapCalculator.format_gap_display(is_leader=True)
+        else:
+            if position == 1:
+                return GapCalculator.format_gap_display(is_leader=True)
+
+        # For non-leaders, gap to leader = gap to P1
+        # which is same as interval in this context
+        return self._calculate_interval(driver, current_color_position, current_driver_color,
+                                  active_drivers, all_drivers_with_colors,
+                                  is_race, session_data, get_driver_color_fn, show_division)
+
+    def _calculate_practice_interval(self, car_idx: int, current_color_position: int,
                                current_driver_color: str, all_drivers_with_colors: List[Dict],
-                               session_data: Dict, show_division_gap: bool = True) -> str:
-        """Calculate gap for practice/qualifying based on best lap times.
+                               session_data: Dict, show_division: bool = True) -> str:
+        """Calculate interval for practice/qualifying based on best lap times.
 
         Args:
             car_idx: Current car index
@@ -732,12 +773,12 @@ class TelemetryProcessor:
             current_driver_color: Division color
             all_drivers_with_colors: List of drivers with color info
             session_data: Session data dict (includes current_session and lookup caches)
-            show_division_gap: If True, compare to car ahead in same division. If False, compare to any car ahead.
+            show_division: If True, compare to car ahead in same division. If False, compare to any car ahead.
 
         Returns:
-            Gap string formatted to 3 decimal places
+            Interval string formatted to 3 decimal places
         """
-        if show_division_gap:
+        if show_division:
             # Filter to same division
             comparison_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
             comparison_drivers.sort(key=lambda x: x['position'])
@@ -780,10 +821,10 @@ class TelemetryProcessor:
 
         return ""
 
-    def _calculate_finishing_gap_from_results(self, car_idx: int, current_driver_color: str,
+    def _calculate_finishing_interval_from_results(self, car_idx: int, current_driver_color: str,
                                               session_data: Dict, get_driver_color_fn: Callable,
-                                              show_division_gap: bool = True) -> str:
-        """Calculate finishing gap using official ResultsPositions data.
+                                              show_division: bool = True) -> str:
+        """Calculate finishing interval using official ResultsPositions data.
 
         This method is called for drivers who have crossed the finish line after checkered flag.
         It uses the official iRacing ResultsPositions data which includes:
@@ -799,7 +840,7 @@ class TelemetryProcessor:
             current_driver_color: Driver's division color
             session_data: Session data dict (includes results_lookup)
             get_driver_color_fn: Function to get driver's division color
-            show_division_gap: If True, compare to car ahead in same division. If False, compare to any car ahead.
+            show_division: If True, compare to car ahead in same division. If False, compare to any car ahead.
 
         Returns:
             Gap string for display (e.g., "2.5", "1L", "Leader", "")
@@ -857,7 +898,7 @@ class TelemetryProcessor:
         current_laps = current_result.get('LapsComplete', 0)
         current_time = current_result.get('Time', 0.0)
 
-        if show_division_gap:
+        if show_division:
             # DIVISION GAP MODE: Find car ahead in same division/class
 
             # Use the division color that was already calculated and passed in
@@ -993,12 +1034,12 @@ class TelemetryProcessor:
     # MAIN PROCESSING METHOD
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def process_telemetry(self, get_driver_color_fn: Callable, show_division_gap: bool = True) -> Optional[List[DriverState]]:
+    def process_telemetry(self, get_driver_color_fn: Callable, show_division: bool = True) -> Optional[List[DriverState]]:
         """Process telemetry data - orchestrates telemetry processing using helper methods.
 
         Args:
             get_driver_color_fn: Function to get driver's division color
-            show_division_gap: If True, show gap to car ahead in same division. If False, show gap to any car ahead.
+            show_division: If True, gap/interval scoped to division. If False, overall.
 
         Returns:
             List of DriverState objects or None if processing failed
@@ -1148,12 +1189,20 @@ class TelemetryProcessor:
                 current_driver_division = self.division_manager.get_driver_division(driver_info)
                 current_color_position = division_positions.get(car_idx, position)
 
-                # Calculate gap using helper method
-                gap = self._calculate_gap(
+                # Calculate interval using helper method
+                interval = self._calculate_interval(
                     driver, current_color_position, current_driver_color,
                     active_drivers, all_drivers_with_colors,
                     is_race, session_data,
-                    get_driver_color_fn, show_division_gap
+                    get_driver_color_fn, show_division
+                )
+
+                # Calculate gap to leader
+                gap_to_leader = self._calculate_gap_to_leader(
+                    driver, position, current_color_position, current_driver_color,
+                    active_drivers, all_drivers_with_colors,
+                    is_race, session_data,
+                    get_driver_color_fn, show_division
                 )
 
                 # Get lap time data from cache (preserves times when driver goes inactive)
@@ -1198,7 +1247,7 @@ class TelemetryProcessor:
                 # Build and append race data entry
                 driver['position'] = position  # Ensure position is set for helper method (still needed for gap calculations)
                 race_entry = self._build_race_data_entry(
-                    driver, division_positions, gap, position,
+                    driver, division_positions, interval, gap_to_leader, position,
                     current_driver_color, current_driver_division,
                     delta, last_lap_time, best_lap_time, starting_position,
                     irating, lic_level, lic_sublevel

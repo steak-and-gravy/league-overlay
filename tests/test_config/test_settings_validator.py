@@ -602,7 +602,7 @@ class TestNewDisplaySettings:
         data = {
             'width': 500,
             'opacity': 0.8,
-            'show_division_gap': True,
+            'show_division': True,
             'show_last_lap': True,
             'show_delta': True,
             'font_size': 'Large'
@@ -610,7 +610,7 @@ class TestNewDisplaySettings:
         result = validator.validate_and_coerce(data)
         assert result['width'] == 500
         assert result['opacity'] == 0.8
-        assert result['show_division_gap'] is True
+        assert result['show_division'] is True
         assert result['show_last_lap'] is True
         assert result['show_delta'] is True
         assert result['font_size'] == 'Large'
@@ -721,7 +721,7 @@ class TestNewColumnSettings:
         data = {
             'width': 500,
             'opacity': 0.8,
-            'show_division_gap': True,
+            'show_division': True,
             'show_positions_gained': True,
             'show_best_lap': True,
             'show_last_lap': True,
@@ -731,7 +731,7 @@ class TestNewColumnSettings:
         result = validator.validate_and_coerce(data)
         assert result['width'] == 500
         assert result['opacity'] == 0.8
-        assert result['show_division_gap'] is True
+        assert result['show_division'] is True
         assert result['show_positions_gained'] is True
         assert result['show_best_lap'] is True
         assert result['show_last_lap'] is True
@@ -1015,7 +1015,7 @@ class TestNewDriverInfoColumns:
         data = {
             'width': 500,
             'opacity': 0.8,
-            'show_division_gap': True,
+            'show_division': True,
             'show_positions_gained': True,
             'show_best_lap': False,
             'show_last_lap': True,
@@ -1027,7 +1027,7 @@ class TestNewDriverInfoColumns:
         # Verify old settings are preserved
         assert result['width'] == 500
         assert result['opacity'] == 0.8
-        assert result['show_division_gap'] is True
+        assert result['show_division'] is True
         assert result['show_positions_gained'] is True
         assert result['show_best_lap'] is False
         assert result['show_last_lap'] is True
