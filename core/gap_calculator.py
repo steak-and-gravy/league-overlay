@@ -5,21 +5,31 @@ import math
 
 
 class GapCalculator:
-    """Calculates and formats time/distance gaps between cars."""
+    """Calculates and formats time/distance gaps and intervals between cars."""
 
     @staticmethod
-    def calculate_time_gap(est_time_ahead: float, est_time_behind: float) -> Optional[float]:
-        """Calculate time gap in seconds between two cars."""
+    def calculate_interval_time(est_time_ahead: float, est_time_behind: float) -> Optional[float]:
+        """Calculate time interval in seconds between current car and car ahead."""
         if est_time_ahead > 0 and est_time_behind > 0:
             gap = est_time_ahead - est_time_behind
             return gap if gap >= 0 else gap * -1
         return None
 
     @staticmethod
-    def calculate_lap_gap(lap_ahead, lap_behind) -> int:
-        """Calculate lap difference between two cars based on lap + possibly distance."""
+    def calculate_interval_lap(lap_ahead, lap_behind) -> int:
+        """Calculate lap difference between current car and car ahead based on lap + possibly distance."""
         gap = lap_ahead - lap_behind
         return int(gap) if gap > 0 else 0
+
+    @staticmethod
+    def calculate_time_gap(est_time_ahead: float, est_time_behind: float) -> Optional[float]:
+        """Calculate time gap in seconds between two cars. (Legacy, use calculate_interval_time)"""
+        return GapCalculator.calculate_interval_time(est_time_ahead, est_time_behind)
+
+    @staticmethod
+    def calculate_lap_gap(lap_ahead, lap_behind) -> int:
+        """Calculate lap difference between two cars. (Legacy, use calculate_interval_lap)"""
+        return GapCalculator.calculate_interval_lap(lap_ahead, lap_behind)
 
     @staticmethod
     def format_gap_display(time_gap: Optional[float] = None,

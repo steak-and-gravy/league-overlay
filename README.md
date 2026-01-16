@@ -9,7 +9,10 @@ BB’s League Overlay displays live standings and gaps with a focus on divisions
 
 ## ✨ Features
 - **Live Standings** — Current race position (both overall and within division) with driver number and name.
-- **Gap Tracking** — See the real-time gap to the car ahead in your division.
+- **Interval & Gap Tracking** — Real-time gaps with two columns:
+  - **Interval** — Time to the car immediately ahead (in your division if division-scoped, otherwise overall)
+  - **Gap** — Time to your division leader (if division-scoped) or overall race leader
+- **Division Scope Toggle** — Toggle the "Show division scope" setting to switch both Interval and Gap between division-only or overall race calculations
 - **Post-Race Gap Preservation** — Final gaps frozen at finish line, preventing changes as drivers slow down or continue circulating.
 - **Positions Gained** — Optional column showing positions gained/lost from starting grid (green ↑ = gained, red ↓ = lost).
 - **Best Lap Times** — Optional column displaying each driver's best lap time this session.

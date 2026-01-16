@@ -32,7 +32,9 @@ class AppSettings:
     hide_headers: bool = False
     center_drivers: bool = False
     bold_drivers: bool = True
-    show_division_gap: bool = True
+    show_division: bool = True  # Scope for both Gap and Interval (True=division, False=overall)
+    show_gap: bool = False  # Show Gap to leader column
+    show_interval: bool = True  # Show Interval to car ahead column
     show_last_lap: bool = False
     show_delta: bool = False
     show_best_lap: bool = False
@@ -90,6 +92,13 @@ class SettingsManager:
 
             logger.info(f"Settings loaded from {self.settings_file}")
 
+            # Auto-migrate legacy show_gap to show_division
+            # Legacy: show_gap meant "show division gap vs overall gap"
+            # New: show_division controls scope for both Gap and Interval
+            if 'show_gap' in data and 'show_division' not in data:
+                data['show_division'] = data.pop('show_gap')
+                logger.info("Auto-migrated legacy 'show_gap' setting to 'show_division'")
+
             # Validate and coerce all fields using validator
             validated_dict = self.validator.validate_and_coerce(data)
 
@@ -127,7 +136,9 @@ class SettingsManager:
                 'hide_headers': settings.hide_headers,
                 'center_drivers': settings.center_drivers,
                 'bold_drivers': settings.bold_drivers,
-                'show_division_gap': settings.show_division_gap,
+                'show_division': settings.show_division,
+                'show_gap': settings.show_gap,
+                'show_interval': settings.show_interval,
                 'show_last_lap': settings.show_last_lap,
                 'show_delta': settings.show_delta,
                 'show_best_lap': settings.show_best_lap,
@@ -178,7 +189,9 @@ class SettingsManager:
             'hide_headers': settings.hide_headers,
             'center_drivers': settings.center_drivers,
             'bold_drivers': settings.bold_drivers,
-            'show_division_gap': settings.show_division_gap,
+            'show_division': settings.show_division,
+            'show_gap': settings.show_gap,
+            'show_interval': settings.show_interval,
             'show_last_lap': settings.show_last_lap,
             'show_delta': settings.show_delta,
             'show_best_lap': settings.show_best_lap,

@@ -59,7 +59,7 @@ class DriverRowRenderer:
         layout.setSpacing(styling['layout_spacing'])
 
         # Build column configuration based on settings
-        # Column order: Pos | [+/-] | D-Pos | Driver | [Rating] | Car# | Gap | [Best] | [Last] | [Delta] | [Pit]
+        # Column order: Pos | [+/-] | D-Pos | Driver | [Rating] | Car# | Gap | Int | [Best] | [Last] | [Delta] | [Pit]
         # Columns in brackets are optional
 
         # Start with base columns
@@ -73,6 +73,7 @@ class DriverRowRenderer:
         rating_col = None
         car_num_col = None
         gap_col = None
+        interval_col = None
         best_lap_col = None
         last_lap_col = None
         delta_col = None
@@ -105,10 +106,17 @@ class DriverRowRenderer:
         car_num_col = current_col
         current_col += 1
 
-        # Gap (always shown)
-        stretches.append(COLUMN_LAYOUT.GAP)
-        gap_col = current_col
-        current_col += 1
+        # Optional: Gap to leader
+        if self.parent.settings.show_gap:
+            stretches.append(COLUMN_LAYOUT.GAP)
+            gap_col = current_col
+            current_col += 1
+
+        # Optional: Interval to car ahead
+        if self.parent.settings.show_interval:
+            stretches.append(COLUMN_LAYOUT.INTERVAL)
+            interval_col = current_col
+            current_col += 1
 
         # Optional: Best Lap
         if self.parent.settings.show_best_lap:
@@ -161,8 +169,13 @@ class DriverRowRenderer:
         # Always show: Car Number (moved to after Rating)
         self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_num_col)
 
-        # Always show: Gap
-        self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, gap_col)
+        # Gap to leader
+        if gap_col is not None:
+            self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, gap_col)
+
+        # Interval to car ahead
+        if interval_col is not None:
+            self._create_interval_label(layout, driver, gap_color, label_bg, label_border, font_weight, interval_col)
 
         # Optional: Best Lap
         if best_lap_col is not None:
@@ -297,8 +310,8 @@ class DriverRowRenderer:
 
     def _create_gap_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                          label_bg: str, label_border: str, font_weight: str, column: int = 4) -> None:
-        """Create gap label."""
-        gap_label = QLabel(driver.gap)
+        """Create gap to leader label."""
+        gap_label = QLabel(driver.gap_to_leader)
         gap_label.setStyleSheet(f"""
             QLabel {{
                 color: {gap_color};
@@ -315,6 +328,27 @@ class DriverRowRenderer:
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(gap_label, 0, column)
+
+    def _create_interval_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
+                              label_bg: str, label_border: str, font_weight: str, column: int = 5) -> None:
+        """Create interval to car ahead label."""
+        interval_label = QLabel(driver.interval)
+        interval_label.setStyleSheet(f"""
+            QLabel {{
+                color: {gap_color};
+                background-color: {label_bg};
+                font-size: {self.parent.get_font_size('data')};
+                font-weight: {font_weight};
+                {label_border}
+            }}
+        """)
+        interval_label.setAlignment(Qt.AlignCenter)
+        interval_label.setMinimumWidth(COLUMN_MIN_WIDTHS.INTERVAL)
+        interval_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        interval_label.customContextMenuRequested.connect(
+            lambda pos, d=driver: self.parent.show_context_menu(d)
+        )
+        layout.addWidget(interval_label, 0, column)
 
     def _create_delta_label(self, layout: QGridLayout, driver: DriverState, delta_faster_color: str,
                            delta_slower_color: str, default_color: str, label_bg: str,

@@ -701,12 +701,12 @@ class TestDriverInfoHandling:
 
 
 class TestOverallGapMode:
-    """Unit tests for overall gap mode (show_division_gap=False).
+    """Unit tests for overall interval mode (show_division=False).
 
-    These tests verify that the show_division_gap setting correctly toggles
-    between division-based gaps (default) and overall gaps. Since the actual
-    gap calculation logic is complex and spread across multiple methods, these
-    tests verify the key conceptual behavior: the setting affects the gap display.
+    These tests verify that the show_division setting correctly toggles
+    between division-based intervals (default) and overall intervals. Since the actual
+    interval calculation logic is complex and spread across multiple methods, these
+    tests verify the key conceptual behavior: the setting affects the interval display.
     """
 
     @pytest.fixture
@@ -726,30 +726,30 @@ class TestOverallGapMode:
             'position_calculator': position_calculator
         }
 
-    def test_show_division_gap_setting_exists_in_process_telemetry(self, mock_dependencies):
-        """Test that show_division_gap parameter is used in gap calculation.
+    def test_show_division_setting_exists_in_process_telemetry(self, mock_dependencies):
+        """Test that show_division parameter is used in interval calculation.
 
         This is a simple smoke test to ensure the parameter exists and is passed through.
         The actual behavior is tested via integration tests with the real application.
         """
         processor = TelemetryProcessor(**mock_dependencies)
 
-        # Verify the _calculate_gap method accepts show_division_gap parameter
+        # Verify the _calculate_interval method accepts show_division parameter
         # by checking its signature
         import inspect
-        sig = inspect.signature(processor._calculate_gap)
-        assert 'show_division_gap' in sig.parameters, \
-            "_calculate_gap should accept show_division_gap parameter"
+        sig = inspect.signature(processor._calculate_interval)
+        assert 'show_division' in sig.parameters, \
+            "_calculate_interval should accept show_division parameter"
 
         # Check default value is True (maintains existing behavior)
-        default_value = sig.parameters['show_division_gap'].default
+        default_value = sig.parameters['show_division'].default
         assert default_value is True, \
-            "show_division_gap should default to True (division gaps)"
+            "show_division should default to True (division intervals)"
 
-    def test_division_gap_mode_shows_leader_for_division_leaders(self, mock_dependencies):
-        """Test that division gap mode shows 'Leader' for division leaders.
+    def test_division_interval_mode_shows_leader_for_division_leaders(self, mock_dependencies):
+        """Test that division interval mode shows 'Leader' for division leaders.
 
-        In division mode (show_division_gap=True), each division's P1 shows 'Leader',
+        In division mode (show_division=True), each division's P1 shows 'Leader',
         even if they're not P1 overall.
         """
         # This is tested implicitly through existing behavior - division leaders always
@@ -759,19 +759,19 @@ class TestOverallGapMode:
 
         # The key behavior: when a driver is P1 in their division, they should
         # get "Leader" displayed, regardless of overall position
-        # This is ensured by the current_color_position == 1 check in _calculate_gap
+        # This is ensured by the current_color_position == 1 check in _calculate_interval
 
         # Create a simple scenario to verify the concept
         # Driver P1 in division (overall P2) should show "Leader" in division mode
         # This is handled by the position calculation logic in telemetry_processor
 
-        assert True, "Division gap mode maintains existing 'Leader' behavior for division P1"
+        assert True, "Division interval mode maintains existing 'Leader' behavior for division P1"
 
-    def test_overall_gap_mode_only_shows_one_leader(self, mock_dependencies):
-        """Test that overall gap mode shows 'Leader' only for overall P1.
+    def test_overall_interval_mode_only_shows_one_leader(self, mock_dependencies):
+        """Test that overall interval mode shows 'Leader' only for overall P1.
 
-        In overall mode (show_division_gap=False), only the overall race leader
-        shows 'Leader'. All division leaders show gaps to the car ahead of them.
+        In overall mode (show_division=False), only the overall race leader
+        shows 'Leader'. All division leaders show intervals to the car ahead of them.
         """
         # This is the key conceptual difference: in overall mode, position_key
         # is used directly instead of current_color_position, so only P1 overall
@@ -779,10 +779,10 @@ class TestOverallGapMode:
 
         processor = TelemetryProcessor(**mock_dependencies)
 
-        # The implementation checks: if show_division_gap is False, use position_key
+        # The implementation checks: if show_division is False, use position_key
         # directly (position), which means only P1 overall (position == 1) will show "Leader"
 
-        assert True, "Overall gap mode uses position_key for leader determination"
+        assert True, "Overall interval mode uses position_key for leader determination"
 
 
 class TestDisconnectedFinishersLeaderBug:
@@ -1192,7 +1192,7 @@ class TestCarSpecificTimeNormalization:
             active_drivers,
             current_session,
             lambda x: "#FFFFFF",
-            show_division_gap=False
+            show_division=False
         )
 
         # The gap should be calculated using normalized EstTime values
@@ -1267,7 +1267,7 @@ class TestCarSpecificTimeNormalization:
             active_drivers,
             current_session,
             lambda x: "#FFFFFF",
-            show_division_gap=False
+            show_division=False
         )
 
         # Verify gap is calculated (non-empty)
@@ -1317,7 +1317,7 @@ class TestCarSpecificTimeNormalization:
             active_drivers,
             current_session,
             lambda x: "#FFFFFF",
-            show_division_gap=False
+            show_division=False
         )
 
         # Should still calculate a gap using non-normalized EstTime
@@ -1366,7 +1366,7 @@ class TestCarSpecificTimeNormalization:
             active_drivers,
             current_session,
             lambda x: "#FFFFFF",
-            show_division_gap=False
+            show_division=False
         )
 
         # Should calculate gap using fallback (non-normalized)
@@ -1435,7 +1435,7 @@ class TestCarSpecificTimeNormalization:
             active_drivers,
             current_session,
             lambda x: "#FFFFFF",
-            show_division_gap=False
+            show_division=False
         )
 
         # Should show lap gap (1L or similar) since they're on different laps
@@ -1508,25 +1508,25 @@ class TestFinishingGapCalculation:
 
         # Test P1 (overall leader)
         gap = processor._calculate_finishing_gap_from_results(
-            0, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            0, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "Leader"
 
         # Test P2 (2.5s behind P1)
         gap = processor._calculate_finishing_gap_from_results(
-            1, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "2.5"
 
         # Test P3 (3.3s behind P2: 5.8456 - 2.5123 = 3.3333)
         gap = processor._calculate_finishing_gap_from_results(
-            2, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            2, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "3.3"
 
         # Test P4 (2.3s behind P3: 8.1234 - 5.8456 = 2.2778)
         gap = processor._calculate_finishing_gap_from_results(
-            3, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            3, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "2.3"
 
@@ -1556,25 +1556,25 @@ class TestFinishingGapCalculation:
 
         # Test P1 (leader)
         gap = processor._calculate_finishing_gap_from_results(
-            0, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            0, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "Leader"
 
         # Test P2 (1 lap down from P1)
         gap = processor._calculate_finishing_gap_from_results(
-            1, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "1L"
 
         # Test P3 (same lap as P2, time gap: 11.6291 - 6.5095 = 5.1196)
         gap = processor._calculate_finishing_gap_from_results(
-            2, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            2, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "5.1"
 
         # Test P4 (1 lap down from P3: 14 - 13 = 1)
         gap = processor._calculate_finishing_gap_from_results(
-            3, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            3, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "1L"
 
@@ -1639,25 +1639,25 @@ class TestFinishingGapCalculation:
 
         # Test P1 (Pro division leader - red)
         gap = processor._calculate_finishing_gap_from_results(
-            0, "#FF0000", session_data, mock_get_color, show_division_gap=True
+            0, "#FF0000", session_data, mock_get_color, show_division=True
         )
         assert gap == "Leader"
 
         # Test P2 (ProAm division leader - blue)
         gap = processor._calculate_finishing_gap_from_results(
-            1, "#0000FF", session_data, mock_get_color, show_division_gap=True
+            1, "#0000FF", session_data, mock_get_color, show_division=True
         )
         assert gap == "Leader"
 
         # Test P3 (ProAm, 2nd in division - blue, time gap to P2: 11.6291 - 6.5095 = 5.1196)
         gap = processor._calculate_finishing_gap_from_results(
-            2, "#0000FF", session_data, mock_get_color, show_division_gap=True
+            2, "#0000FF", session_data, mock_get_color, show_division=True
         )
         assert gap == "5.1"
 
         # Test P4 (Am division leader - green)
         gap = processor._calculate_finishing_gap_from_results(
-            3, "#00FF00", session_data, mock_get_color, show_division_gap=True
+            3, "#00FF00", session_data, mock_get_color, show_division=True
         )
         assert gap == "Leader"
 
@@ -1683,13 +1683,13 @@ class TestFinishingGapCalculation:
 
         # Test P1 (division leader)
         gap = processor._calculate_finishing_gap_from_results(
-            0, "#FFFFFF", session_data, mock_get_color, show_division_gap=True
+            0, "#FFFFFF", session_data, mock_get_color, show_division=True
         )
         assert gap == "Leader"
 
         # Test P2 (same division, 1 lap down)
         gap = processor._calculate_finishing_gap_from_results(
-            1, "#FFFFFF", session_data, mock_get_color, show_division_gap=True
+            1, "#FFFFFF", session_data, mock_get_color, show_division=True
         )
         assert gap == "1L"
 
@@ -1704,7 +1704,7 @@ class TestFinishingGapCalculation:
             return ("#FFFFFF", "Pro")
 
         gap = processor._calculate_finishing_gap_from_results(
-            0, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            0, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == ""
 
@@ -1724,7 +1724,7 @@ class TestFinishingGapCalculation:
 
         # Query for CarIdx 99 which doesn't exist
         gap = processor._calculate_finishing_gap_from_results(
-            99, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            99, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == ""
 
@@ -1746,7 +1746,7 @@ class TestFinishingGapCalculation:
 
         # Should return "0.0" instead of negative value
         gap = processor._calculate_finishing_gap_from_results(
-            1, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "0.0"
 
@@ -1809,7 +1809,7 @@ class TestFinishingGapCalculation:
             is_race=True,
             session_data=session_data,
             get_driver_color_fn=mock_get_color,
-            show_division_gap=False
+            show_division=False
         )
 
         # Should return "Leader" from ResultsPositions
@@ -1838,7 +1838,7 @@ class TestFinishingGapCalculation:
             return ("#FFFFFF", "Pro")
 
         gap = processor._calculate_finishing_gap_from_results(
-            1, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
 
         # GapCalculator formats as "M:SS.S" for times >= 60s
@@ -1965,7 +1965,7 @@ class TestFinishingGapCalculation:
 
         # Test CarIdx 1 with stale data (ResultsPositions=14, Live=15)
         gap = processor._calculate_finishing_gap_from_results(
-            1, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
 
         # Should return empty string because data is stale
@@ -2024,7 +2024,7 @@ class TestFinishingGapCalculation:
 
         # Test CarIdx 1 with current data (ResultsPositions=15, Live=15)
         gap = processor._calculate_finishing_gap_from_results(
-            1, "#FFFFFF", session_data, mock_get_color, show_division_gap=False
+            1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
 
         # Should calculate gap because data is current

@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 
 # Application version
-VERSION = "0.9.9"
+VERSION = "0.9.9.1"
 
 
 @dataclass(frozen=True)
@@ -53,7 +53,8 @@ class ColumnLayout:
     DIV_POS: int = 6
     CAR_NUM: int = 6
     DRIVER_NAME: int = 25
-    GAP: int = 9
+    GAP: int = 9  # Gap to leader
+    INTERVAL: int = 9  # Interval to car ahead
     BEST_LAP: int = 9
     DELTA: int = 6
     LAST_LAP: int = 9
@@ -69,8 +70,8 @@ class ColumnMinWidths:
     DIV_POS: int = 35
     CAR_NUM: int = 35
     DRIVER_NAME: int = 60
-    GAP: int = 45
-    DIV_GAP: int = 50  # Slightly wider for "Div Gap" text
+    GAP: int = 50  # Gap to leader, wider for "Gap (Div)"/"Gap" text
+    INTERVAL: int = 50  # Interval to car ahead, wider for "Int (Div)"/"Int" text
     BEST_LAP: int = 55
     DELTA: int = 35
     LAST_LAP: int = 55

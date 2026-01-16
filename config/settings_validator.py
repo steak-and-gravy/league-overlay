@@ -139,10 +139,20 @@ class SettingsValidator:
             default=self.defaults['bold_drivers'],
             field_name='bold_drivers'
         )
-        validated['show_division_gap'] = self.coerce_bool(
-            data.get('show_division_gap'),
-            default=self.defaults['show_division_gap'],
-            field_name='show_division_gap'
+        validated['show_division'] = self.coerce_bool(
+            data.get('show_division'),
+            default=self.defaults['show_division'],
+            field_name='show_division'
+        )
+        validated['show_gap'] = self.coerce_bool(
+            data.get('show_gap'),
+            default=self.defaults['show_gap'],
+            field_name='show_gap'
+        )
+        validated['show_interval'] = self.coerce_bool(
+            data.get('show_interval'),
+            default=self.defaults['show_interval'],
+            field_name='show_interval'
         )
         validated['show_last_lap'] = self.coerce_bool(
             data.get('show_last_lap'),

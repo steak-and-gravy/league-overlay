@@ -111,6 +111,12 @@ Disconnected drivers:
 
 ## Gap Calculation (Highly Sensitive)
 
+### Terminology
+
+- **Interval** — time gap to the car immediately ahead (in your division if `show_division=True`)
+- **Gap** — time gap to the division leader (if `show_division=True`) or overall race leader (if `show_division=False`)
+- Both are calculated from normalized lap times
+
 ### Car-Specific Time Normalization (CRITICAL)
 
 `CarIdxEstTime` is **car-model normalized** and cannot be directly compared.
@@ -120,6 +126,10 @@ Disconnected drivers:
 Fallback only if lap times are zero or unavailable.
 
 Removing or bypassing normalization is a correctness bug.
+
+The `show_division` setting controls scope for both Interval and Gap:
+- `True` (default) → division-scoped calculations
+- `False` → overall race calculations
 
 ---
 

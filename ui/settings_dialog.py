@@ -484,10 +484,11 @@ class SettingsDialog(QDialog):
         self.hide_headers_cb.setChecked(self.parent_overlay.settings.hide_headers)
         checkbox_row1.addWidget(self.hide_headers_cb)
 
-        self.show_division_gap_cb = QCheckBox("Show division gap")
-        self.show_division_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_division_gap_cb.setChecked(self.parent_overlay.settings.show_division_gap)
-        checkbox_row1.addWidget(self.show_division_gap_cb)
+        self.show_division_cb = QCheckBox("Show division gaps")
+        self.show_division_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_division_cb.setChecked(self.parent_overlay.settings.show_division)
+        self.show_division_cb.setToolTip("When enabled, Gap and Interval are scoped to your division only")
+        checkbox_row1.addWidget(self.show_division_cb)
 
         window_layout.addLayout(checkbox_row1)
 
@@ -507,53 +508,71 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row2)
 
-        # Row 3: Column visibility - Position data
+        # Row 3: Column visibility - Gap and Interval
         checkbox_row3 = QHBoxLayout()
         checkbox_row3.setSpacing(10)
+
+        self.show_gap_cb = QCheckBox("Show gap")
+        self.show_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_gap_cb.setChecked(self.parent_overlay.settings.show_gap)
+        self.show_gap_cb.setToolTip("Gap to division/overall leader")
+        checkbox_row3.addWidget(self.show_gap_cb)
+
+        self.show_interval_cb = QCheckBox("Show interval")
+        self.show_interval_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_interval_cb.setChecked(self.parent_overlay.settings.show_interval)
+        self.show_interval_cb.setToolTip("Interval to car ahead")
+        checkbox_row3.addWidget(self.show_interval_cb)
+
+        window_layout.addLayout(checkbox_row3)
+
+        # Row 4: Column visibility - Position and Delta
+        checkbox_row4 = QHBoxLayout()
+        checkbox_row4.setSpacing(10)
 
         self.show_positions_gained_cb = QCheckBox("Show positions +/-")
         self.show_positions_gained_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_positions_gained_cb.setChecked(self.parent_overlay.settings.show_positions_gained)
-        checkbox_row3.addWidget(self.show_positions_gained_cb)
+        checkbox_row4.addWidget(self.show_positions_gained_cb)
 
         self.show_delta_cb = QCheckBox("Show delta")
         self.show_delta_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_delta_cb.setChecked(self.parent_overlay.settings.show_delta)
-        checkbox_row3.addWidget(self.show_delta_cb)
+        checkbox_row4.addWidget(self.show_delta_cb)
 
-        window_layout.addLayout(checkbox_row3)
+        window_layout.addLayout(checkbox_row4)
 
-        # Row 4: Column visibility - Lap times
-        checkbox_row4 = QHBoxLayout()
-        checkbox_row4.setSpacing(10)
+        # Row 5: Column visibility - Lap times
+        checkbox_row5 = QHBoxLayout()
+        checkbox_row5.setSpacing(10)
 
         self.show_best_lap_cb = QCheckBox("Show best lap")
         self.show_best_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_best_lap_cb.setChecked(self.parent_overlay.settings.show_best_lap)
-        checkbox_row4.addWidget(self.show_best_lap_cb)
+        checkbox_row5.addWidget(self.show_best_lap_cb)
 
         self.show_last_lap_cb = QCheckBox("Show last lap")
         self.show_last_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_last_lap_cb.setChecked(self.parent_overlay.settings.show_last_lap)
-        checkbox_row4.addWidget(self.show_last_lap_cb)
+        checkbox_row5.addWidget(self.show_last_lap_cb)
 
-        window_layout.addLayout(checkbox_row4)
+        window_layout.addLayout(checkbox_row5)
 
-        # Row 5: Column visibility - Driver info and pit strategy
-        checkbox_row5 = QHBoxLayout()
-        checkbox_row5.setSpacing(10)
+        # Row 6: Column visibility - Driver info and pit strategy
+        checkbox_row6 = QHBoxLayout()
+        checkbox_row6.setSpacing(10)
 
         self.show_rating_cb = QCheckBox("Show rating")
         self.show_rating_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_rating_cb.setChecked(self.parent_overlay.settings.show_rating)
-        checkbox_row5.addWidget(self.show_rating_cb)
+        checkbox_row6.addWidget(self.show_rating_cb)
 
         self.show_pit_lap_cb = QCheckBox("Show pit lap")
         self.show_pit_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_pit_lap_cb.setChecked(self.parent_overlay.settings.show_pit_lap)
-        checkbox_row5.addWidget(self.show_pit_lap_cb)
+        checkbox_row6.addWidget(self.show_pit_lap_cb)
 
-        window_layout.addLayout(checkbox_row5)
+        window_layout.addLayout(checkbox_row6)
 
         # Spacer after last checkbox row
         window_layout.addSpacing(10)
@@ -1039,11 +1058,15 @@ class SettingsDialog(QDialog):
             self.hide_headers_cb.setChecked(defaults.hide_headers)
             self.center_drivers_cb.setChecked(defaults.center_drivers)
             self.bold_drivers_cb.setChecked(defaults.bold_drivers)
-            self.show_division_gap_cb.setChecked(defaults.show_division_gap)
+            self.show_division_cb.setChecked(defaults.show_division)
+            self.show_gap_cb.setChecked(defaults.show_gap)
+            self.show_interval_cb.setChecked(defaults.show_interval)
             self.show_best_lap_cb.setChecked(defaults.show_best_lap)
             self.show_last_lap_cb.setChecked(defaults.show_last_lap)
             self.show_delta_cb.setChecked(defaults.show_delta)
             self.show_positions_gained_cb.setChecked(defaults.show_positions_gained)
+            self.show_rating_cb.setChecked(defaults.show_rating)
+            self.show_pit_lap_cb.setChecked(defaults.show_pit_lap)
             self.font_size_combo.setCurrentText(defaults.font_size)
             self.color_style_combo.setCurrentText(defaults.row_color_style)
             self.log_level_combo.setCurrentText(defaults.log_level)
@@ -1099,7 +1122,9 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.hide_headers = self.hide_headers_cb.isChecked()
             self.parent_overlay.settings.center_drivers = self.center_drivers_cb.isChecked()
             self.parent_overlay.settings.bold_drivers = self.bold_drivers_cb.isChecked()
-            self.parent_overlay.settings.show_division_gap = self.show_division_gap_cb.isChecked()
+            self.parent_overlay.settings.show_division = self.show_division_cb.isChecked()
+            self.parent_overlay.settings.show_gap = self.show_gap_cb.isChecked()
+            self.parent_overlay.settings.show_interval = self.show_interval_cb.isChecked()
             self.parent_overlay.settings.show_last_lap = self.show_last_lap_cb.isChecked()
             self.parent_overlay.settings.show_delta = self.show_delta_cb.isChecked()
             self.parent_overlay.settings.show_best_lap = self.show_best_lap_cb.isChecked()

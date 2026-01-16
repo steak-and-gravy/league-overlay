@@ -98,11 +98,14 @@ class DriverState:
     """Driver's best lap time this session in seconds (from CarIdxBestLapTime)"""
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # GAP AND DELTA DISPLAY
+    # GAP AND INTERVAL DISPLAY
     # ═══════════════════════════════════════════════════════════════════════════
 
-    gap: str = ""
-    """Formatted gap string for display (e.g., "+2.5s", "1 Lap", "Leader")"""
+    gap_to_leader: str = ""
+    """Formatted gap string to leader for display (e.g., "2.5s", "1L", "Leader")"""
+
+    interval: str = ""
+    """Formatted interval string to car ahead for display (e.g., "2.5s", "1L", "Leader")"""
 
     delta: str = ""
     """Formatted delta lap time comparison for display (e.g., "+0.5", "-0.3", "--")"""
