@@ -557,8 +557,8 @@ class LeagueOverlay(QMainWindow):
         # Build column configuration based on settings
         # Column order: Pos | [+/-] | D-Pos | Driver | [Rating] | Car# | Gap | Int | [Best] | [Last] | [Delta] | [Pit]
         # Columns in brackets are optional
-        gap_header = "Div Gap" if self.settings.show_division else "Gap"
-        interval_header = "Div Int" if self.settings.show_division else "Int"
+        gap_header = "Gap"
+        interval_header = "Int"
 
         headers = ["Pos"]
         stretches = [COLUMN_LAYOUT.POS]
@@ -647,8 +647,20 @@ class LeagueOverlay(QMainWindow):
                     font-weight: bold;
                     font-size: {self.get_font_size('header')};
                 }}
+                QToolTip {{
+                    color: white;
+                }}
             """)
             label.setAlignment(Qt.AlignCenter)
+            
+            # Add tooltips for Gap and Interval headers
+            if header == "Gap":
+                tooltip = "Division mode: gap to division leader" if self.settings.show_division else "Overall mode: gap to overall leader"
+                label.setToolTip(tooltip)
+            elif header == "Int":
+                tooltip = "Division mode: interval to car ahead in your division" if self.settings.show_division else "Overall mode: interval to car ahead in the field"
+                label.setToolTip(tooltip)
+            
             # Set same minimum widths as detail rows for consistent column sizing
             if header in min_width_map:
                 label.setMinimumWidth(min_width_map[header])
