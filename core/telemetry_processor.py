@@ -729,8 +729,6 @@ class TelemetryProcessor:
                            get_driver_color_fn: Callable, show_division: bool = True) -> str:
         """Calculate gap for a driver to the division/overall leader.
 
-        Similar to interval calculation but targets the leader instead of car ahead.
-
         Args:
             driver: Current driver data dict
             position: Driver's overall position
@@ -748,7 +746,7 @@ class TelemetryProcessor:
         """
         car_idx = driver['car_idx']
 
-        # Check if this driver is the leader
+        # If this driver is the leader in the chosen scope, show Leader
         if show_division:
             if current_color_position == 1:
                 return GapCalculator.format_gap_display(is_leader=True)
@@ -756,11 +754,255 @@ class TelemetryProcessor:
             if position == 1:
                 return GapCalculator.format_gap_display(is_leader=True)
 
-        # For non-leaders, gap to leader = gap to P1
-        # which is same as interval in this context
-        return self._calculate_interval(driver, current_color_position, current_driver_color,
-                                  active_drivers, all_drivers_with_colors,
-                                  is_race, session_data, get_driver_color_fn, show_division)
+        # Finished driver (non-leader) uses official results to get gap to leader
+        if self.race_state_tracker.is_driver_finished(car_idx):
+            return self._calculate_finishing_gap_to_leader_from_results(
+                car_idx,
+                current_driver_color,
+                session_data,
+                get_driver_color_fn,
+                show_division
+            )
+
+        # Live race gap to leader
+        if is_race:
+            return self._calculate_live_gap_to_leader(
+                driver,
+                current_driver_color,
+                active_drivers,
+                session_data,
+                get_driver_color_fn,
+                show_division
+            )
+
+        # Practice/Qualifying gap to leader (best laps)
+        return self._calculate_practice_gap_to_leader(
+            driver['car_idx'],
+            current_driver_color,
+            all_drivers_with_colors,
+            session_data,
+            show_division
+        )
+
+    def _calculate_live_gap_to_leader(self, driver: Dict, current_driver_color: str,
+                                active_drivers: List[Dict],
+                                session_data: Dict, get_driver_color_fn: Callable,
+                                show_division: bool = True) -> str:
+        """Calculate live gap to leader during a race."""
+        car_idx = driver['car_idx']
+
+        # Build comparison list (division-only or overall)
+        comparison_drivers = []
+        for temp_driver in active_drivers:
+            temp_color = get_driver_color_fn(temp_driver['driver_info']) if show_division else None
+            if not show_division or temp_color == current_driver_color:
+                comparison_drivers.append({
+                    'car_idx': temp_driver['car_idx'],
+                    'position': temp_driver.get('position', 0),
+                    'total_track_position': temp_driver['total_track_position'],
+                    'current_lap': temp_driver['current_lap'],
+                    'lap_pct': temp_driver['lap_pct']
+                })
+
+        if not comparison_drivers:
+            return ""
+
+        comparison_drivers.sort(key=lambda x: x['position'])
+
+        # Find this driver's index
+        current_pos_index = None
+        for i, temp_driver in enumerate(comparison_drivers):
+            if temp_driver['car_idx'] == car_idx:
+                current_pos_index = i
+                break
+
+        # No valid index
+        if current_pos_index is None:
+            return ""
+
+        # Leader entry is the first in the sorted list
+        leader_entry = comparison_drivers[0]
+        leader_idx = leader_entry['car_idx']
+
+        # If somehow the driver is leader, return Leader (should already be handled)
+        if leader_idx == car_idx:
+            return GapCalculator.format_gap_display(is_leader=True)
+
+        # If leader has finished (rare while others are racing), show placeholder
+        if self.race_state_tracker.is_driver_finished(leader_idx):
+            return "-"
+
+        # Get estimated times
+        car_idx_est_time = self.ir['CarIdxEstTime']
+        current_est_time = car_idx_est_time[car_idx]
+        leader_est_time = car_idx_est_time[leader_idx]
+
+        normalize_lap_time_pct = 0
+        leader_lap_time = 0
+        drivers = self.ir['DriverInfo']['Drivers']
+        if leader_idx < len(drivers) and car_idx < len(drivers):
+            leader_lap_time = drivers[leader_idx]['CarClassEstLapTime']
+            current_lap_time = drivers[car_idx]['CarClassEstLapTime']
+            if leader_lap_time > 0 and current_lap_time > 0:
+                normalize_lap_time_pct = leader_lap_time / current_lap_time
+                leader_est_time = leader_est_time / normalize_lap_time_pct
+
+        time_gap_raw = None
+
+        # Same-lap comparison
+        if current_est_time > 0 and leader_est_time > 0 and leader_entry['current_lap'] == driver['current_lap']:
+            time_gap_raw = GapCalculator.calculate_time_gap(leader_est_time, current_est_time)
+        elif current_est_time > 0 and leader_est_time > 0 and leader_entry['current_lap'] > driver['current_lap']:
+            # Leader is ahead by laps, add lap time to estimate
+            if normalize_lap_time_pct > 0:
+                time_gap_raw = GapCalculator.calculate_time_gap(leader_est_time + leader_lap_time / normalize_lap_time_pct, current_est_time)
+            else:
+                time_gap_raw = GapCalculator.calculate_time_gap(leader_est_time + leader_lap_time, current_est_time)
+        else:
+            # Fallback based on track position difference
+            position_diff = leader_entry['total_track_position'] - driver['total_track_position']
+            time_gap_raw = position_diff * self.get_fastest_lap_time(session_data)
+
+        # Lap gap calculation
+        lap_gap = GapCalculator.calculate_lap_gap(leader_entry['total_track_position'], driver['total_track_position'])
+
+        if time_gap_raw is not None and time_gap_raw < 0:
+            time_gap_raw = abs(time_gap_raw)
+
+        return GapCalculator.format_gap_display(time_gap=time_gap_raw, lap_gap=lap_gap)
+
+    def _calculate_practice_gap_to_leader(self, car_idx: int, current_driver_color: str,
+                                     all_drivers_with_colors: List[Dict],
+                                     session_data: Dict, show_division: bool = True) -> str:
+        """Gap to leader during practice/qualifying based on best laps."""
+        # Build comparison group
+        if show_division:
+            comparison_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
+        else:
+            comparison_drivers = list(all_drivers_with_colors)
+
+        if not comparison_drivers:
+            return ""
+
+        comparison_drivers.sort(key=lambda x: x['position'])
+
+        # Find current driver and leader
+        current_idx = None
+        for i, d in enumerate(comparison_drivers):
+            if d['car_idx'] == car_idx:
+                current_idx = i
+                break
+
+        if current_idx is None:
+            return ""
+
+        leader_idx = comparison_drivers[0]['car_idx']
+
+        # Leader shows Leader
+        if leader_idx == car_idx:
+            return GapCalculator.format_gap_display(is_leader=True)
+
+        current_best = self.get_best_lap_from_session_info(session_data, car_idx)
+        leader_best = self.get_best_lap_from_session_info(session_data, leader_idx)
+
+        if current_best > 0 and leader_best > 0:
+            time_gap_raw = current_best - leader_best
+            return f"{time_gap_raw:.3f}"
+
+        return ""
+
+    def _calculate_finishing_gap_to_leader_from_results(self, car_idx: int, current_driver_color: str,
+                                                   session_data: Dict, get_driver_color_fn: Callable,
+                                                   show_division: bool = True) -> str:
+        """Calculate finishing gap to the leader using official ResultsPositions data."""
+        results_lookup = session_data.get('results_lookup', {})
+        current_session = session_data.get('current_session', {})
+
+        results_positions = current_session.get('ResultsPositions')
+        if not results_positions:
+            return ""
+
+        sorted_results = sorted(results_positions, key=lambda x: x.get('Position', 999))
+
+        current_result = results_lookup.get(car_idx)
+        if not current_result:
+            return ""
+
+        # Stale data detection mirrors interval logic
+        if self.race_state_tracker.is_driver_finished(car_idx):
+            finish_lap = self.race_state_tracker.get_finish_lap(car_idx)
+            results_laps = current_result.get('LapsComplete', 0)
+            if finish_lap is not None and results_laps < finish_lap:
+                logger.debug(f"STALE_CHECK - Car {car_idx}: Waiting for ResultsPositions sync (results_laps={results_laps} < finish_lap={finish_lap})")
+                return ""
+        else:
+            try:
+                results_laps = current_result.get('LapsComplete', 0)
+                car_idx_lap = self.ir['CarIdxLap']
+                live_laps = car_idx_lap[car_idx] if car_idx < len(car_idx_lap) else 0
+                if results_laps < live_laps:
+                    logger.debug(f"STALE_CHECK - Car {car_idx}: Racing data stale (results_laps={results_laps} < live_laps={live_laps})")
+                    return ""
+            except (KeyError, TypeError, IndexError) as e:
+                logger.warning(f"STALE_CHECK - Car {car_idx}: Exception accessing telemetry ({type(e).__name__}), using ResultsPositions anyway")
+                pass
+
+        current_laps = current_result.get('LapsComplete', 0)
+        current_time = current_result.get('Time', 0.0)
+
+        if show_division:
+            # Division leader = first car in same division/class
+            current_driver_info = self.ir['DriverInfo']['Drivers'][car_idx] if car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+            current_car_class_id = current_driver_info.get('CarClassID')
+
+            division_results = []
+            for result in sorted_results:
+                result_car_idx = result.get('CarIdx')
+                if result_car_idx is None:
+                    continue
+
+                driver_info = self.ir['DriverInfo']['Drivers'][result_car_idx] if result_car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+                if not driver_info:
+                    continue
+
+                driver_division_color = get_driver_color_fn(driver_info)
+                driver_car_class_id = driver_info.get('CarClassID')
+
+                division_match = driver_division_color == current_driver_color
+                class_match = (current_car_class_id is None and driver_car_class_id is None) or (driver_car_class_id == current_car_class_id)
+
+                if division_match and class_match:
+                    division_results.append(result)
+
+            if not division_results:
+                return ""
+
+            division_leader = division_results[0]
+
+            if division_leader.get('CarIdx') == car_idx:
+                return GapCalculator.format_gap_display(is_leader=True)
+
+            ahead_laps = division_leader.get('LapsComplete', 0)
+            ahead_time = division_leader.get('Time', 0.0)
+        else:
+            # Overall leader is first in sorted results
+            division_leader = sorted_results[0]
+            if division_leader.get('CarIdx') == car_idx:
+                return GapCalculator.format_gap_display(is_leader=True)
+
+            ahead_laps = division_leader.get('LapsComplete', 0)
+            ahead_time = division_leader.get('Time', 0.0)
+
+        lap_gap = ahead_laps - current_laps
+
+        if lap_gap > 0:
+            return GapCalculator.format_gap_display(lap_gap=lap_gap)
+
+        time_gap = current_time - ahead_time
+        if time_gap < 0:
+            time_gap = 0.0
+
+        return GapCalculator.format_gap_display(time_gap=time_gap, lap_gap=0)
 
     def _calculate_practice_interval(self, car_idx: int, current_color_position: int,
                                current_driver_color: str, all_drivers_with_colors: List[Dict],
