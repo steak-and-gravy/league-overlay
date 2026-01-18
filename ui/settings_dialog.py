@@ -166,7 +166,7 @@ class SettingsDialog(QDialog):
         self.color_buttons = {}
         self.color_value_labels = {}
 
-        for division in ["Pro", "ProAm", "Am", "Rookie"]:
+        for division in ["Pro", "ProAm", "Am", "Rookie", "Default"]:
             if division not in self.parent_overlay.division_manager.division_colors:
                 continue
 

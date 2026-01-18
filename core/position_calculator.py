@@ -99,7 +99,7 @@ class PositionCalculator:
             if car_idx_class_position[car_idx] == 0:
                 continue
 
-            # Multi-class support: only show cars in the player's class
+            # Multi-class support: only show cars in the player's class (works for both driving and spectating)
             if self.player_car_class_id is not None:
                 if driver_info.get('CarClassID') != self.player_car_class_id:
                     continue
@@ -174,6 +174,7 @@ class PositionCalculator:
             if car_idx_class_position[car_idx] == 0:
                 continue
 
+            # Multi-class support: only show cars in the player's class (works for both driving and spectating)
             if self.player_car_class_id is not None:
                 if driver_info.get('CarClassID') != self.player_car_class_id:
                     continue

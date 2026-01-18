@@ -395,6 +395,10 @@ class RaceStateTracker:
         """
         active_car_indices = {d['car_idx'] for d in active_drivers}
 
+        # Use player's class for filtering disconnected restoration
+        # (PositionCalculator already filtered active_drivers to one class)
+        view_class_id = self.player_car_class_id
+
         # Get race lap count for retirement detection
         try:
             race_laps = self.ir['RaceLaps']
@@ -425,10 +429,10 @@ class RaceStateTracker:
                 if not driver_state.driver_info:
                     continue
 
-                # Multi-class support: only restore drivers in player's class
-                if self.player_car_class_id is not None:
+                # Multi-class support: only restore drivers in the current view class
+                if view_class_id is not None:
                     driver_class_id = driver_state.driver_info.get('CarClassID')
-                    if driver_class_id != self.player_car_class_id:
+                    if driver_class_id != view_class_id:
                         continue
 
                 # Create dict for PositionCalculator's expected format
@@ -467,10 +471,10 @@ class RaceStateTracker:
                 if not driver_info:
                     continue
 
-                # Multi-class support: only include drivers in player's class
-                if self.player_car_class_id is not None:
+                # Multi-class support: only include drivers in the current view class
+                if view_class_id is not None:
                     driver_class_id = driver_info.get('CarClassID')
-                    if driver_class_id != self.player_car_class_id:
+                    if driver_class_id != view_class_id:
                         continue
 
                 # Get position from results
