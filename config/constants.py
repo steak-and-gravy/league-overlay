@@ -42,7 +42,7 @@ class UIDimensions:
     SIZE_GRIP_SIZE: int = 20
     CLOSE_BUTTON_WIDTH: int = 25
     SETTINGS_DIALOG_WIDTH: int = 630
-    SETTINGS_DIALOG_HEIGHT: int = 480
+    SETTINGS_DIALOG_HEIGHT: int = 505
 
 
 @dataclass(frozen=True)

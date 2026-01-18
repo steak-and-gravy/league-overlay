@@ -625,32 +625,26 @@ class TelemetryProcessor:
             Interval string
         """
         car_idx = driver['car_idx']
+        # Determine current driver's car class and filter to same class (always),
+        # and same division when show_division is True
+        drivers_info = self.ir['DriverInfo']['Drivers']
+        current_info = drivers_info[car_idx] if car_idx < len(drivers_info) else {}
+        current_car_class_id = current_info.get('CarClassID')
 
-        # Find drivers to compare against
-        if show_division:
-            # Find all drivers in the same division
-            comparison_drivers = []
-            for temp_driver in active_drivers:
-                temp_color = get_driver_color_fn(temp_driver['driver_info'])
-                if temp_color == current_driver_color:
-                    comparison_drivers.append({
-                        'car_idx': temp_driver['car_idx'],
-                        'position': temp_driver.get('position', 0),
-                        'total_track_position': temp_driver['total_track_position'],
-                        'current_lap': temp_driver['current_lap'],
-                        'lap_pct': temp_driver['lap_pct']
-                    })
-        else:
-            # Find all drivers (overall gap)
-            comparison_drivers = []
-            for temp_driver in active_drivers:
-                comparison_drivers.append({
-                    'car_idx': temp_driver['car_idx'],
-                    'position': temp_driver.get('position', 0),
-                    'total_track_position': temp_driver['total_track_position'],
-                    'current_lap': temp_driver['current_lap'],
-                    'lap_pct': temp_driver['lap_pct']
-                })
+        comparison_drivers = []
+        for temp_driver in active_drivers:
+            temp_info = temp_driver['driver_info']
+            if current_car_class_id is not None and temp_info.get('CarClassID') != current_car_class_id:
+                continue
+            if show_division and get_driver_color_fn(temp_info) != current_driver_color:
+                continue
+            comparison_drivers.append({
+                'car_idx': temp_driver['car_idx'],
+                'position': temp_driver.get('position', 0),
+                'total_track_position': temp_driver['total_track_position'],
+                'current_lap': temp_driver['current_lap'],
+                'lap_pct': temp_driver['lap_pct']
+            })
 
         comparison_drivers.sort(key=lambda x: x['position'])
 
@@ -791,18 +785,25 @@ class TelemetryProcessor:
         """Calculate live gap to leader during a race."""
         car_idx = driver['car_idx']
 
-        # Build comparison list (division-only or overall)
+        # Build comparison list: same class always; same division when show_division
+        drivers_info = self.ir['DriverInfo']['Drivers']
+        current_info = drivers_info[car_idx] if car_idx < len(drivers_info) else {}
+        current_car_class_id = current_info.get('CarClassID')
+
         comparison_drivers = []
         for temp_driver in active_drivers:
-            temp_color = get_driver_color_fn(temp_driver['driver_info']) if show_division else None
-            if not show_division or temp_color == current_driver_color:
-                comparison_drivers.append({
-                    'car_idx': temp_driver['car_idx'],
-                    'position': temp_driver.get('position', 0),
-                    'total_track_position': temp_driver['total_track_position'],
-                    'current_lap': temp_driver['current_lap'],
-                    'lap_pct': temp_driver['lap_pct']
-                })
+            temp_info = temp_driver['driver_info']
+            if current_car_class_id is not None and temp_info.get('CarClassID') != current_car_class_id:
+                continue
+            if show_division and get_driver_color_fn(temp_info) != current_driver_color:
+                continue
+            comparison_drivers.append({
+                'car_idx': temp_driver['car_idx'],
+                'position': temp_driver.get('position', 0),
+                'total_track_position': temp_driver['total_track_position'],
+                'current_lap': temp_driver['current_lap'],
+                'lap_pct': temp_driver['lap_pct']
+            })
 
         if not comparison_drivers:
             return ""
@@ -875,11 +876,18 @@ class TelemetryProcessor:
                                      all_drivers_with_colors: List[Dict],
                                      session_data: Dict, show_division: bool = True) -> str:
         """Gap to leader during practice/qualifying based on best laps."""
-        # Build comparison group
-        if show_division:
-            comparison_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
-        else:
-            comparison_drivers = list(all_drivers_with_colors)
+        # Build comparison group: same class always; optional same division
+        drivers_info = self.ir['DriverInfo']['Drivers']
+        current_info = drivers_info[car_idx] if car_idx < len(drivers_info) else {}
+        current_car_class_id = current_info.get('CarClassID')
+
+        pool = all_drivers_with_colors if not show_division else [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
+
+        comparison_drivers = []
+        for d in pool:
+            di = drivers_info[d['car_idx']] if d['car_idx'] < len(drivers_info) else {}
+            if current_car_class_id is None or di.get('CarClassID') == current_car_class_id:
+                comparison_drivers.append(d)
 
         if not comparison_drivers:
             return ""
@@ -985,13 +993,32 @@ class TelemetryProcessor:
             ahead_laps = division_leader.get('LapsComplete', 0)
             ahead_time = division_leader.get('Time', 0.0)
         else:
-            # Overall leader is first in sorted results
-            division_leader = sorted_results[0]
-            if division_leader.get('CarIdx') == car_idx:
+            # Overall mode: still compare within the same car class (class leader)
+            current_driver_info = self.ir['DriverInfo']['Drivers'][car_idx] if car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+            current_car_class_id = current_driver_info.get('CarClassID')
+
+            class_results = []
+            for result in sorted_results:
+                result_car_idx = result.get('CarIdx')
+                if result_car_idx is None:
+                    continue
+                driver_info = self.ir['DriverInfo']['Drivers'][result_car_idx] if result_car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+                if not driver_info:
+                    continue
+                driver_car_class_id = driver_info.get('CarClassID')
+                class_match = (current_car_class_id is None and driver_car_class_id is None) or (driver_car_class_id == current_car_class_id)
+                if class_match:
+                    class_results.append(result)
+
+            if not class_results:
+                return ""
+
+            class_leader = class_results[0]
+            if class_leader.get('CarIdx') == car_idx:
                 return GapCalculator.format_gap_display(is_leader=True)
 
-            ahead_laps = division_leader.get('LapsComplete', 0)
-            ahead_time = division_leader.get('Time', 0.0)
+            ahead_laps = class_leader.get('LapsComplete', 0)
+            ahead_time = class_leader.get('Time', 0.0)
 
         lap_gap = ahead_laps - current_laps
 
@@ -1020,9 +1047,21 @@ class TelemetryProcessor:
         Returns:
             Interval string formatted to 3 decimal places
         """
+        # Always compare within same car class; optionally scope to division
+        drivers_info = self.ir['DriverInfo']['Drivers']
+        current_info = drivers_info[car_idx] if car_idx < len(drivers_info) else {}
+        current_car_class_id = current_info.get('CarClassID')
+
         if show_division:
-            # Filter to same division
-            comparison_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
+            # Filter to same division and class
+            comparison_drivers = []
+            for d in all_drivers_with_colors:
+                if d['color'] != current_driver_color:
+                    continue
+                di = drivers_info[d['car_idx']] if d['car_idx'] < len(drivers_info) else {}
+                if current_car_class_id is not None and di.get('CarClassID') != current_car_class_id:
+                    continue
+                comparison_drivers.append(d)
             comparison_drivers.sort(key=lambda x: x['position'])
 
             # Find current driver's index
@@ -1038,11 +1077,16 @@ class TelemetryProcessor:
 
             car_ahead_idx = comparison_drivers[current_idx - 1]['car_idx']
         else:
-            # Overall gap - find car directly ahead by overall position
-            all_drivers_with_colors.sort(key=lambda x: x['position'])
+            # Overall mode but still only same class
+            filtered = []
+            for d in all_drivers_with_colors:
+                di = drivers_info[d['car_idx']] if d['car_idx'] < len(drivers_info) else {}
+                if current_car_class_id is None or di.get('CarClassID') == current_car_class_id:
+                    filtered.append(d)
+            filtered.sort(key=lambda x: x['position'])
 
             current_idx = None
-            for i, d in enumerate(all_drivers_with_colors):
+            for i, d in enumerate(filtered):
                 if d['car_idx'] == car_idx:
                     current_idx = i
                     break
@@ -1051,7 +1095,7 @@ class TelemetryProcessor:
             if current_idx is None or current_idx == 0:
                 return ""
 
-            car_ahead_idx = all_drivers_with_colors[current_idx - 1]['car_idx']
+            car_ahead_idx = filtered[current_idx - 1]['car_idx']
         current_best = self.get_best_lap_from_session_info(session_data, car_idx)
         ahead_best = self.get_best_lap_from_session_info(session_data, car_ahead_idx)
 
@@ -1195,62 +1239,43 @@ class TelemetryProcessor:
             ahead_result = division_results[current_div_index - 1]
 
         else:
-            # OVERALL GAP MODE: Find car immediately ahead in overall results
+            # OVERALL MODE: Compare within same class for car-ahead
 
-            # Get current driver's car class for multi-class leader detection
+            # Get current driver's car class
             current_driver_info = self.ir['DriverInfo']['Drivers'][car_idx] if car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
             current_car_class_id = current_driver_info.get('CarClassID')
 
-            # Find current driver's index in overall results AND check if class leader
-            current_index = None
-            is_class_leader = False
-
-            # Build list of cars in same class to determine if this is the class leader
+            # Build list of cars in same class
             class_results = []
             for result in sorted_results:
                 result_car_idx = result.get('CarIdx')
                 if result_car_idx is None:
                     continue
-
                 driver_info = self.ir['DriverInfo']['Drivers'][result_car_idx] if result_car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
                 if not driver_info:
                     continue
-
                 driver_car_class_id = driver_info.get('CarClassID')
-
-                # Check if same class (handles both None and actual class IDs)
                 class_match = (current_car_class_id is None and driver_car_class_id is None) or (driver_car_class_id == current_car_class_id)
-
                 if class_match:
                     class_results.append(result)
 
-            # Find current car's position in class results
+            # Find current driver's index within class
+            current_index = None
             for i, result in enumerate(class_results):
-                if result.get('CarIdx') == car_idx:
-                    is_class_leader = (i == 0)
-                    break
-
-            # If this is the class leader, show "Leader"
-            if is_class_leader:
-                logger.debug(f"FINISH_GAP_OVERALL - Car {car_idx} is CLASS LEADER")
-                return GapCalculator.format_gap_display(is_leader=True)
-
-            # Find current driver's index in overall results for gap calculation
-            for i, result in enumerate(sorted_results):
                 if result.get('CarIdx') == car_idx:
                     current_index = i
                     break
 
-            # If first overall (race leader), show "Leader"
+            # Class leader shows Leader
             if current_index == 0:
-                logger.debug(f"FINISH_GAP_OVERALL - Car {car_idx} is OVERALL LEADER")
+                logger.debug(f"FINISH_GAP_OVERALL - Car {car_idx} is CLASS LEADER")
                 return GapCalculator.format_gap_display(is_leader=True)
 
-            # Get car ahead
+            # No car ahead in class
             if current_index is None or current_index == 0:
                 return ""
 
-            ahead_result = sorted_results[current_index - 1]
+            ahead_result = class_results[current_index - 1]
 
         # Calculate gap to car ahead
         ahead_laps = ahead_result.get('LapsComplete', 0)

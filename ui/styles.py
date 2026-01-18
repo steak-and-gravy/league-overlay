@@ -10,6 +10,39 @@ if TYPE_CHECKING:
     from core.driver_state import DriverState
 
 
+def is_light_color(hex_color: str) -> bool:
+    """Determine if a hex color is light or dark.
+    
+    Uses luminance calculation: if luminance > 0.5, it's a light color.
+    Args:
+        hex_color: Hex color string (e.g., '#FFFFFF')
+    
+    Returns:
+        True if color is light (use dark text), False if dark (use light text)
+    """
+    if not hex_color.startswith('#') or len(hex_color) < 7:
+        return False
+    
+    try:
+        r = int(hex_color[1:3], 16) / 255.0
+        g = int(hex_color[3:5], 16) / 255.0
+        b = int(hex_color[5:7], 16) / 255.0
+        
+        # Calculate relative luminance using sRGB formula
+        # Reference: https://www.w3.org/TR/WCAG20/#relativeluminancedef
+        def adjust(c):
+            return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+        
+        r = adjust(r)
+        g = adjust(g)
+        b = adjust(b)
+        
+        luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return luminance > 0.5
+    except (ValueError, IndexError):
+        return False
+
+
 class ColorStyleStrategy(ABC):
     """Abstract base class for driver row color styles."""
 
@@ -174,7 +207,8 @@ class DefaultColorStyle(ColorStyleStrategy):
         position_bg = parent.get_bg_color('#FF0000')
         position_color = "white"
         car_number_bg = parent.get_bg_color(driver.division_color)
-        car_number_color = "white"
+        # Use black text for light division colors, white for dark
+        car_number_color = "#000000" if is_light_color(driver.division_color) else "white"
 
         if driver.is_player:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
