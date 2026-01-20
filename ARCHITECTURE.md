@@ -120,6 +120,22 @@ Sorted List[DriverState]
 Qt Signal → UI Rendering
 ```
 
+### Example: Footer Data Flow
+
+The optional footer demonstrates the signal-based communication pattern:
+
+1. **TelemetryProcessor.get_footer_data()** reads iRSDK fields:
+   - `TrackTemp` (track surface temperature)
+   - `PlayerCarMyIncidentCount` (player incidents)
+   - `WeekendInfo['WeekendOptions']['IncidentLimit']` (incident limit)
+   - Calculates SoF from `DriverInfo['Drivers']` (filtered by player's class)
+
+2. **league_overlay._handle_telemetry_update()** calls `get_footer_data()` and emits `update_footer` signal (telemetry thread)
+
+3. **league_overlay.update_footer_display()** receives signal and updates QLabels (main thread)
+
+This pattern ensures thread-safe UI updates and clean separation between telemetry logic and UI rendering.
+
 ---
 
 ## Threading Model

@@ -412,6 +412,7 @@ class TelemetryProcessor:
             division_position=current_color_position,
             division_color=division_color,
             division_name=division_name,
+            current_lap=current_lap,
             gap_to_leader=gap_to_leader if not (is_disconnected and not is_finished) else "(DC)",
             interval=interval if not (is_disconnected and not is_finished) else "(DC)",
             delta=delta,
@@ -1528,3 +1529,55 @@ class TelemetryProcessor:
         except Exception as e:
             logger.error(f"Processing error: {e}", exc_info=True)
             return None
+
+    def get_footer_data(self) -> Dict[str, Any]:
+        """Get footer data: track temperature, incidents, incident limit, and SoF.
+
+        Returns:
+            Dictionary with keys:
+                - track_temp: Track surface temperature in Celsius (float or None)
+                - incidents: Player's current incident count (int or None)
+                - incident_limit: Session incident limit (int or None, None = unlimited)
+                - sof: Strength of Field (average iRating, int or None)
+        """
+        footer_data: Dict[str, Any] = {}
+
+        # Track temperature (Celsius)
+        try:
+            footer_data['track_temp'] = self.ir['TrackTemp']
+        except (KeyError, TypeError):
+            footer_data['track_temp'] = None
+
+        # Incidents (player only)
+        try:
+            footer_data['incidents'] = self.ir['PlayerCarMyIncidentCount']
+        except (KeyError, TypeError):
+            footer_data['incidents'] = None
+
+        # Incident limit from WeekendOptions
+        try:
+            footer_data['incident_limit'] = self.ir['WeekendInfo']['WeekendOptions']['IncidentLimit']
+        except (KeyError, TypeError):
+            footer_data['incident_limit'] = None
+
+        # Calculate SoF from DriverInfo (average of non-zero iRatings in player's class)
+        try:
+            drivers = self.ir['DriverInfo']['Drivers']
+            
+            # Get player's car class ID from position calculator (already cached)
+            player_car_class_id = self.position_calculator.player_car_class_id
+            
+            # Only calculate if we have the player's class
+            if player_car_class_id is not None:
+                iratings = [
+                    d.get('IRating', 0) 
+                    for d in drivers 
+                    if d.get('CarClassID') == player_car_class_id and d.get('IRating', 0) > 0
+                ]
+                footer_data['sof'] = sum(iratings) // len(iratings) if iratings else None
+            else:
+                footer_data['sof'] = None
+        except (KeyError, TypeError, ZeroDivisionError):
+            footer_data['sof'] = None
+
+        return footer_data

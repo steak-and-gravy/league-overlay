@@ -17,7 +17,7 @@ import time
 import os
 import re
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import irsdk
 
 # Import from modular structure
@@ -98,8 +98,10 @@ class LeagueOverlay(QMainWindow):
         self.signals.update_data.connect(self.display_race_data)
         self.signals.update_status.connect(self.update_status_label)
         self.signals.refresh_colors.connect(self.refresh_driver_colors)
+        self.signals.update_footer.connect(self.update_footer_display)
 
         self.player_car_idx = None  # Player's car (from iRacing API)
+        self.class_leader_lap: Optional[int] = None  # Cached class leader lap for status display
 
         # Auto-centering controller
         self.auto_center = AutoCenterController(timeout=UI_CONFIG.MANUAL_SCROLL_TIMEOUT)
@@ -395,6 +397,35 @@ class LeagueOverlay(QMainWindow):
         self.scroll_area.verticalScrollBar().valueChanged.connect(self.on_manual_scroll)
         self.main_layout.addWidget(self.scroll_area)
 
+        # Footer (optional)
+        self.footer_frame = QWidget()
+        self.footer_frame.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.HEADER_DARK_GRAY)};")
+        self.footer_layout = QHBoxLayout(self.footer_frame)
+        self.footer_layout.setContentsMargins(5, 5, 5, 5)
+        self.footer_layout.setSpacing(10)
+
+        # Left: Strength of Field
+        self.sof_label = QLabel("SoF: ----")
+        self.sof_label.setStyleSheet(f"color: white; font-size: {self.get_font_size('status')}pt; font-weight: bold;")
+        self.sof_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.footer_layout.addWidget(self.sof_label)
+
+        # Center: Incidents
+        self.incidents_label = QLabel("--x")
+        self.incidents_label.setStyleSheet(f"color: white; font-size: {self.get_font_size('status')}pt; font-weight: bold;")
+        self.incidents_label.setAlignment(Qt.AlignCenter)
+        self.footer_layout.addWidget(self.incidents_label)
+
+        # Right: Track temperature
+        self.track_temp_label = QLabel("🛣️ --°F/--°C")
+        self.track_temp_label.setStyleSheet(f"color: white; font-size: {self.get_font_size('status')}pt; font-weight: bold;")
+        self.track_temp_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.footer_layout.addWidget(self.track_temp_label)
+
+        # Initially hidden based on settings
+        self.footer_frame.setVisible(self.settings.show_footer)
+        self.main_layout.addWidget(self.footer_frame)
+
         # Add size grip for resizing
         self.size_grip = CustomSizeGrip(main_widget)
         self.size_grip.set_parent_window(self)
@@ -457,6 +488,47 @@ class LeagueOverlay(QMainWindow):
         """
         self.status_label.setText(text)
         self.update_status_style(color)
+
+    def update_footer_display(self, footer_data: Dict[str, Any]):
+        """Update footer display with track temp, incidents, and SoF.
+
+        Args:
+            footer_data: Dictionary containing:
+                - track_temp: Track temperature in Celsius (float or None)
+                - incidents: Player's current incident count (int or None)
+                - incident_limit: Session incident limit (int or None, None = unlimited)
+                - sof: Strength of Field (average iRating, int or None)
+        """
+        if not self.settings.show_footer:
+            return
+
+        # Track temperature (convert to F and C, display as integers)
+        track_temp = footer_data.get('track_temp')
+        if track_temp is not None:
+            temp_f = int((track_temp * 9/5) + 32)
+            temp_c = int(track_temp)
+            self.track_temp_label.setText(f"🛣️ {temp_f}°F/{temp_c}°C")
+        else:
+            self.track_temp_label.setText("🛣️ --°F/--°C")
+
+        # Incidents (with limit if available)
+        incidents = footer_data.get('incidents')
+        incident_limit = footer_data.get('incident_limit')
+        if incidents is not None:
+            if incident_limit is not None and incident_limit != "Unlimited":
+                self.incidents_label.setText(f"{incidents}x/{incident_limit}")
+            else:
+                self.incidents_label.setText(f"{incidents}x/∞")
+        else:
+            self.incidents_label.setText("--x")
+
+        # Strength of Field (format as 2.4k)
+        sof = footer_data.get('sof')
+        if sof is not None:
+            sof_k = sof / 1000.0
+            self.sof_label.setText(f"SoF: {sof_k:.1f}k")
+        else:
+            self.sof_label.setText("SoF: ----")
 
     def create_title_bar(self):
         """Create custom title bar"""
@@ -807,6 +879,10 @@ class LeagueOverlay(QMainWindow):
             self._last_emitted_data = []
             self.signals.update_data.emit(self.displayed_data.copy())
 
+        # Update footer visibility based on settings
+        if hasattr(self, 'footer_frame'):
+            self.footer_frame.setVisible(self.settings.show_footer)
+
     def reload_division_config(self, config_file_path: str) -> None:
         """Reload division configuration from a different config file.
 
@@ -1049,12 +1125,25 @@ class LeagueOverlay(QMainWindow):
                             self.player_car_idx,
                             self.division_manager.get_driver_color)
 
+            # Cache class leader lap for status display (use first entry after filtering)
+            if current_data:
+                self.class_leader_lap = current_data[0].current_lap
+            else:
+                self.class_leader_lap = None
+
             # Check if data changed structurally
             data_changed = self._has_data_changed(current_data)
 
             if data_changed:
                 self._last_emitted_data = current_data.copy()
                 self.signals.update_data.emit(current_data)
+        else:
+            self.class_leader_lap = None
+
+        # Emit footer data if footer is enabled
+        if self.settings.show_footer:
+            footer_data = self.telemetry_processor.get_footer_data()
+            self.signals.update_footer.emit(footer_data)
 
     def _has_data_changed(self, new_data: List[DriverState]) -> bool:
         """Check if the new data is different from the last emitted data.
@@ -1239,7 +1328,8 @@ class LeagueOverlay(QMainWindow):
             if session_time_total != 'unlimited' and session_time_total not in [0, '0']:
                 try:
                     total_seconds_val = int(float(session_time_total.replace(' sec', '')))
-                    return f"{state_name} - {self._format_time_duration(total_seconds_val)}"
+                    lap_suffix = f" (Lap {self.class_leader_lap})" if self.class_leader_lap is not None else ""
+                    return f"{state_name} - {self._format_time_duration(total_seconds_val)}{lap_suffix}"
                 except (ValueError, TypeError, AttributeError):
                     return state_name
             else:
@@ -1247,7 +1337,8 @@ class LeagueOverlay(QMainWindow):
         elif session_time_remain is not None and session_time_remain > 0:
             # During active session, show remaining time
             total_seconds = int(session_time_remain)
-            return f"{state_name} - {self._format_time_duration(total_seconds)}"
+            lap_suffix = f" (Lap {self.class_leader_lap})" if self.class_leader_lap is not None else ""
+            return f"{state_name} - {self._format_time_duration(total_seconds)}{lap_suffix}"
         else:
             return state_name
 
