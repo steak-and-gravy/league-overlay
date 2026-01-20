@@ -74,6 +74,32 @@ Rule:
 
 ---
 
+## Player Identification & Caching
+
+`PositionCalculator` caches player identification data:
+- `player_car_idx` — player's car index from `PlayerCarIdx`
+- `player_car_class_id` — player's car class from `DriverInfo`
+
+**Important**: Always use cached values from `PositionCalculator` rather than re-querying:
+
+```python
+# ✓ Correct - use cached value
+player_class_id = self.position_calculator.player_car_class_id
+
+# ✗ Wrong - don't re-lookup from drivers
+player_idx = self.position_calculator.player_car_idx
+player_class_id = drivers[player_idx].get('CarClassID')  # May fail, may be stale
+```
+
+**Why**: Player identification happens once via `identify_player()` which handles edge cases (spectating, replays, etc). The cached values are authoritative and always available after identification.
+
+**Usage examples**:
+- SoF calculation (filter by player's class)
+- Gap calculations (same-class filtering)
+- Division filtering (player's perspective)
+
+---
+
 ## Positioning Model (Invariant)
 
 ### Unified `position`

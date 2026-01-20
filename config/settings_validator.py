@@ -184,6 +184,11 @@ class SettingsValidator:
             default=self.defaults['show_pit_lap'],
             field_name='show_pit_lap'
         )
+        validated['show_footer'] = self.coerce_bool(
+            data.get('show_footer'),
+            default=self.defaults['show_footer'],
+            field_name='show_footer'
+        )
 
         # Enum fields (limited valid values)
         validated['font_size'] = self.coerce_enum(
