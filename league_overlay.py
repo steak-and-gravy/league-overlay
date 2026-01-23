@@ -515,7 +515,7 @@ class LeagueOverlay(QMainWindow):
         incidents = footer_data.get('incidents')
         incident_limit = footer_data.get('incident_limit')
         if incidents is not None:
-            if incident_limit is not None and incident_limit != "Unlimited":
+            if incident_limit is not None and incident_limit != "unlimited":
                 self.incidents_label.setText(f"{incidents}x/{incident_limit}")
             else:
                 self.incidents_label.setText(f"{incidents}x/∞")
@@ -1328,8 +1328,7 @@ class LeagueOverlay(QMainWindow):
             if session_time_total != 'unlimited' and session_time_total not in [0, '0']:
                 try:
                     total_seconds_val = int(float(session_time_total.replace(' sec', '')))
-                    lap_suffix = f" (Lap {self.class_leader_lap})" if self.class_leader_lap is not None else ""
-                    return f"{state_name} - {self._format_time_duration(total_seconds_val)}{lap_suffix}"
+                    return f"{state_name} - {self._format_time_duration(total_seconds_val)}"
                 except (ValueError, TypeError, AttributeError):
                     return state_name
             else:
@@ -1337,7 +1336,7 @@ class LeagueOverlay(QMainWindow):
         elif session_time_remain is not None and session_time_remain > 0:
             # During active session, show remaining time
             total_seconds = int(session_time_remain)
-            lap_suffix = f" (Lap {self.class_leader_lap})" if self.class_leader_lap is not None else ""
+            lap_suffix = f" (Lap {self.class_leader_lap})" if state_name == "Race" and self.class_leader_lap is not None else ""
             return f"{state_name} - {self._format_time_duration(total_seconds)}{lap_suffix}"
         else:
             return state_name
