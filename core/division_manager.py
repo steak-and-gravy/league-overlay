@@ -41,7 +41,7 @@ class DivisionManager:
 
     def _load_official_league(self) -> None:
         """Load driver config from official remote league."""
-        from config.official_leagues import get_official_league
+        from config.official_leagues import get_official_league, get_full_league_url
         import requests
 
         league_name = self.config_file.replace("official:", "")
@@ -55,7 +55,8 @@ class DivisionManager:
 
         # Try to fetch from remote
         try:
-            response = requests.get(league.url, timeout=10)
+            league_url = get_full_league_url(league)
+            response = requests.get(league_url, timeout=10)
             response.raise_for_status()
             data = response.json()
 

@@ -118,12 +118,17 @@ class LeagueOverlay(QMainWindow):
         self.settings_manager = SettingsManager(FILE_CONFIG.SETTINGS_FILE)
         self.settings = self.settings_manager.load()
 
+        # Load official leagues (from cache or fallback)
+        from config.official_leagues import load_official_leagues_from_json, OFFICIAL_LEAGUES
+        OFFICIAL_LEAGUES.clear()
+        OFFICIAL_LEAGUES.extend(load_official_leagues_from_json())
+        logger.info(f"Loaded {len(OFFICIAL_LEAGUES)} official leagues")
+
         # Color config file (defaults to first official league if not specified in settings)
         if self.settings.league_config:
             self.color_config_file = self.settings.league_config
         else:
             # Default to first official league
-            from config.official_leagues import OFFICIAL_LEAGUES
             if OFFICIAL_LEAGUES:
                 self.color_config_file = f"official:{OFFICIAL_LEAGUES[0].name}"
             else:
@@ -934,7 +939,7 @@ class LeagueOverlay(QMainWindow):
             logger.warning("Cannot refresh - not an official league")
             return (False, "Cannot refresh - not an official league", 0)
 
-        from config.official_leagues import get_official_league
+        from config.official_leagues import get_official_league, get_full_league_url
         import requests
 
         league_name = self.color_config_file.replace("official:", "")
@@ -943,7 +948,8 @@ class LeagueOverlay(QMainWindow):
             league = get_official_league(league_name)
 
             # Fetch from remote
-            response = requests.get(league.url, timeout=10)
+            league_url = get_full_league_url(league)
+            response = requests.get(league_url, timeout=10)
             response.raise_for_status()
             data = response.json()
 
