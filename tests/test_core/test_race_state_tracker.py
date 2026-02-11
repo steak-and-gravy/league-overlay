@@ -226,13 +226,13 @@ class TestSnapshots:
         state1 = DriverState(car_idx=5, position=1)
         tracker.update_snapshot(5, state1)
 
-        state2 = DriverState(car_idx=5, position=2, gap='1.5')
+        state2 = DriverState(car_idx=5, position=2, gap_to_leader='1.5')
         tracker.update_snapshot(5, state2)
 
         retrieved = tracker.get_snapshot(5)
         assert retrieved == state2
         assert retrieved.position == 2
-        assert retrieved.gap == '1.5'
+        assert retrieved.gap_to_leader == '1.5'
 
     def test_mark_finished_updates_snapshot_position(self, mock_ir):
         """Test marking driver finished updates snapshot with position."""

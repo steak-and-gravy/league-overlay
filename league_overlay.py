@@ -1109,6 +1109,9 @@ class LeagueOverlay(QMainWindow):
             self.current_session_type != self.telemetry_processor.current_session_type
         )
 
+        # Check if starting positions were updated (qualifying results loaded)
+        starting_positions_updated = self.race_state_tracker.consume_starting_positions_update()
+
         # Sync session info from telemetry processor
         self.current_session_id = self.telemetry_processor.current_session_id
         self.current_session_type = self.telemetry_processor.current_session_type
@@ -1140,7 +1143,7 @@ class LeagueOverlay(QMainWindow):
             # Check if data changed structurally
             data_changed = self._has_data_changed(current_data)
 
-            if data_changed:
+            if data_changed or starting_positions_updated:
                 self._last_emitted_data = current_data.copy()
                 self.signals.update_data.emit(current_data)
         else:
@@ -1285,7 +1288,8 @@ class LeagueOverlay(QMainWindow):
             return f"{minutes}:{seconds:02d}"
 
     def _format_lap_based_status(self, state_name: str, session_state: int,
-                                 session_laps_total: str) -> str:
+                                 session_laps_total: str, session_type: str,
+                                 current_session: Optional[Dict] = None) -> str:
         """Format status text for lap-based sessions.
 
         Args:
@@ -1306,11 +1310,28 @@ class LeagueOverlay(QMainWindow):
             # During pacing (negative laps) or before race starts
             if race_laps <= 0 or session_state in [2, 3]:
                 # Show total laps scheduled
-                return f"{state_name} - {laps_total} Lap{'s' if laps_total != 1 else ''}"
+                status = f"{state_name} - {laps_total} Lap{'s' if laps_total != 1 else ''}"
             else:
                 # During racing, show current/total
                 current_lap = race_laps
-                return f"{state_name} - Lap {current_lap}/{laps_total}"
+                status = f"{state_name} - Lap {current_lap}/{laps_total}"
+
+            # Solo qualifying: append time remaining when available
+            if session_type and "qual" in session_type.lower():
+                session_time_remain = None
+                try:
+                    session_time_remain = self.ir['SessionTimeRemain']
+                except (KeyError, TypeError):
+                    session_time_remain = None
+
+                if (session_time_remain is None or session_time_remain <= 0) and current_session:
+                    session_time_remain = current_session.get('SessionTimeRemain')
+
+                if session_time_remain is not None and session_time_remain > 0:
+                    total_seconds = int(session_time_remain)
+                    status = f"{status} ({self._format_time_duration(total_seconds)})"
+
+            return status
         except (ValueError, TypeError):
             return state_name
 
@@ -1342,7 +1363,8 @@ class LeagueOverlay(QMainWindow):
         elif session_time_remain is not None and session_time_remain > 0:
             # During active session, show remaining time
             total_seconds = int(session_time_remain)
-            lap_suffix = f" (Lap {self.class_leader_lap})" if state_name == "Race" and self.class_leader_lap is not None else ""
+            class_leader_lap = getattr(self, "class_leader_lap", None)
+            lap_suffix = f" (Lap {class_leader_lap})" if state_name == "Race" and class_leader_lap is not None else ""
             return f"{state_name} - {self._format_time_duration(total_seconds)}{lap_suffix}"
         else:
             return state_name
@@ -1373,7 +1395,9 @@ class LeagueOverlay(QMainWindow):
                            session_laps_total not in [0, '0'])
 
             if is_lap_based:
-                return self._format_lap_based_status(state_name, session_state, session_laps_total)
+                return self._format_lap_based_status(
+                    state_name, session_state, session_laps_total, session_type, current_session
+                )
             else:
                 return self._format_time_based_status(state_name, session_state, current_session)
 

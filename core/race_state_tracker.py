@@ -46,6 +46,7 @@ class RaceStateTracker:
         self.player_class_car_indices: Optional[Set[int]] = None
         self.starting_positions: Dict[int, int] = {}  # Maps car_idx to starting grid position
         self.starting_positions_loaded: bool = False  # Track if we've attempted to load starting positions
+        self.starting_positions_updated: bool = False  # Flag for UI refresh after loading positions
         self.results_restored_drivers: Set[int] = set()  # Track which drivers we've logged as restored from ResultsPositions
 
     def is_racing(self) -> bool:
@@ -215,6 +216,7 @@ class RaceStateTracker:
 
                     if self.starting_positions:
                         logger.info(f"STARTING_POSITIONS - Loaded {len(self.starting_positions)} starting positions from QualifyResultsInfo")
+                        self.starting_positions_updated = True
                         # Cancel any pending retries since we succeeded
                         self._cancel_retry_timer()
                         return
@@ -253,6 +255,7 @@ class RaceStateTracker:
                         if self.starting_positions:
                             session_type = qualify_session.get('SessionType', 'unknown')
                             logger.info(f"STARTING_POSITIONS - Loaded {len(self.starting_positions)} starting positions from {session_type} session")
+                            self.starting_positions_updated = True
                             # Cancel any pending retries since we succeeded
                             self._cancel_retry_timer()
                             return
@@ -279,6 +282,17 @@ class RaceStateTracker:
             Starting position (0 if not found or not available)
         """
         return self.starting_positions.get(car_idx, 0)
+
+    def consume_starting_positions_update(self) -> bool:
+        """Check and clear starting positions update flag.
+
+        Returns:
+            True if starting positions were updated since last check, else False
+        """
+        if self.starting_positions_updated:
+            self.starting_positions_updated = False
+            return True
+        return False
 
     # ═══════════════════════════════════════════════════════════════════════════
     # FINISH STATUS TRACKING
