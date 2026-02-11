@@ -133,45 +133,58 @@ class TestSessionStatusFormatting:
     def test_format_lap_based_status_before_start(self, mock_app):
         """Before race starts, show total laps scheduled."""
         mock_app.ir.__getitem__ = Mock(return_value=0)
-        result = mock_app._format_lap_based_status("Race", 3, "20")
+        result = mock_app._format_lap_based_status("Race", 3, "20", "Race", {})
         assert result == "Race - 20 Laps"
 
     def test_format_lap_based_status_during_pacing(self, mock_app):
         """During pacing, show total laps scheduled."""
         mock_app.ir.__getitem__ = Mock(return_value=-1)
-        result = mock_app._format_lap_based_status("Pacing", 3, "20")
+        result = mock_app._format_lap_based_status("Pacing", 3, "20", "Race", {})
         assert result == "Pacing - 20 Laps"
 
     def test_format_lap_based_status_single_lap(self, mock_app):
         """Single lap should not be pluralized."""
         mock_app.ir.__getitem__ = Mock(return_value=0)
-        result = mock_app._format_lap_based_status("Race", 3, "1")
+        result = mock_app._format_lap_based_status("Race", 3, "1", "Race", {})
         assert result == "Race - 1 Lap"
 
     def test_format_lap_based_status_during_race(self, mock_app):
         """During race, show current/total laps."""
         mock_app.ir.__getitem__ = Mock(return_value=5)
-        result = mock_app._format_lap_based_status("Race", 4, "20")
+        result = mock_app._format_lap_based_status("Race", 4, "20", "Race", {})
         assert result == "Race - Lap 5/20"
 
     def test_format_lap_based_status_final_lap(self, mock_app):
         """Final lap should show correctly."""
         mock_app.ir.__getitem__ = Mock(return_value=20)
-        result = mock_app._format_lap_based_status("Checkered", 5, "20")
+        result = mock_app._format_lap_based_status("Checkered", 5, "20", "Race", {})
         assert result == "Checkered - Lap 20/20"
 
     def test_format_lap_based_status_invalid_laps(self, mock_app):
         """Invalid lap count should return state name only."""
         mock_app.ir.__getitem__ = Mock(return_value=0)
-        result = mock_app._format_lap_based_status("Race", 3, "invalid")
+        result = mock_app._format_lap_based_status("Race", 3, "invalid", "Race", {})
         assert result == "Race"
 
     def test_format_lap_based_status_ir_error(self, mock_app):
         """iRacing data errors should be handled gracefully."""
         mock_app.ir.__getitem__ = Mock(side_effect=KeyError("RaceLaps"))
-        result = mock_app._format_lap_based_status("Race", 4, "20")
+        result = mock_app._format_lap_based_status("Race", 4, "20", "Race", {})
         # Should still work with RaceLaps defaulting to 0
         assert result == "Race - 20 Laps"
+
+    def test_format_lap_based_status_qualify_appends_time(self, mock_app):
+        """Qualifying lap-based sessions should append time remaining."""
+        def mock_getitem(key):
+            if key == "RaceLaps":
+                return 1
+            if key == "SessionTimeRemain":
+                return 600
+            raise KeyError(key)
+
+        mock_app.ir.__getitem__ = Mock(side_effect=mock_getitem)
+        result = mock_app._format_lap_based_status("Qualify", 4, "4", "Qualify", {})
+        assert result == "Qualify - Lap 1/4 - 10:00"
 
     # ═══════════════════════════════════════════════════════════════════
     # TIME-BASED STATUS FORMATTING TESTS

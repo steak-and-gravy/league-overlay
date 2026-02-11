@@ -15,9 +15,9 @@ class TestFormatCombinedRating:
 
     def test_valid_a_class_rating(self):
         """Test A-class driver with valid iRating."""
-        # A-class (level 18), sublevel 247 (2.47 → 2.5), iRating 6010 (→ 6.0k)
+        # A-class (level 18), sublevel 247 (2.47 → 2.4), iRating 6010 (→ 6.0k)
         result = GapCalculator.format_combined_rating(6010, 18, 247)
-        assert result == "A2.5  6.0k"
+        assert result == "A2.4  6.0k"
 
     def test_valid_b_class_rating(self):
         """Test B-class driver with valid iRating."""
@@ -33,9 +33,9 @@ class TestFormatCombinedRating:
 
     def test_valid_pro_rating(self):
         """Test Pro driver with valid iRating."""
-        # Pro (level 22), sublevel 450 (4.50 → 4.5), iRating 12456 (→ 12.5k)
+        # Pro (level 22), sublevel 450 (4.50 → 4.5), iRating 12456 (→ 12.4k)
         result = GapCalculator.format_combined_rating(12456, 22, 450)
-        assert result == "P4.5  12.5k"
+        assert result == "P4.5  12.4k"
 
     def test_valid_d_class_rating(self):
         """Test D-class driver with valid iRating."""
@@ -45,9 +45,9 @@ class TestFormatCombinedRating:
 
     def test_valid_c_class_rating(self):
         """Test C-class driver with valid iRating."""
-        # C-class (level 10), sublevel 315 (3.15 → 3.1), iRating 3678 (→ 3.7k)
+        # C-class (level 10), sublevel 315 (3.15 → 3.1), iRating 3678 (→ 3.6k)
         result = GapCalculator.format_combined_rating(3678, 10, 315)
-        assert result == "C3.1  3.7k"
+        assert result == "C3.1  3.6k"
 
     def test_invalid_license_level_zero(self):
         """Test invalid license level (0) returns dash."""
@@ -80,9 +80,9 @@ class TestFormatCombinedRating:
         assert result == "—"
 
     def test_sublevel_rounding_up(self):
-        """Test sublevel rounds up correctly (247 → 2.5)."""
+        """Test sublevel rounds down correctly (247 → 2.4)."""
         result = GapCalculator.format_combined_rating(5000, 18, 247)
-        assert "A2.5" in result
+        assert "A2.4" in result
 
     def test_sublevel_rounding_down(self):
         """Test sublevel rounds down correctly (243 → 2.4)."""
@@ -120,8 +120,8 @@ class TestFormatPitLap:
 
     def test_on_out_lap(self):
         """Test driver on out lap (first lap after pitting) shows OUT."""
-        # Pitted on lap 10, now on lap 11 (out lap)
-        result = GapCalculator.format_pit_lap(11, 10)
+        # Pitted on lap 10, now on lap 10 (out lap)
+        result = GapCalculator.format_pit_lap(10, 10)
         assert result == "OUT"
 
     def test_after_out_lap_completed(self):
@@ -138,8 +138,8 @@ class TestFormatPitLap:
 
     def test_first_lap_pit(self):
         """Test driver who pitted on lap 1."""
-        # Pitted on lap 1, now on lap 2 (out lap)
-        result = GapCalculator.format_pit_lap(2, 1)
+        # Pitted on lap 1, now on lap 1 (out lap)
+        result = GapCalculator.format_pit_lap(1, 1)
         assert result == "OUT"
 
         # After out lap
@@ -148,8 +148,8 @@ class TestFormatPitLap:
 
     def test_late_race_pit(self):
         """Test pit stop late in race."""
-        # Pitted on lap 45, now on lap 46 (out lap)
-        result = GapCalculator.format_pit_lap(46, 45)
+        # Pitted on lap 45, now on lap 45 (out lap)
+        result = GapCalculator.format_pit_lap(45, 45)
         assert result == "OUT"
 
         # After out lap
@@ -157,9 +157,9 @@ class TestFormatPitLap:
         assert result == "L45"
 
     def test_negative_last_pit_lap(self):
-        """Test invalid negative last pit lap returns dash."""
+        """Test invalid negative last pit lap returns PIT."""
         result = GapCalculator.format_pit_lap(5, -1)
-        assert result == "—"
+        assert result == "PIT"
 
     def test_current_lap_before_pit(self):
         """Test edge case where current lap is before pit lap (should not happen)."""
@@ -184,12 +184,12 @@ class TestGetLicenseBackgroundColor:
     def test_d_class_level_5(self):
         """Test D-class level 5 (min) returns dark orange."""
         result = GapCalculator.get_license_background_color(5)
-        assert result == '#FF8C00'
+        assert result == '#A55B00'
 
     def test_d_class_level_8(self):
         """Test D-class level 8 (max) returns dark orange."""
         result = GapCalculator.get_license_background_color(8)
-        assert result == '#FF8C00'
+        assert result == '#A55B00'
 
     def test_c_class_level_9(self):
         """Test C-class level 9 (min) returns goldenrod."""

@@ -1186,7 +1186,7 @@ class TestCarSpecificTimeNormalization:
         current_session = {'ResultsPositions': []}
 
         # Calculate gap with normalization
-        gap = processor._calculate_live_race_gap(
+        gap = processor._calculate_live_race_interval(
             driver_current,
             "#FFFFFF",
             active_drivers,
@@ -1261,7 +1261,7 @@ class TestCarSpecificTimeNormalization:
         current_session = {'ResultsPositions': []}
 
         # Calculate gap with normalization
-        gap = processor._calculate_live_race_gap(
+        gap = processor._calculate_live_race_interval(
             driver_current,
             "#FFFFFF",
             active_drivers,
@@ -1311,7 +1311,7 @@ class TestCarSpecificTimeNormalization:
         current_session = {'ResultsPositions': []}
 
         # Calculate gap - should fall back to non-normalized calculation
-        gap = processor._calculate_live_race_gap(
+        gap = processor._calculate_live_race_interval(
             driver_current,
             "#FFFFFF",
             active_drivers,
@@ -1360,7 +1360,7 @@ class TestCarSpecificTimeNormalization:
         current_session = {'ResultsPositions': []}
 
         # This should not crash (division by zero protection)
-        gap = processor._calculate_live_race_gap(
+        gap = processor._calculate_live_race_interval(
             driver_current,
             "#FFFFFF",
             active_drivers,
@@ -1429,7 +1429,7 @@ class TestCarSpecificTimeNormalization:
         current_session = {'ResultsPositions': []}
 
         # Calculate gap with normalization (different laps)
-        gap = processor._calculate_live_race_gap(
+        gap = processor._calculate_live_race_interval(
             driver_current,
             "#FFFFFF",
             active_drivers,
@@ -1507,25 +1507,25 @@ class TestFinishingGapCalculation:
             return ("#FFFFFF", "Pro")
 
         # Test P1 (overall leader)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             0, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "Leader"
 
         # Test P2 (2.5s behind P1)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "2.5"
 
         # Test P3 (3.3s behind P2: 5.8456 - 2.5123 = 3.3333)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             2, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "3.3"
 
         # Test P4 (2.3s behind P3: 8.1234 - 5.8456 = 2.2778)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             3, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "2.3"
@@ -1555,25 +1555,25 @@ class TestFinishingGapCalculation:
         processor.race_state_tracker.mark_driver_finished(3, official_position=4, finish_lap=13)
 
         # Test P1 (leader)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             0, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "Leader"
 
         # Test P2 (1 lap down from P1)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "1L"
 
         # Test P3 (same lap as P2, time gap: 11.6291 - 6.5095 = 5.1196)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             2, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "5.1"
 
         # Test P4 (1 lap down from P3: 14 - 13 = 1)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             3, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "1L"
@@ -1638,25 +1638,25 @@ class TestFinishingGapCalculation:
             return color_map.get(car_idx, "#FFFFFF")
 
         # Test P1 (Pro division leader - red)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             0, "#FF0000", session_data, mock_get_color, show_division=True
         )
         assert gap == "Leader"
 
         # Test P2 (ProAm division leader - blue)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             1, "#0000FF", session_data, mock_get_color, show_division=True
         )
         assert gap == "Leader"
 
         # Test P3 (ProAm, 2nd in division - blue, time gap to P2: 11.6291 - 6.5095 = 5.1196)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             2, "#0000FF", session_data, mock_get_color, show_division=True
         )
         assert gap == "5.1"
 
         # Test P4 (Am division leader - green)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             3, "#00FF00", session_data, mock_get_color, show_division=True
         )
         assert gap == "Leader"
@@ -1682,13 +1682,13 @@ class TestFinishingGapCalculation:
         processor.race_state_tracker.mark_driver_finished(1, official_position=2, finish_lap=14)
 
         # Test P1 (division leader)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             0, "#FFFFFF", session_data, mock_get_color, show_division=True
         )
         assert gap == "Leader"
 
         # Test P2 (same division, 1 lap down)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             1, "#FFFFFF", session_data, mock_get_color, show_division=True
         )
         assert gap == "1L"
@@ -1703,7 +1703,7 @@ class TestFinishingGapCalculation:
         def mock_get_color(driver_info):
             return ("#FFFFFF", "Pro")
 
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             0, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == ""
@@ -1723,7 +1723,7 @@ class TestFinishingGapCalculation:
             return ("#FFFFFF", "Pro")
 
         # Query for CarIdx 99 which doesn't exist
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             99, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == ""
@@ -1745,7 +1745,7 @@ class TestFinishingGapCalculation:
             return ("#FFFFFF", "Pro")
 
         # Should return "0.0" instead of negative value
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
         assert gap == "0.0"
@@ -1800,7 +1800,7 @@ class TestFinishingGapCalculation:
             return ("#FFFFFF", "Pro")
 
         # Call _calculate_gap (should use finishing gap logic)
-        gap = processor._calculate_gap(
+        gap = processor._calculate_interval(
             driver,
             current_color_position=1,
             current_driver_color="#FFFFFF",
@@ -1837,7 +1837,7 @@ class TestFinishingGapCalculation:
         def mock_get_color(driver_info):
             return ("#FFFFFF", "Pro")
 
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
 
@@ -1865,7 +1865,8 @@ class TestFinishingGapCalculation:
         driver_state = processor._build_race_data_entry(
             driver=driver,
             division_positions=division_positions,
-            gap=gap,
+            interval="",
+            gap_to_leader=gap,
             display_position=1,
             division_color="#FFFFFF",
             division_name="Pro",
@@ -1876,7 +1877,7 @@ class TestFinishingGapCalculation:
         )
 
         # Should show gap, not "(DC)" because driver finished before disconnecting
-        assert driver_state.gap == "2.5"
+        assert driver_state.gap_to_leader == "2.5"
         assert driver_state.is_disconnected == True  # Flag is still set
 
     def test_racing_disconnected_driver_shows_dc(self, processor):
@@ -1898,7 +1899,8 @@ class TestFinishingGapCalculation:
         driver_state = processor._build_race_data_entry(
             driver=driver,
             division_positions=division_positions,
-            gap=gap,
+            interval="",
+            gap_to_leader=gap,
             display_position=2,
             division_color="#FFFFFF",
             division_name="Pro",
@@ -1909,7 +1911,7 @@ class TestFinishingGapCalculation:
         )
 
         # Should show "(DC)" because driver disconnected while racing (not finished)
-        assert driver_state.gap == "(DC)"
+        assert driver_state.gap_to_leader == "(DC)"
         assert driver_state.is_disconnected == True
 
     def test_stale_results_positions_returns_empty(self, mock_ir):
@@ -1964,7 +1966,7 @@ class TestFinishingGapCalculation:
             return ("#FFFFFF", "Pro")
 
         # Test CarIdx 1 with stale data (ResultsPositions=14, Live=15)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
 
@@ -2023,7 +2025,7 @@ class TestFinishingGapCalculation:
             return ("#FFFFFF", "Pro")
 
         # Test CarIdx 1 with current data (ResultsPositions=15, Live=15)
-        gap = processor._calculate_finishing_gap_from_results(
+        gap = processor._calculate_finishing_interval_from_results(
             1, "#FFFFFF", session_data, mock_get_color, show_division=False
         )
 
