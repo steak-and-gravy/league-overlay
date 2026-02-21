@@ -1914,6 +1914,40 @@ class TestFinishingGapCalculation:
         assert driver_state.gap_to_leader == "(DC)"
         assert driver_state.is_disconnected == True
 
+    def test_racing_disconnected_driver_hides_out_pit_status(self, processor):
+        """Disconnected racing drivers should not show OUT/PIT/TOW in pit column."""
+        processor.position_calculator.player_car_idx = 99  # Not this driver
+
+        car_idx = 2
+        driver = {
+            'car_idx': car_idx,
+            'driver_info': {'UserID': 102, 'UserName': 'Driver C', 'CarIdx': car_idx},
+            'disconnected': True,
+            'current_lap': 11
+        }
+
+        # Simulate that this car would otherwise display OUT.
+        processor.pit_tracking[car_idx] = 10
+        processor.pit_on_road[car_idx] = False
+        processor.pit_exit_out_lap[car_idx] = 11
+
+        driver_state = processor._build_race_data_entry(
+            driver=driver,
+            division_positions={car_idx: 3},
+            interval="",
+            gap_to_leader="8.1",
+            display_position=3,
+            division_color="#FFFFFF",
+            division_name="Pro",
+            delta="--",
+            last_lap_time=122.0,
+            best_lap_time=121.0,
+            starting_position=5
+        )
+
+        assert driver_state.gap_to_leader == "(DC)"
+        assert driver_state.pit_lap == "—"
+
     def test_stale_results_positions_returns_empty(self, mock_ir):
         """Test that stale ResultsPositions data (lap count behind live) returns empty string."""
         # Create a real dict-based mock for this test

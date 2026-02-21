@@ -422,7 +422,7 @@ class LeagueOverlay(QMainWindow):
         self.footer_layout.addWidget(self.incidents_label)
 
         # Right: Track temperature
-        self.track_temp_label = QLabel("🛣️ --°F/--°C")
+        self.track_temp_label = QLabel("🛣️ --°F / --°C")
         self.track_temp_label.setStyleSheet(f"color: white; font-size: {self.get_font_size('status')}pt; font-weight: bold;")
         self.track_temp_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.footer_layout.addWidget(self.track_temp_label)
@@ -512,9 +512,9 @@ class LeagueOverlay(QMainWindow):
         if track_temp is not None:
             temp_f = int((track_temp * 9/5) + 32)
             temp_c = int(track_temp)
-            self.track_temp_label.setText(f"🛣️ {temp_f}°F/{temp_c}°C")
+            self.track_temp_label.setText(f"🛣️ {temp_f}°F / {temp_c}°C")
         else:
-            self.track_temp_label.setText("🛣️ --°F/--°C")
+            self.track_temp_label.setText("🛣️ --°F / --°C")
 
         # Incidents (with limit if available)
         incidents = footer_data.get('incidents')

@@ -134,6 +134,9 @@ class DriverState:
     pit_lap: str = ""
     """Formatted combined pit lap (shows OUT during out lap, L12 otherwise)"""
 
+    is_towing: bool = False
+    """True if driver appears to be in tow (teleported to pits)"""
+
     # ═══════════════════════════════════════════════════════════════════════════
     # COMPUTED PROPERTIES
     # ═══════════════════════════════════════════════════════════════════════════

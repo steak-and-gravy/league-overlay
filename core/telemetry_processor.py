@@ -26,6 +26,7 @@ duplicates in the overall standings. Prevents stale track data contamination.
 """
 
 from typing import Dict, List, Optional, Tuple, Any, Callable
+import time
 import irsdk
 
 from config.constants import TELEMETRY_CONFIG, TIMING
@@ -67,6 +68,7 @@ class TelemetryProcessor:
 
         # Session tracking
         self.current_session_id: Optional[int] = None
+        self.current_subsession_id: Optional[int] = None
         self.current_session_type: Optional[str] = None
 
         # Lap time cache - preserves lap times even when drivers go inactive
@@ -75,7 +77,19 @@ class TelemetryProcessor:
 
         # Pit stop tracking - maps car_idx to last pit lap number
         self.pit_tracking: Dict[int, int] = {}
-        self.temp_pit_tracking: Dict[int, int] = {}
+        self.pit_state: Dict[int, Dict[str, Any]] = {}
+        self.pit_on_road: Dict[int, bool] = {}
+        self.pit_exit_out_lap: Dict[int, int] = {}
+
+        # Tow tracking - maps car_idx to towing status (best-effort heuristic)
+        self.tow_tracking: Dict[int, bool] = {}
+        self.tow_last_surface: Dict[int, int] = {}
+        self.tow_last_on_pit_road: Dict[int, bool] = {}
+        self.tow_last_track_position: Dict[int, float] = {}
+        self.tow_end_time: Dict[int, float] = {}
+        self.tow_seen_off_pit_road: Dict[int, bool] = {}
+        self.tow_frozen_track_position: Dict[int, float] = {}
+        self.tow_last_live_track_position: Dict[int, float] = {}
 
     def reset_fields(self) -> None:
         """Clear all session-specific tracking data.
@@ -94,6 +108,19 @@ class TelemetryProcessor:
 
         # Clear pit tracking on session change
         self.pit_tracking.clear()
+        self.pit_state.clear()
+        self.pit_on_road.clear()
+        self.pit_exit_out_lap.clear()
+
+        # Clear tow tracking on session change
+        self.tow_tracking.clear()
+        self.tow_last_surface.clear()
+        self.tow_last_on_pit_road.clear()
+        self.tow_last_track_position.clear()
+        self.tow_end_time.clear()
+        self.tow_seen_off_pit_road.clear()
+        self.tow_frozen_track_position.clear()
+        self.tow_last_live_track_position.clear()
 
         # Reset prepopulation retry tracking
         self.prepopulate_retry_count = 0
@@ -133,7 +160,9 @@ class TelemetryProcessor:
             session_num = self.ir['SessionNum']
             current_session = self.ir['SessionInfo']['Sessions'][session_num]
             session_type = current_session['SessionType']
-            session_id = self.ir['WeekendInfo']['SessionID']
+            weekend_info = self.ir['WeekendInfo']
+            session_id = weekend_info['SessionID']
+            subsession_id = weekend_info.get('SubSessionID')
             is_race = session_type.lower() == 'race'
         except (KeyError, TypeError, IndexError):
             return None
@@ -155,6 +184,7 @@ class TelemetryProcessor:
 
         session_data = {
             'session_id': session_id,
+            'subsession_id': subsession_id,
             'session_type': session_type,
             'current_session': current_session,
             'results_lookup': results_lookup,  # O(1) lookup dictionary
@@ -171,17 +201,24 @@ class TelemetryProcessor:
         """Detect if session has changed and update tracking.
 
         Args:
-            session_data: Dict with 'session_id' and 'session_type'
+            session_data: Dict with 'session_id', 'subsession_id', and 'session_type'
 
         Returns:
             True if session changed, False otherwise
         """
         session_id = session_data['session_id']
+        subsession_id = session_data.get('subsession_id')
         session_type = session_data['session_type']
 
-        if self.current_session_id != session_id or self.current_session_type != session_type:
-            logger.info(f"Session changed: {session_type} (SessionID: {session_id})")
+        if (self.current_session_id != session_id
+                or self.current_subsession_id != subsession_id
+                or self.current_session_type != session_type):
+            logger.info(
+                f"Session changed: {session_type} "
+                f"(SessionID: {session_id}, SubSessionID: {subsession_id})"
+            )
             self.current_session_id = session_id
+            self.current_subsession_id = subsession_id
             self.current_session_type = session_type
             return True
 
@@ -211,49 +248,219 @@ class TelemetryProcessor:
                 self.lap_time_cache[car_idx] = (valid_best, valid_last)
 
     def _update_pit_tracking(self) -> None:
-        """Update pit tracking by monitoring CarIdxOnPitRoad transitions.
+        """Update pit tracking by monitoring pit-road enter/exit transitions.
 
-        Detects when cars exit pit road (True → False transition) and records
-        the current lap number. This is used for Last Pit Lap and Out Lap columns.
+        A pit stop is only considered valid when a car enters pit road and
+        reaches the pit stall before exiting. Last-pit-lap uses the lap when
+        pit road was entered. Out-lap uses corrected exit-lap semantics to
+        handle start/finish edge cases.
         """
+        TRACK_SURFACE_IN_PIT_STALL = 1
         try:
             car_idx_on_pit_road = self.ir['CarIdxOnPitRoad']
             car_idx_track_surface = self.ir['CarIdxTrackSurface']
             car_idx_lap = self.ir['CarIdxLap']
+            car_idx_lap_pct = self.ir['CarIdxLapDistPct']
 
-            if not car_idx_on_pit_road or not car_idx_lap or not car_idx_track_surface:
+            if (not car_idx_on_pit_road or not car_idx_lap
+                    or not car_idx_track_surface or not car_idx_lap_pct):
                 return
-            
-            for car_idx in range(min(len(car_idx_on_pit_road), len(car_idx_lap), len(car_idx_track_surface))):
-                current_on_pit = car_idx_on_pit_road[car_idx]
-                current_in_stall = car_idx_track_surface[car_idx]
+
+            max_len = min(
+                len(car_idx_on_pit_road),
+                len(car_idx_track_surface),
+                len(car_idx_lap),
+                len(car_idx_lap_pct)
+            )
+
+            for car_idx in range(max_len):
+                current_on_pit = bool(car_idx_on_pit_road[car_idx])
+                current_in_stall = (car_idx_track_surface[car_idx] == TRACK_SURFACE_IN_PIT_STALL)
                 current_lap = car_idx_lap[car_idx]
-                if self.pit_tracking.get(car_idx, -1) >= 0:
-                    # hold last pit lap in case this is a drive-through
-                    self.temp_pit_tracking[car_idx] = self.pit_tracking.get(car_idx)
-                # Track when car exits pit road (transition from pit to track)
-                # We use a sentinel value of -1 to indicate "on pit road currently"
-                # Another value of -2 to indicate they stopped in the pit stall
-                if current_in_stall == 1: # 1 = InPitStall
-                    # Car is in pit stall - mark as -2 (sentinel)
-                    # This is important as we will only park it as an out lap if they actually stopped in the stall
-                    self.pit_tracking[car_idx] = -2
-                elif current_on_pit:
-                    # Car is on pit road - mark as -1 (sentinel) unless they have already been in the pit stall, then leave -2
-                    if self.pit_tracking.get(car_idx) != -2:
-                        self.pit_tracking[car_idx] = -1
-                elif self.pit_tracking.get(car_idx, 0) < 0 and not current_on_pit:
-                    # Car just exited pit road (was -1, now False)
-                    # Record the lap they're now on (the out lap) if they stopped in the pit stall
-                    if self.pit_tracking[car_idx] == -2:
-                        self.pit_tracking[car_idx] = current_lap
-                    else:
-                        self.pit_tracking[car_idx] = self.temp_pit_tracking.get(car_idx, 0)
-                # If car is not on pit road and we have no record, don't update
-                # (haven't seen them pit yet this session)
+                current_lap_pct = car_idx_lap_pct[car_idx]
+
+                state = self.pit_state.setdefault(
+                    car_idx,
+                    {
+                        'in_pit_road_prev': False,
+                        'entry_lap': 0,
+                        'saw_stall': False
+                    }
+                )
+
+                was_on_pit = bool(state['in_pit_road_prev'])
+
+                # Pit-road entry transition: capture lap baseline for this stop.
+                if current_on_pit and not was_on_pit:
+                    state['entry_lap'] = current_lap
+                    state['saw_stall'] = False
+
+                if current_on_pit and current_in_stall:
+                    state['saw_stall'] = True
+
+                # Pit-road exit transition: only commit a pit stop if stall was visited.
+                if not current_on_pit and was_on_pit:
+                    if state['saw_stall']:
+                        entry_lap = int(state['entry_lap']) if state['entry_lap'] > 0 else current_lap
+                        self.pit_tracking[car_idx] = entry_lap
+
+                        out_lap = current_lap + (1 if current_lap_pct > 0.5 else 0)
+                        self.pit_exit_out_lap[car_idx] = out_lap
+
+                    state['entry_lap'] = 0
+                    state['saw_stall'] = False
+
+                self.pit_on_road[car_idx] = current_on_pit
+                state['in_pit_road_prev'] = current_on_pit
 
         except (KeyError, TypeError, IndexError) as e:
             logger.debug(f"Error updating pit tracking: {e}")
+
+    def _update_tow_tracking(self) -> None:
+        """Update tow tracking using pit-stall transitions and tow end timers.
+
+        Player car uses explicit PlayerCarTowTime when available.
+        Other cars use transition-based tow detection with estimated tow end time.
+        """
+        TRACK_SURFACE_IN_PIT_STALL = 1
+        TRACK_SURFACE_APPROACHING_PITS = 2
+
+        try:
+            car_idx_track_surface = self.ir['CarIdxTrackSurface']
+            car_idx_on_pit_road = self.ir['CarIdxOnPitRoad']
+            car_idx_lap = self.ir['CarIdxLap']
+            car_idx_lap_pct = self.ir['CarIdxLapDistPct']
+        except (KeyError, TypeError):
+            return
+
+        try:
+            player_tow_time = float(self.ir['PlayerCarTowTime'])
+        except (KeyError, TypeError, ValueError):
+            player_tow_time = 0.0
+
+        if (not car_idx_track_surface or not car_idx_on_pit_road
+                or not car_idx_lap or not car_idx_lap_pct):
+            return
+
+        player_car_idx = self.position_calculator.player_car_idx
+        now = time.monotonic()
+
+        max_len = min(
+            len(car_idx_track_surface),
+            len(car_idx_on_pit_road),
+            len(car_idx_lap),
+            len(car_idx_lap_pct)
+        )
+
+        for car_idx in range(max_len):
+            current_surface = car_idx_track_surface[car_idx]
+            current_on_pit = car_idx_on_pit_road[car_idx]
+            current_track_position = car_idx_lap[car_idx] + car_idx_lap_pct[car_idx]
+
+            prev_surface = self.tow_last_surface.get(car_idx)
+            prev_on_pit = self.tow_last_on_pit_road.get(car_idx)
+            prev_track_position = self.tow_last_track_position.get(car_idx)
+
+            # Guard against false TOW for pit-lane starters:
+            # require evidence this car has been off pit road at least once.
+            if not current_on_pit:
+                self.tow_seen_off_pit_road[car_idx] = True
+
+            # Player tow timer is authoritative when available.
+            if car_idx == player_car_idx and player_tow_time > 0:
+                self.tow_tracking[car_idx] = True
+                self.tow_end_time[car_idx] = now + player_tow_time
+
+            # Clear tow state when tow timer expires or car leaves pit road/stall.
+            if self.tow_tracking.get(car_idx, False):
+                end_time = self.tow_end_time.get(car_idx, 0.0)
+                player_tow_done = (car_idx == player_car_idx and player_tow_time <= 0)
+                non_player_tow_done = (car_idx != player_car_idx and end_time > 0 and now >= end_time)
+
+                if (player_tow_done
+                        or non_player_tow_done
+                        or (not current_on_pit and current_surface != TRACK_SURFACE_IN_PIT_STALL)):
+                    self.tow_tracking[car_idx] = False
+                    self.tow_end_time[car_idx] = 0.0
+
+            # Detect tow-like transition into pit stall
+            entered_stall = (prev_surface is not None
+                             and prev_surface != TRACK_SURFACE_IN_PIT_STALL
+                             and current_surface == TRACK_SURFACE_IN_PIT_STALL)
+            if entered_stall and current_on_pit and not self.tow_tracking.get(car_idx, False):
+                approached_pits = (prev_surface == TRACK_SURFACE_APPROACHING_PITS)
+                was_on_pit_road = (prev_on_pit is True)
+
+                if (not was_on_pit_road and not approached_pits
+                        and self.tow_seen_off_pit_road.get(car_idx, False)):
+                    self.tow_tracking[car_idx] = True
+                    # Estimate non-player tow duration from teleport distance if possible.
+                    estimated_tow_seconds = None
+                    if prev_track_position is not None:
+                        lap_delta = abs(current_track_position - prev_track_position)
+                        if lap_delta > 1.0:
+                            lap_delta = 1.0
+
+                        class_est_lap_time = 0.0
+                        try:
+                            drivers_info = self.ir['DriverInfo']['Drivers']
+                            if car_idx < len(drivers_info):
+                                class_est_lap_time = float(drivers_info[car_idx]['CarClassEstLapTime'])
+                        except (KeyError, TypeError, IndexError, ValueError):
+                            class_est_lap_time = 0.0
+
+                        if class_est_lap_time > 0:
+                            estimated_tow_seconds = lap_delta * class_est_lap_time * 0.8 + 12.0
+
+                    if estimated_tow_seconds is not None:
+                        self.tow_end_time[car_idx] = now + estimated_tow_seconds
+                    else:
+                        # No estimate available: keep TOW until the car exits pit road/stall.
+                        self.tow_end_time[car_idx] = 0.0
+
+            # Update last-known values
+            self.tow_last_surface[car_idx] = current_surface
+            self.tow_last_on_pit_road[car_idx] = current_on_pit
+            self.tow_last_track_position[car_idx] = current_track_position
+
+    def _update_tow_sort_freeze_state(self, active_drivers: List[Dict]) -> None:
+        """Track frozen sort position for cars while towing.
+
+        This keeps raw telemetry position untouched and only affects race-order sorting.
+        """
+        for driver in active_drivers:
+            car_idx = driver['car_idx']
+            if self.race_state_tracker.is_driver_finished(car_idx):
+                continue
+
+            current_track_position = driver.get('total_track_position', 0.0)
+            is_towing = self.tow_tracking.get(car_idx, False)
+
+            if is_towing:
+                if car_idx not in self.tow_frozen_track_position:
+                    frozen_position = self.tow_last_live_track_position.get(
+                        car_idx,
+                        current_track_position
+                    )
+                    self.tow_frozen_track_position[car_idx] = frozen_position
+            else:
+                self.tow_last_live_track_position[car_idx] = current_track_position
+                if car_idx in self.tow_frozen_track_position:
+                    del self.tow_frozen_track_position[car_idx]
+
+    def _get_tow_aware_sort_track_position(self, driver: Dict) -> float:
+        """Return tow-frozen sort key when towing, otherwise live track position."""
+        car_idx = driver.get('car_idx')
+        if car_idx is None:
+            return driver.get('total_track_position', -1)
+
+        if self.tow_tracking.get(car_idx, False):
+            return self.tow_frozen_track_position.get(
+                car_idx,
+                driver.get('total_track_position', -1)
+            )
+
+        return driver.get('total_track_position', -1)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SESSION RESULTS AND LAP TIMES
@@ -385,6 +592,7 @@ class TelemetryProcessor:
         is_player = (car_idx == self.position_calculator.player_car_idx)
         is_disconnected = driver.get('disconnected', False)
         is_finished = self.race_state_tracker.is_driver_finished(car_idx)
+        is_towing = self.tow_tracking.get(car_idx, False) if not is_finished else False
 
         # Format last lap time for display
         last_lap_display = GapCalculator.format_lap_time(last_lap_time)
@@ -403,7 +611,17 @@ class TelemetryProcessor:
         # Calculate last pit lap and out lap indicator
         last_pit_lap_num = self.pit_tracking.get(car_idx, 0)
         current_lap = driver.get('current_lap', 0)
-        pit_lap_display = GapCalculator.format_pit_lap(current_lap, last_pit_lap_num)
+        is_on_pit_road = self.pit_on_road.get(car_idx, False)
+        exit_out_lap = self.pit_exit_out_lap.get(car_idx, -1)
+        is_on_out_lap = (not is_on_pit_road) and exit_out_lap >= current_lap and exit_out_lap >= 0
+        pit_lap_display = "TOW" if is_towing else GapCalculator.format_pit_lap(
+            current_lap,
+            last_pit_lap_num,
+            is_on_pit_road=is_on_pit_road,
+            is_out_lap=is_on_out_lap
+        )
+        if is_disconnected and not is_finished:
+            pit_lap_display = "—"
 
         return DriverState(
             car_idx=car_idx,
@@ -427,6 +645,7 @@ class TelemetryProcessor:
             combined_rating=combined_rating_display,
             lic_level=lic_level,
             pit_lap=pit_lap_display,
+            is_towing=is_towing,
             is_player=is_player,
             is_disconnected=is_disconnected
         )
@@ -1333,6 +1552,7 @@ class TelemetryProcessor:
             # Update pit tracking only during race sessions (practice/qualifying don't need pit tracking)
             if is_race:
                 self._update_pit_tracking()
+                self._update_tow_tracking()
 
             # Identify player
             self.position_calculator.identify_player(drivers)
@@ -1350,6 +1570,9 @@ class TelemetryProcessor:
                 active_drivers = self.position_calculator.calculate_real_time_positions(drivers)
 
                 if active_drivers:
+                    # Maintain tow-freeze state for sorting without mutating live telemetry track position.
+                    self._update_tow_sort_freeze_state(active_drivers)
+
                     # Update snapshots for active drivers
                     self._update_race_snapshots(active_drivers)
 
@@ -1391,7 +1614,7 @@ class TelemetryProcessor:
                     # Sort racing drivers by current track position
                     # Use .get() for safety: drivers restored from snapshots after checkered (via _handle_disconnected_drivers)
                     # might not have total_track_position if snapshot was created before this field was added
-                    racing_drivers.sort(key=lambda x: x.get('total_track_position', -1), reverse=True)
+                    racing_drivers.sort(key=self._get_tow_aware_sort_track_position, reverse=True)
 
                     # IMPORTANT: Assign positions to racing drivers by "filling the gaps"
                     # This handles lapped drivers who may have finished (e.g., P13, P14, P19)
