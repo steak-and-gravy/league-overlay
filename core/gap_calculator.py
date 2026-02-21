@@ -236,7 +236,12 @@ class GapCalculator:
         return f"{sr}  {ir}"
 
     @staticmethod
-    def format_pit_lap(current_lap: int, last_pit_lap: int) -> str:
+    def format_pit_lap(
+        current_lap: int,
+        last_pit_lap: int,
+        is_on_pit_road: bool = False,
+        is_out_lap: bool = False
+    ) -> str:
         """Format pit lap column (combines Last Pit and Out Lap).
 
         Shows "OUT" during out lap, otherwise shows last pit lap number.
@@ -244,20 +249,26 @@ class GapCalculator:
         Args:
             current_lap: Driver's current lap number
             last_pit_lap: Lap number when driver last pitted (0 if haven't pitted)
+            is_on_pit_road: True when driver is currently on pit road
+            is_out_lap: True when driver is on out lap (post-exit, pre-complete)
 
         Returns:
-            "OUT" if on out lap (current_lap == last_pit_lap + 1)
+            "OUT" if on out lap
             "L12" if pitted but not on out lap
             "—" if haven't pitted yet
         """
+        # On pit road
+        if is_on_pit_road:
+            return "PIT"
+
         # Check if haven't pitted
         if last_pit_lap == 0:
             return "—"
-        # On pit road
-        elif last_pit_lap < 0:
+        if last_pit_lap < 0:
             return "PIT"
-        # Check if on out lap (first lap after pitting, same lap as pit lap since we track pit lap when exiting pits)
-        elif current_lap == last_pit_lap:
+
+        # Explicit out-lap flag is authoritative; equality check is legacy fallback.
+        if is_out_lap or current_lap == last_pit_lap:
             return "OUT"
 
         # Show last pit lap number

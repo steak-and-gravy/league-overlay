@@ -548,8 +548,13 @@ class DriverRowRenderer:
             font_weight: Font weight
             column: Column index to place label
         """
-        # Use orange color (#FF8200) when showing "OUT", otherwise use default color
-        pit_lap_color = "#FF8200" if driver.pit_lap == "OUT" else text_color
+        # Status colors: OUT in orange, TOW in red, otherwise default text color
+        if driver.pit_lap == "OUT":
+            pit_lap_color = "#FF8200"
+        elif driver.pit_lap == "TOW":
+            pit_lap_color = "#FF3B30"
+        else:
+            pit_lap_color = text_color
 
         pit_lap_label = QLabel(driver.pit_lap)
         pit_lap_label.setStyleSheet(f"""

@@ -58,8 +58,8 @@ class ColumnLayout:
     BEST_LAP: int = 9
     DELTA: int = 6
     LAST_LAP: int = 9
-    RATING: int = 12
-    PIT_LAP: int = 6
+    RATING: int = 13
+    PIT_LAP: int = 5
 
 
 @dataclass(frozen=True)

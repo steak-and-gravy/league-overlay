@@ -161,6 +161,16 @@ class TestFormatPitLap:
         result = GapCalculator.format_pit_lap(5, -1)
         assert result == "PIT"
 
+    def test_on_pit_road_flag_takes_priority(self):
+        """Test explicit on-pit-road flag forces PIT display."""
+        result = GapCalculator.format_pit_lap(25, 12, is_on_pit_road=True)
+        assert result == "PIT"
+
+    def test_explicit_out_lap_flag(self):
+        """Test explicit out-lap flag shows OUT without lap equality."""
+        result = GapCalculator.format_pit_lap(12, 10, is_out_lap=True)
+        assert result == "OUT"
+
     def test_current_lap_before_pit(self):
         """Test edge case where current lap is before pit lap (should not happen)."""
         # This shouldn't happen in practice, but test defensive behavior
