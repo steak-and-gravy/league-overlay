@@ -3,7 +3,7 @@
 A lightweight desktop overlay for **iRacing** that gives you a clearer picture of your league division race within the race.  
 BB’s League Overlay displays live standings and gaps with a focus on divisions. Gaps are to the next driver within your division, not just who is on track ahead of you.
 
-![Alt text](https://leagueoverlay.com/assets/img/0n.png "Overlay image")
+![Alt text](https://leagueoverlay.com/assets/img/overall.png "Overlay image")
 
 ---
 
