@@ -627,8 +627,9 @@ class LeagueOverlay(QMainWindow):
         self.header_layout.setContentsMargins(5, 2, 5, 2)
         self.header_layout.setSpacing(2)
 
-        # Reset all column stretches first (clear old values from hidden columns)
-        for col_idx in range(11):  # Max possible columns (5 base + 6 optional)
+        # Reset all column stretches first (clear old values from hidden columns).
+        # Max columns: 4 base (Pos, D-Pos, Driver, Car#) + 8 optional = 12.
+        for col_idx in range(12):
             self.header_layout.setColumnStretch(col_idx, 0)
 
         # Build column configuration based on settings
