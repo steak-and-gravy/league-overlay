@@ -7,7 +7,8 @@ import re
 from typing import TYPE_CHECKING
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog, QComboBox
+    QFrame, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog, QComboBox,
+    QLineEdit
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -28,7 +29,7 @@ class SettingsDialog(QDialog):
         self.parent_overlay = parent
         self.setWindowTitle("BB's League Overlay - Settings")
         self.setModal(True)
-        self.setFixedSize(UI_DIMENSIONS.SETTINGS_DIALOG_WIDTH, UI_DIMENSIONS.SETTINGS_DIALOG_HEIGHT)
+        self.setFixedSize(UI_DIMENSIONS.SETTINGS_DIALOG_WIDTH, UI_DIMENSIONS.SETTINGS_DIALOG_HEIGHT + 160)
 
         self.setup_ui()
         
@@ -590,6 +591,92 @@ class SettingsDialog(QDialog):
 
         right_column.addWidget(window_group)
 
+        # Broadcast Header section
+        broadcast_group = QFrame()
+        broadcast_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
+        broadcast_group.setMinimumWidth(300)
+        broadcast_group.setMaximumWidth(300)
+        broadcast_layout = QVBoxLayout(broadcast_group)
+        broadcast_layout.setSpacing(8)
+
+        broadcast_title = QLabel("Broadcast Header")
+        broadcast_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
+        broadcast_layout.addWidget(broadcast_title)
+
+        # Enable toggle
+        self.broadcast_header_cb = QCheckBox("Show broadcast header")
+        self.broadcast_header_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.broadcast_header_cb.setChecked(self.parent_overlay.settings.show_broadcast_header)
+        broadcast_layout.addWidget(self.broadcast_header_cb)
+
+        # League name
+        title_row = QHBoxLayout()
+        title_label = QLabel("League name:")
+        title_label.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        title_label.setFixedWidth(80)
+        title_row.addWidget(title_label)
+        self.broadcast_title_input = QLineEdit(self.parent_overlay.settings.broadcast_header_title)
+        self.broadcast_title_input.setPlaceholderText("e.g. BROKEN WING RACING LEAGUE")
+        self.broadcast_title_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #444444; color: white; border: 1px solid #666666;
+                padding: 3px 5px; font-size: 9pt;
+            }
+        """)
+        title_row.addWidget(self.broadcast_title_input)
+        broadcast_layout.addLayout(title_row)
+
+        # Logo path
+        logo_row = QHBoxLayout()
+        logo_label = QLabel("Logo:")
+        logo_label.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        logo_label.setFixedWidth(80)
+        logo_row.addWidget(logo_label)
+        self.broadcast_logo_input = QLineEdit(self.parent_overlay.settings.broadcast_header_logo or "")
+        self.broadcast_logo_input.setPlaceholderText("Path to logo image...")
+        self.broadcast_logo_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #444444; color: white; border: 1px solid #666666;
+                padding: 3px 5px; font-size: 9pt;
+            }
+        """)
+        logo_row.addWidget(self.broadcast_logo_input)
+        browse_logo_btn = QPushButton("...")
+        browse_logo_btn.setFixedWidth(30)
+        browse_logo_btn.setStyleSheet("""
+            QPushButton { background-color: #555555; color: white; border: none; padding: 3px; font-size: 9pt; }
+            QPushButton:hover { background-color: #666666; }
+        """)
+        browse_logo_btn.clicked.connect(self._browse_logo)
+        logo_row.addWidget(browse_logo_btn)
+        broadcast_layout.addLayout(logo_row)
+
+        # Accent color
+        accent_row = QHBoxLayout()
+        accent_label = QLabel("Accent color:")
+        accent_label.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        accent_label.setFixedWidth(80)
+        accent_row.addWidget(accent_label)
+
+        self._broadcast_accent_color = self.parent_overlay.settings.broadcast_header_accent_color
+        self.broadcast_accent_btn = QPushButton()
+        self.broadcast_accent_btn.setFixedSize(60, 22)
+        self.broadcast_accent_btn.setStyleSheet(
+            f"QPushButton {{ background-color: {self._broadcast_accent_color}; border: 1px solid #666666; }}"
+            f"QPushButton:hover {{ border: 1px solid white; }}"
+        )
+        self.broadcast_accent_btn.clicked.connect(self._pick_accent_color)
+        accent_row.addWidget(self.broadcast_accent_btn)
+
+        self.broadcast_accent_value_label = QLabel(self._broadcast_accent_color)
+        self.broadcast_accent_value_label.setStyleSheet("border: none; color: #888888; font-size: 8pt;")
+        accent_row.addWidget(self.broadcast_accent_value_label)
+
+        accent_row.addStretch()
+        broadcast_layout.addLayout(accent_row)
+
+        right_column.addWidget(broadcast_group)
+
         # Add columns to main layout with equal stretch factors (1:1 ratio)
         columns_layout.addLayout(left_column, 1)
         columns_layout.addLayout(right_column, 1)
@@ -1079,6 +1166,15 @@ class SettingsDialog(QDialog):
             self.show_rating_cb.setChecked(defaults.show_rating)
             self.show_pit_lap_cb.setChecked(defaults.show_pit_lap)
             self.show_footer_cb.setChecked(defaults.show_footer)
+            self.broadcast_header_cb.setChecked(defaults.show_broadcast_header)
+            self.broadcast_title_input.setText(defaults.broadcast_header_title)
+            self.broadcast_logo_input.setText(defaults.broadcast_header_logo or "")
+            self._broadcast_accent_color = defaults.broadcast_header_accent_color
+            self.broadcast_accent_btn.setStyleSheet(
+                f"QPushButton {{ background-color: {self._broadcast_accent_color}; border: 1px solid #666666; }}"
+                f"QPushButton:hover {{ border: 1px solid white; }}"
+            )
+            self.broadcast_accent_value_label.setText(self._broadcast_accent_color)
             self.font_size_combo.setCurrentText(defaults.font_size)
             self.color_style_combo.setCurrentText(defaults.row_color_style)
             self.log_level_combo.setCurrentText(defaults.log_level)
@@ -1126,6 +1222,28 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.opacity = defaults.opacity
             self.parent_overlay.update_all_backgrounds()
 
+    def _browse_logo(self):
+        """Open file dialog to select a logo image."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Logo Image", "",
+            "Image Files (*.png *.jpg *.jpeg *.svg *.bmp);;All Files (*)"
+        )
+        if file_path:
+            self.broadcast_logo_input.setText(file_path)
+
+    def _pick_accent_color(self):
+        """Open color picker for broadcast header accent color."""
+        color = QColorDialog.getColor(
+            QColor(self._broadcast_accent_color), self, "Select Accent Color"
+        )
+        if color.isValid():
+            self._broadcast_accent_color = color.name()
+            self.broadcast_accent_btn.setStyleSheet(
+                f"QPushButton {{ background-color: {self._broadcast_accent_color}; border: 1px solid #666666; }}"
+                f"QPushButton:hover {{ border: 1px solid white; }}"
+            )
+            self.broadcast_accent_value_label.setText(self._broadcast_accent_color)
+
     def apply_settings(self):
         """Apply all settings"""
         try:
@@ -1144,6 +1262,10 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_rating = self.show_rating_cb.isChecked()
             self.parent_overlay.settings.show_pit_lap = self.show_pit_lap_cb.isChecked()
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()
+            self.parent_overlay.settings.show_broadcast_header = self.broadcast_header_cb.isChecked()
+            self.parent_overlay.settings.broadcast_header_title = self.broadcast_title_input.text()
+            self.parent_overlay.settings.broadcast_header_logo = self.broadcast_logo_input.text() or None
+            self.parent_overlay.settings.broadcast_header_accent_color = self._broadcast_accent_color
             self.parent_overlay.settings.font_size = self.font_size_combo.currentText()
             self.parent_overlay.settings.row_color_style = self.color_style_combo.currentText()
 

@@ -39,6 +39,7 @@ class UIDimensions:
     WINDOW_MIN_WIDTH: int = 250
     WINDOW_MIN_HEIGHT: int = 200
     TITLE_BAR_HEIGHT: int = 30
+    BROADCAST_HEADER_MIN_HEIGHT: int = 60
     SIZE_GRIP_SIZE: int = 20
     CLOSE_BUTTON_WIDTH: int = 25
     SETTINGS_DIALOG_WIDTH: int = 630
@@ -112,7 +113,10 @@ class UIConfig:
                     "status": "8pt",
                     "header": "8pt",
                     "data": "8pt",
-                    "spacing": 2
+                    "spacing": 2,
+                    "broadcast_title": "10pt",
+                    "broadcast_session": "7.5pt",
+                    "broadcast_track": "7pt"
                 },
                 "Medium": {
                     "title": "9.5pt",
@@ -120,7 +124,10 @@ class UIConfig:
                     "status": "9pt",
                     "header": "9pt",
                     "data": "9pt",
-                    "spacing": 3
+                    "spacing": 3,
+                    "broadcast_title": "11pt",
+                    "broadcast_session": "8.5pt",
+                    "broadcast_track": "8pt"
                 },
                 "Large": {
                     "title": "10.5pt",
@@ -128,7 +135,10 @@ class UIConfig:
                     "status": "10pt",
                     "header": "10pt",
                     "data": "10pt",
-                    "spacing": 4
+                    "spacing": 4,
+                    "broadcast_title": "12pt",
+                    "broadcast_session": "9.5pt",
+                    "broadcast_track": "9pt"
                 },
                 "Extra Large": {
                     "title": "11.5pt",
@@ -136,7 +146,10 @@ class UIConfig:
                     "status": "11pt",
                     "header": "11pt",
                     "data": "11pt",
-                    "spacing": 5
+                    "spacing": 5,
+                    "broadcast_title": "13pt",
+                    "broadcast_session": "10.5pt",
+                    "broadcast_track": "10pt"
                 }
             })
 

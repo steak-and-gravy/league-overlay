@@ -39,6 +39,7 @@ from ui.widgets import DataUpdateSignal, CustomSizeGrip
 from ui.driver_row_renderer import DriverRowRenderer
 from ui.settings_dialog import SettingsDialog
 from ui.auto_center_controller import AutoCenterController
+from ui.broadcast_header import BroadcastHeaderWidget
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -99,6 +100,7 @@ class LeagueOverlay(QMainWindow):
         self.signals.update_status.connect(self.update_status_label)
         self.signals.refresh_colors.connect(self.refresh_driver_colors)
         self.signals.update_footer.connect(self.update_footer_display)
+        self.signals.update_session_metadata.connect(self.update_broadcast_header)
 
         self.player_car_idx = None  # Player's car (from iRacing API)
         self.class_leader_lap: Optional[int] = None  # Cached class leader lap for status display
@@ -331,6 +333,13 @@ class LeagueOverlay(QMainWindow):
                 self.update_status_style('orange')
             else:
                 self.update_status_style('white')
+            # Hide status label when broadcast header is active
+            self.status_label.setVisible(not self.settings.show_broadcast_header)
+        # Update broadcast header
+        if hasattr(self, 'broadcast_header'):
+            self.broadcast_header.settings = self.settings
+            self.broadcast_header.refresh_styles()
+            self.broadcast_header.setVisible(self.settings.show_broadcast_header)
         # Update scroll layout spacing
         if hasattr(self, 'scroll_layout'):
             self.scroll_layout.setSpacing(self.get_font_size('spacing'))
@@ -363,11 +372,22 @@ class LeagueOverlay(QMainWindow):
         
         # Title bar
         self.create_title_bar()
-        
-        # Status label
+
+        # Broadcast header (optional, for broadcast/spectator use)
+        self.broadcast_header = BroadcastHeaderWidget(
+            settings=self.settings,
+            get_bg_color_fn=self.get_bg_color,
+            get_font_size_fn=self.get_font_size,
+            parent=main_widget
+        )
+        self.broadcast_header.setVisible(self.settings.show_broadcast_header)
+        self.main_layout.addWidget(self.broadcast_header)
+
+        # Status label (hidden when broadcast header is active)
         self.status_label = QLabel("Connecting to iRacing...")
         self.update_status_style("orange")
         self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setVisible(not self.settings.show_broadcast_header)
         self.main_layout.addWidget(self.status_label)
 
         # Header frame
@@ -494,6 +514,13 @@ class LeagueOverlay(QMainWindow):
         self.status_label.setText(text)
         self.update_status_style(color)
 
+        # Forward to broadcast header when active (handles disconnect + flag states)
+        if self.settings.show_broadcast_header and hasattr(self, 'broadcast_header'):
+            self.broadcast_header.update_session_info({
+                'session_status': text,
+                'status_color': color,
+            })
+
     def update_footer_display(self, footer_data: Dict[str, Any]):
         """Update footer display with track temp, incidents, and SoF.
 
@@ -534,6 +561,16 @@ class LeagueOverlay(QMainWindow):
             self.sof_label.setText(f"SoF: {sof_k:.1f}k")
         else:
             self.sof_label.setText("SoF: ----")
+
+    def update_broadcast_header(self, session_data: Dict[str, Any]):
+        """Update broadcast header with session metadata.
+
+        Args:
+            session_data: Dictionary with session_status and track_display_name
+        """
+        if not self.settings.show_broadcast_header:
+            return
+        self.broadcast_header.update_session_info(session_data)
 
     def create_title_bar(self):
         """Create custom title bar"""
@@ -1154,6 +1191,12 @@ class LeagueOverlay(QMainWindow):
         if self.settings.show_footer:
             footer_data = self.telemetry_processor.get_footer_data()
             self.signals.update_footer.emit(footer_data)
+
+        # Emit session metadata for broadcast header
+        if self.settings.show_broadcast_header:
+            session_metadata = self.telemetry_processor.get_session_metadata()
+            session_metadata['session_status'] = self._get_session_status_text()
+            self.signals.update_session_metadata.emit(session_metadata)
 
     def _has_data_changed(self, new_data: List[DriverState]) -> bool:
         """Check if the new data is different from the last emitted data.

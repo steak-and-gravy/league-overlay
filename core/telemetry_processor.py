@@ -1930,3 +1930,19 @@ class TelemetryProcessor:
             footer_data['sof'] = None
 
         return footer_data
+
+    def get_session_metadata(self) -> Dict[str, Any]:
+        """Get session metadata for the broadcast header.
+
+        Returns:
+            Dictionary with keys:
+                - track_display_name: Track display name from WeekendInfo (str or None)
+        """
+        metadata: Dict[str, Any] = {}
+
+        try:
+            metadata['track_display_name'] = self.ir['WeekendInfo']['TrackDisplayName']
+        except (KeyError, TypeError):
+            metadata['track_display_name'] = None
+
+        return metadata

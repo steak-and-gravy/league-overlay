@@ -12,6 +12,7 @@ class DataUpdateSignal(QObject):
     update_status = Signal(str, str)  # text, color
     refresh_colors = Signal()
     update_footer = Signal(dict)  # footer_data: track_temp, incidents, incident_limit, sof
+    update_session_metadata = Signal(dict)  # session_data: session_status, track_display_name
 
 
 class CustomSizeGrip(QSizeGrip):
