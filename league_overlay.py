@@ -1138,17 +1138,11 @@ class LeagueOverlay(QMainWindow):
         Args:
             race_data: Processed race data from TelemetryProcessor, or None if unavailable
         """
-        if race_data is None:
-            return
-
         # Detect session change by comparing with processor's session info
         session_changed = (
             self.current_session_id != self.telemetry_processor.current_session_id or
             self.current_session_type != self.telemetry_processor.current_session_type
         )
-
-        # Check if starting positions were updated (qualifying results loaded)
-        starting_positions_updated = self.race_state_tracker.consume_starting_positions_update()
 
         # Sync session info from telemetry processor
         self.current_session_id = self.telemetry_processor.current_session_id
@@ -1158,7 +1152,25 @@ class LeagueOverlay(QMainWindow):
         if session_changed and self.current_session_id is not None:
             self.race_data = []
             self._last_emitted_data = []  # Reset change tracking on session change
+            self.class_leader_lap = None
             # Note: Division filter state is intentionally preserved across session changes
+
+        # Recalculate footer/session metadata on session change even if race data is temporarily unavailable.
+        # This prevents stale SoF when transitioning between sessions.
+        if race_data is None:
+            if session_changed:
+                if self.settings.show_footer:
+                    footer_data = self.telemetry_processor.get_footer_data()
+                    self.signals.update_footer.emit(footer_data)
+
+                if self.settings.show_broadcast_header:
+                    session_metadata = self.telemetry_processor.get_session_metadata()
+                    session_metadata['session_status'] = self._get_session_status_text()
+                    self.signals.update_session_metadata.emit(session_metadata)
+            return
+
+        # Check if starting positions were updated (qualifying results loaded)
+        starting_positions_updated = self.race_state_tracker.consume_starting_positions_update()
 
         # Update race data and player info
         self.race_data = race_data
@@ -1472,7 +1484,7 @@ class LeagueOverlay(QMainWindow):
 
             # Show detailed session status
             status_text = self._get_session_status_text()
-            # Use yellow color for CAUTION state, green otherwise
+            # Use yellow color for CAUTION state, green otherwise.
             status_color = 'yellow' if 'CAUTION' in status_text else 'green'
             self.signals.update_status.emit(status_text, status_color)
 

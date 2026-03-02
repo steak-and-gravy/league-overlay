@@ -152,7 +152,7 @@ class SettingsDialog(QDialog):
         self._update_refresh_button()
         left_column.addWidget(config_group)
 
-        # Division colors (moved to left column)
+        # Division colors
         colors_group = QFrame()
         colors_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
         colors_group.setMinimumWidth(300)
@@ -289,14 +289,11 @@ class SettingsDialog(QDialog):
         slower_color_row.addStretch()
         colors_layout.addLayout(slower_color_row)
 
-        left_column.addWidget(colors_group)
-        left_column.addStretch()
-
         # RIGHT COLUMN
         right_column = QVBoxLayout()
         right_column.setSpacing(5)
 
-        # Window settings (moved to right column)
+        # Window settings
         window_group = QFrame()
         window_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
         window_group.setMinimumWidth(300)
@@ -589,7 +586,8 @@ class SettingsDialog(QDialog):
         # Spacer after last checkbox row
         window_layout.addSpacing(10)
 
-        right_column.addWidget(window_group)
+        left_column.addWidget(window_group)
+        left_column.addStretch()
 
         # Broadcast Header section
         broadcast_group = QFrame()
@@ -676,6 +674,7 @@ class SettingsDialog(QDialog):
         broadcast_layout.addLayout(accent_row)
 
         right_column.addWidget(broadcast_group)
+        right_column.addWidget(colors_group)
 
         # Add columns to main layout with equal stretch factors (1:1 ratio)
         columns_layout.addLayout(left_column, 1)
@@ -1288,4 +1287,3 @@ class SettingsDialog(QDialog):
     def on_cancel(self):
         """Cancel settings"""
         self.reject()
-

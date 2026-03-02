@@ -561,6 +561,25 @@ class TestSessionTracking:
         assert processor._detect_session_change(session_data_3) is True
         assert processor.current_session_id == 54321
 
+    def test_session_change_detection_ignores_missing_subsession_id(self, mock_dependencies):
+        """Missing SubSessionID should not trigger false session resets."""
+        processor = TelemetryProcessor(**mock_dependencies)
+
+        # Seed prior session state with a known subsession ID.
+        processor.current_session_id = 12345
+        processor.current_subsession_id = 999
+        processor.current_session_type = 'Race'
+
+        # Same session data, but SubSessionID temporarily unavailable.
+        session_data = {
+            'session_id': 12345,
+            'subsession_id': None,
+            'session_type': 'Race',
+        }
+
+        assert processor._detect_session_change(session_data) is False
+        assert processor.current_subsession_id == 999
+
 
 class TestDriverInfoHandling:
     """Unit tests for robust DriverInfo data handling during session transitions."""

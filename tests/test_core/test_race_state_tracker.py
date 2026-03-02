@@ -11,7 +11,7 @@ Tests cover:
 """
 
 import pytest
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock
 from core.race_state_tracker import RaceStateTracker
 from core.driver_state import DriverState
 
@@ -472,6 +472,56 @@ class TestEdgeCases:
         tracker.mark_driver_finished(9999, 1)
 
         assert tracker.is_driver_finished(9999) is True
+
+
+class TestStartingPositionsLoading:
+    """Tests for loading and consuming qualifying starting positions."""
+
+    def test_load_starting_positions_parses_string_values(self):
+        """QualifyResultsInfo string values should still populate integer car indices."""
+        mock_ir = MagicMock()
+        tracker = RaceStateTracker(mock_ir)
+
+        mock_ir.__getitem__.side_effect = lambda key: {
+            'QualifyResultsInfo': {
+                'Results': [
+                    {'CarIdx': '1', 'ClassPosition': '0'},
+                    {'CarIdx': '5', 'ClassPosition': '2'},
+                ]
+            }
+        }.get(key)
+
+        tracker.load_starting_positions_from_qualify()
+
+        assert tracker.get_starting_position(1) == 1
+        assert tracker.get_starting_position(5) == 3
+        assert tracker.starting_positions_updated is True
+
+    def test_load_starting_positions_finds_open_qualify_session(self):
+        """SessionInfo fallback should match Open/Lone Qualify variants."""
+        mock_ir = MagicMock()
+        tracker = RaceStateTracker(mock_ir)
+
+        mock_ir.__getitem__.side_effect = lambda key: {
+            'QualifyResultsInfo': {'Results': []},
+            'SessionInfo': {
+                'Sessions': [
+                    {
+                        'SessionType': 'Open Qualify',
+                        'ResultsPositions': [
+                            {'CarIdx': 7, 'ClassPosition': 0},
+                            {'CarIdx': 9, 'ClassPosition': 1},
+                        ]
+                    }
+                ]
+            }
+        }.get(key)
+
+        tracker.load_starting_positions_from_qualify()
+
+        assert tracker.get_starting_position(7) == 1
+        assert tracker.get_starting_position(9) == 2
+        assert tracker.starting_positions_updated is True
 
 
 @pytest.mark.skip(reason="recalculate_all_finish_gaps() method has been removed from API")

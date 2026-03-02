@@ -268,3 +268,37 @@ class TestSessionStatusFormatting:
         mock_app.connection_time = time.time() - 5.0
         # Should be False (not <  5.0)
         assert mock_app._should_show_connection_message() is False
+
+    def test_update_gui_caution_yellow_without_broadcast_mode(self, mock_app):
+        """CAUTION styling should remain yellow when broadcast mode is disabled."""
+        import time
+        mock_app.startup_time = time.time() - 10.0
+        mock_app.is_connected = True
+        mock_app.settings = Mock(show_broadcast_header=False)
+        mock_app.signals = Mock()
+        mock_app.signals.update_status = Mock()
+        mock_app.signals.update_status.emit = Mock()
+        mock_app._should_show_connection_message = Mock(return_value=False)
+        mock_app._get_session_status_text = Mock(return_value="CAUTION - Lap 5/20")
+        mock_app.update_gui = LeagueOverlay.update_gui.__get__(mock_app)
+
+        mock_app.update_gui()
+
+        mock_app.signals.update_status.emit.assert_called_once_with("CAUTION - Lap 5/20", "yellow")
+
+    def test_update_gui_caution_yellow_with_broadcast_mode(self, mock_app):
+        """CAUTION styling should be yellow when broadcast mode is enabled."""
+        import time
+        mock_app.startup_time = time.time() - 10.0
+        mock_app.is_connected = True
+        mock_app.settings = Mock(show_broadcast_header=True)
+        mock_app.signals = Mock()
+        mock_app.signals.update_status = Mock()
+        mock_app.signals.update_status.emit = Mock()
+        mock_app._should_show_connection_message = Mock(return_value=False)
+        mock_app._get_session_status_text = Mock(return_value="CAUTION - Lap 5/20")
+        mock_app.update_gui = LeagueOverlay.update_gui.__get__(mock_app)
+
+        mock_app.update_gui()
+
+        mock_app.signals.update_status.emit.assert_called_once_with("CAUTION - Lap 5/20", "yellow")

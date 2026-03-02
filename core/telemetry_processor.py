@@ -217,15 +217,24 @@ class TelemetryProcessor:
         subsession_id = session_data.get('subsession_id')
         session_type = session_data['session_type']
 
+        # SubSessionID can be transiently unavailable during transitions.
+        # Treat None as "unknown" and avoid false session resets unless both are known.
+        subsession_changed = (
+            subsession_id is not None
+            and self.current_subsession_id is not None
+            and self.current_subsession_id != subsession_id
+        )
+
         if (self.current_session_id != session_id
-                or self.current_subsession_id != subsession_id
+                or subsession_changed
                 or self.current_session_type != session_type):
             logger.info(
                 f"Session changed: {session_type} "
                 f"(SessionID: {session_id}, SubSessionID: {subsession_id})"
             )
             self.current_session_id = session_id
-            self.current_subsession_id = subsession_id
+            if subsession_id is not None:
+                self.current_subsession_id = subsession_id
             self.current_session_type = session_type
             return True
 

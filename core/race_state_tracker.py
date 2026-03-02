@@ -211,8 +211,15 @@ class RaceStateTracker:
                         car_idx = result.get('CarIdx')
                         # Use ClassPosition for multi-class support (0-based, so add 1)
                         class_position = result.get('ClassPosition')
-                        if car_idx is not None and class_position is not None and class_position >= 0:
-                            self.starting_positions[car_idx] = class_position + 1
+                        if car_idx is None or class_position is None:
+                            continue
+                        try:
+                            car_idx_int = int(car_idx)
+                            class_position_int = int(class_position)
+                        except (TypeError, ValueError):
+                            continue
+                        if class_position_int >= 0:
+                            self.starting_positions[car_idx_int] = class_position_int + 1
 
                     if self.starting_positions:
                         logger.info(f"STARTING_POSITIONS - Loaded {len(self.starting_positions)} starting positions from QualifyResultsInfo")
@@ -231,7 +238,8 @@ class RaceStateTracker:
                 # Find qualifying session (search backwards for most recent qualifying)
                 qualify_session = None
                 for session in reversed(sessions):
-                    if session.get('SessionType', '').lower() == 'qualify':
+                    session_type = session.get('SessionType', '').lower()
+                    if 'qualify' in session_type:
                         qualify_session = session
                         break
 
@@ -249,8 +257,15 @@ class RaceStateTracker:
                             car_idx = result.get('CarIdx')
                             # Use ClassPosition for multi-class support (0-based, so add 1)
                             class_position = result.get('ClassPosition')
-                            if car_idx is not None and class_position is not None and class_position >= 0:
-                                self.starting_positions[car_idx] = class_position + 1
+                            if car_idx is None or class_position is None:
+                                continue
+                            try:
+                                car_idx_int = int(car_idx)
+                                class_position_int = int(class_position)
+                            except (TypeError, ValueError):
+                                continue
+                            if class_position_int >= 0:
+                                self.starting_positions[car_idx_int] = class_position_int + 1
 
                         if self.starting_positions:
                             session_type = qualify_session.get('SessionType', 'unknown')

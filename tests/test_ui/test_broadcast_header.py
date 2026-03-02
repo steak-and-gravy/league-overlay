@@ -109,8 +109,13 @@ class TestBroadcastHeaderWidget:
             get_bg_color_fn=_get_bg_color,
             get_font_size_fn=_get_font_size,
         )
-        widget.update_session_info({'status_color': 'yellow'})
+        widget.update_session_info({
+            'session_status': 'CAUTION - Lap 5/20',
+            'status_color': 'yellow',
+        })
         assert '#FFD700' in widget.accent_line.styleSheet()
+        assert 'color: #FFD700;' in widget.session_label.styleSheet()
+        assert 'font-weight: bold;' in widget.session_label.styleSheet()
         widget.deleteLater()
 
     def test_accent_line_restores_on_green(self, qapp, default_settings):
@@ -119,9 +124,17 @@ class TestBroadcastHeaderWidget:
             get_bg_color_fn=_get_bg_color,
             get_font_size_fn=_get_font_size,
         )
-        widget.update_session_info({'status_color': 'yellow'})
-        widget.update_session_info({'status_color': 'green'})
+        widget.update_session_info({
+            'session_status': 'CAUTION - Lap 5/20',
+            'status_color': 'yellow',
+        })
+        widget.update_session_info({
+            'session_status': 'Race - Lap 6/20',
+            'status_color': 'green',
+        })
         assert default_settings.broadcast_header_accent_color in widget.accent_line.styleSheet()
+        assert 'color: #CCCCCC;' in widget.session_label.styleSheet()
+        assert 'font-weight: normal;' in widget.session_label.styleSheet()
         widget.deleteLater()
 
     def test_disconnect_status_forwarded(self, qapp, default_settings):

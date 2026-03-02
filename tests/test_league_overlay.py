@@ -11,6 +11,7 @@ Tests cover:
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 from typing import Optional, List, Dict
+from league_overlay import LeagueOverlay
 
 
 class TestHandleTelemetryUpdate:
@@ -393,3 +394,67 @@ class TestSessionChangeEdgeCases:
 
         assert mock_overlay.current_session_type == 'Open Qualify'
         assert mock_overlay.race_data == new_data
+
+
+class TestSessionChangeFooterRefresh:
+    """Tests for footer refresh behavior during session transitions."""
+
+    def test_recalculates_footer_when_session_changes_and_race_data_none(self):
+        """Session change should refresh footer/SoF even when race data is temporarily unavailable."""
+        app = Mock(spec=LeagueOverlay)
+        app.current_session_id = 100
+        app.current_session_type = "Practice"
+        app.race_data = [{'position': 1}]
+        app._last_emitted_data = [{'position': 1}]
+        app.class_leader_lap = 12
+
+        app.telemetry_processor = Mock()
+        app.telemetry_processor.current_session_id = 101
+        app.telemetry_processor.current_session_type = "Race"
+        app.telemetry_processor.get_footer_data = Mock(return_value={'sof': 2100})
+
+        app.settings = Mock(show_footer=True, show_broadcast_header=False)
+        app.signals = Mock()
+        app.signals.update_footer = Mock()
+        app.signals.update_footer.emit = Mock()
+
+        app._handle_telemetry_update = LeagueOverlay._handle_telemetry_update.__get__(app)
+
+        app._handle_telemetry_update(None)
+
+        assert app.current_session_id == 101
+        assert app.current_session_type == "Race"
+        assert app.race_data == []
+        assert app._last_emitted_data == []
+        assert app.class_leader_lap is None
+        app.telemetry_processor.get_footer_data.assert_called_once()
+        app.signals.update_footer.emit.assert_called_once_with({'sof': 2100})
+
+    def test_does_not_recalculate_footer_without_session_change_when_race_data_none(self):
+        """No footer refresh should occur when session is unchanged and race data is None."""
+        app = Mock(spec=LeagueOverlay)
+        app.current_session_id = 100
+        app.current_session_type = "Practice"
+        app.race_data = [{'position': 1}]
+        app._last_emitted_data = [{'position': 1}]
+        app.class_leader_lap = 12
+
+        app.telemetry_processor = Mock()
+        app.telemetry_processor.current_session_id = 100
+        app.telemetry_processor.current_session_type = "Practice"
+        app.telemetry_processor.get_footer_data = Mock(return_value={'sof': 2100})
+
+        app.settings = Mock(show_footer=True, show_broadcast_header=False)
+        app.signals = Mock()
+        app.signals.update_footer = Mock()
+        app.signals.update_footer.emit = Mock()
+
+        app._handle_telemetry_update = LeagueOverlay._handle_telemetry_update.__get__(app)
+
+        app._handle_telemetry_update(None)
+
+        assert app.race_data == [{'position': 1}]
+        assert app._last_emitted_data == [{'position': 1}]
+        assert app.class_leader_lap == 12
+        app.telemetry_processor.get_footer_data.assert_not_called()
+        app.signals.update_footer.emit.assert_not_called()

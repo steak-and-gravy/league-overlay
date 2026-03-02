@@ -121,6 +121,19 @@ class BroadcastHeaderWidget(QWidget):
             QLabel {{
                 color: #CCCCCC;
                 font-size: {font_size};
+                font-weight: normal;
+                background-color: transparent;
+            }}
+        """)
+
+    def _set_session_label_caution_style(self):
+        """Highlight CAUTION text in broadcast mode."""
+        font_size = self.get_font_size('broadcast_session')
+        self.session_label.setStyleSheet(f"""
+            QLabel {{
+                color: #FFD700;
+                font-size: {font_size};
+                font-weight: bold;
                 background-color: transparent;
             }}
         """)
@@ -191,6 +204,10 @@ class BroadcastHeaderWidget(QWidget):
             else:
                 formatted = status_text.upper()
             self.session_label.setText(formatted)
+            if 'CAUTION' in status_text.upper():
+                self._set_session_label_caution_style()
+            else:
+                self._style_session_label()
 
         track_name = session_data.get('track_display_name', '')
         if track_name:
