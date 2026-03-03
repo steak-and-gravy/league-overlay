@@ -25,6 +25,8 @@ BB’s League Overlay displays live standings and gaps with a focus on divisions
 - **Multi-Class Support** — Automatically filters to your car class in multi-class races.
 - **Auto-Centering** — Keeps you in view with intelligent timeout after manual scrolling.
 - **Customizable Appearance** — Configure font sizes, row colors (Default/Dark/Alternate/Outline), opacity, and performance indicator colors.
+- **Broadcast Header** — Optional professional-quality header displaying league logo, league name, session info, and track name—ideal for spectator streams and broadcast use. Supports custom logo images and accent colors with flag-aware styling (gold during caution, orange when disconnected).
+- **Broadcast Rolling Standings** — Optional broadcast mode that locks the top standings rows and rolls the remaining drivers in the bottom 5 rows on a configurable timer (default 5 seconds), with automatic wrap-around and blank-row padding on the last page.
 - **Right-Click Assignments** — Quickly assign drivers to divisions via context menu during a session.
 - **Update Notifications** — Automatic checks for new versions from GitHub.
 
@@ -49,6 +51,8 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - Performance indicator colors (faster/gained and slower/lost)
 - Column visibility (show/hide Positions Gained, Best Lap, Last Lap, Delta, Rating, and Pit Lap columns)
 - Log level (DEBUG, INFO, WARNING, ERROR)
+- Broadcast rolling standings (enable/disable)
+- Broadcast rolling timer (1-60 seconds, default 5)
 
 ---
 
@@ -62,6 +66,7 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - **Filter divisions**: Click the division filter button to cycle through views
 - **Assign on-the-fly**: Right-click any driver to change their division
 - **Auto-centering**: The overlay keeps you in view; scroll manually to disable temporarily
+- **Broadcast rolling mode**: When enabled (with Broadcast Header), the scrollbar is hidden and auto-centering is disabled while the bottom 5 rows rotate through the remaining standings
 - **Positions Gained column**: Shows positions gained/lost from starting grid with color coding (green for gained, red for lost)
 - **Best Lap column**: Shows each driver's best lap time this session
 - **Delta column**: When driving, compares lap times to your last lap. When spectating, compares to division leader's last lap
@@ -103,6 +108,15 @@ Found a bug or have a feature request? Visit the [GitHub Issues page](https://gi
 ---
 
 ## 🛠️ Development
+
+### Local Setup
+1. Create and activate a virtual environment:
+   - Windows (PowerShell): `python -m venv .venv` then `.venv\Scripts\Activate.ps1`
+   - macOS/Linux: `python3 -m venv .venv` then `source .venv/bin/activate`
+2. Install runtime dependencies: `pip install -r requirements.txt`
+3. Install test dependencies (optional): `pip install -r requirements-dev.txt`
+4. Run the app: `python league_overlay.py`
+5. Run tests: `pytest`
 
 ### Architecture
 This project uses a modular architecture with clear separation of concerns:

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog, QComboBox,
-    QLineEdit
+    QLineEdit, QSpinBox, QAbstractSpinBox, QSizePolicy
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -298,6 +298,7 @@ class SettingsDialog(QDialog):
         window_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
         window_group.setMinimumWidth(300)
         window_group.setMaximumWidth(300)
+        window_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         window_layout = QVBoxLayout(window_group)
         window_layout.setSpacing(8)
         
@@ -586,8 +587,7 @@ class SettingsDialog(QDialog):
         # Spacer after last checkbox row
         window_layout.addSpacing(10)
 
-        left_column.addWidget(window_group)
-        left_column.addStretch()
+        left_column.addWidget(window_group, 1)
 
         # Broadcast Header section
         broadcast_group = QFrame()
@@ -607,14 +607,96 @@ class SettingsDialog(QDialog):
         self.broadcast_header_cb.setChecked(self.parent_overlay.settings.show_broadcast_header)
         broadcast_layout.addWidget(self.broadcast_header_cb)
 
-        # League name
+        # Rolling standings toggle (broadcast mode only)
+        self.broadcast_roll_enabled_cb = QCheckBox("Enable rolling standings")
+        self.broadcast_roll_enabled_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.broadcast_roll_enabled_cb.setChecked(self.parent_overlay.settings.broadcast_roll_enabled)
+        broadcast_layout.addWidget(self.broadcast_roll_enabled_cb)
+
+        # Rolling timer
+        rolling_timer_row = QHBoxLayout()
+        rolling_timer_label = QLabel("Roll timer:")
+        rolling_timer_label.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        rolling_timer_label.setFixedWidth(80)
+        rolling_timer_row.addWidget(rolling_timer_label)
+
+        timer_control = QFrame()
+        timer_control.setObjectName("roll_timer_control")
+        timer_control.setStyleSheet("""
+            QFrame#roll_timer_control {
+                background-color: #444444;
+                border: 1px solid #666666;
+            }
+            QPushButton#roll_timer_up, QPushButton#roll_timer_down {
+                background-color: #555555;
+                color: white;
+                border: none;
+                font-size: 8pt;
+                padding: 0px;
+                margin: 0px;
+            }
+            QPushButton#roll_timer_up:hover, QPushButton#roll_timer_down:hover {
+                background-color: #666666;
+            }
+            QPushButton#roll_timer_up {
+                border-left: 1px solid #666666;
+                border-bottom: 1px solid #666666;
+            }
+            QPushButton#roll_timer_down {
+                border-left: 1px solid #666666;
+            }
+        """)
+        timer_control_layout = QHBoxLayout(timer_control)
+        timer_control_layout.setContentsMargins(0, 0, 0, 0)
+        timer_control_layout.setSpacing(0)
+
+        self.broadcast_roll_interval_spin = QSpinBox()
+        self.broadcast_roll_interval_spin.setRange(1, 60)
+        self.broadcast_roll_interval_spin.setSuffix(" sec")
+        self.broadcast_roll_interval_spin.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.broadcast_roll_interval_spin.setValue(
+            self.parent_overlay.settings.broadcast_roll_interval_seconds
+        )
+        self.broadcast_roll_interval_spin.setFrame(False)
+        self.broadcast_roll_interval_spin.setStyleSheet("""
+            QSpinBox {
+                background-color: transparent; color: white; border: none;
+                padding: 3px 5px; font-size: 9pt;
+            }
+        """)
+        timer_control_layout.addWidget(self.broadcast_roll_interval_spin, 1)
+
+        timer_buttons = QVBoxLayout()
+        timer_buttons.setContentsMargins(0, 0, 0, 0)
+        timer_buttons.setSpacing(0)
+
+        roll_timer_up_btn = QPushButton("▲")
+        roll_timer_up_btn.setObjectName("roll_timer_up")
+        roll_timer_up_btn.setFixedWidth(18)
+        roll_timer_up_btn.setFixedHeight(12)
+        roll_timer_up_btn.clicked.connect(self.broadcast_roll_interval_spin.stepUp)
+        timer_buttons.addWidget(roll_timer_up_btn)
+
+        roll_timer_down_btn = QPushButton("▼")
+        roll_timer_down_btn.setObjectName("roll_timer_down")
+        roll_timer_down_btn.setFixedWidth(18)
+        roll_timer_down_btn.setFixedHeight(12)
+        roll_timer_down_btn.clicked.connect(self.broadcast_roll_interval_spin.stepDown)
+        timer_buttons.addWidget(roll_timer_down_btn)
+
+        timer_control_layout.addLayout(timer_buttons)
+        rolling_timer_row.addWidget(timer_control)
+        rolling_timer_row.addStretch()
+        broadcast_layout.addLayout(rolling_timer_row)
+
+        # Broadcast Title
         title_row = QHBoxLayout()
-        title_label = QLabel("League name:")
+        title_label = QLabel("Title:")
         title_label.setStyleSheet("border: none; color: white; font-size: 9pt;")
         title_label.setFixedWidth(80)
         title_row.addWidget(title_label)
         self.broadcast_title_input = QLineEdit(self.parent_overlay.settings.broadcast_header_title)
-        self.broadcast_title_input.setPlaceholderText("e.g. BROKEN WING RACING LEAGUE")
+        self.broadcast_title_input.setPlaceholderText("e.g. BWRL")
         self.broadcast_title_input.setStyleSheet("""
             QLineEdit {
                 background-color: #444444; color: white; border: 1px solid #666666;
@@ -1166,6 +1248,8 @@ class SettingsDialog(QDialog):
             self.show_pit_lap_cb.setChecked(defaults.show_pit_lap)
             self.show_footer_cb.setChecked(defaults.show_footer)
             self.broadcast_header_cb.setChecked(defaults.show_broadcast_header)
+            self.broadcast_roll_enabled_cb.setChecked(defaults.broadcast_roll_enabled)
+            self.broadcast_roll_interval_spin.setValue(defaults.broadcast_roll_interval_seconds)
             self.broadcast_title_input.setText(defaults.broadcast_header_title)
             self.broadcast_logo_input.setText(defaults.broadcast_header_logo or "")
             self._broadcast_accent_color = defaults.broadcast_header_accent_color
@@ -1262,6 +1346,8 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_pit_lap = self.show_pit_lap_cb.isChecked()
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()
             self.parent_overlay.settings.show_broadcast_header = self.broadcast_header_cb.isChecked()
+            self.parent_overlay.settings.broadcast_roll_enabled = self.broadcast_roll_enabled_cb.isChecked()
+            self.parent_overlay.settings.broadcast_roll_interval_seconds = self.broadcast_roll_interval_spin.value()
             self.parent_overlay.settings.broadcast_header_title = self.broadcast_title_input.text()
             self.parent_overlay.settings.broadcast_header_logo = self.broadcast_logo_input.text() or None
             self.parent_overlay.settings.broadcast_header_accent_color = self._broadcast_accent_color

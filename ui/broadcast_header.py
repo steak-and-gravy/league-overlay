@@ -5,6 +5,7 @@ professional broadcast-quality layout suitable for spectator streams.
 """
 
 import os
+import sys
 from typing import Optional, Dict, Any
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel
@@ -154,15 +155,16 @@ class BroadcastHeaderWidget(QWidget):
         """Load the league logo from the configured path."""
         logo_path = self.settings.broadcast_header_logo
         if not logo_path:
-            self.logo_label.hide()
-            return
+            logo_path = self._get_default_logo_path()
 
         # Support both absolute and relative paths
         if not os.path.isabs(logo_path):
-            logo_path = os.path.join(os.getcwd(), logo_path)
+            logo_path = os.path.join(self._get_app_base_dir(), logo_path)
 
         if not os.path.isfile(logo_path):
-            logger.warning(f"Broadcast header logo not found: {logo_path}")
+            # Warn only when user explicitly configured a path.
+            if self.settings.broadcast_header_logo:
+                logger.warning(f"Broadcast header logo not found: {logo_path}")
             self.logo_label.hide()
             return
 
@@ -175,6 +177,16 @@ class BroadcastHeaderWidget(QWidget):
         self._logo_pixmap = pixmap
         self._apply_logo()
         self.logo_label.show()
+
+    def _get_default_logo_path(self) -> str:
+        """Return the default broadcast logo path in the app base folder."""
+        return os.path.join(self._get_app_base_dir(), "BBLeagueOverlay.png")
+
+    def _get_app_base_dir(self) -> str:
+        """Resolve the application base directory for bundled and source runs."""
+        if getattr(sys, "frozen", False):
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     def _apply_logo(self):
         """Scale and apply the cached logo pixmap to the label."""

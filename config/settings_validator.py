@@ -194,6 +194,11 @@ class SettingsValidator:
             default=self.defaults['show_broadcast_header'],
             field_name='show_broadcast_header'
         )
+        validated['broadcast_roll_enabled'] = self.coerce_bool(
+            data.get('broadcast_roll_enabled'),
+            default=self.defaults['broadcast_roll_enabled'],
+            field_name='broadcast_roll_enabled'
+        )
 
         # Broadcast header settings
         validated['broadcast_header_logo'] = self.coerce_string(
@@ -210,6 +215,13 @@ class SettingsValidator:
             data.get('broadcast_header_accent_color'),
             default=self.defaults['broadcast_header_accent_color'],
             field_name='broadcast_header_accent_color'
+        )
+        validated['broadcast_roll_interval_seconds'] = self.coerce_int(
+            data.get('broadcast_roll_interval_seconds'),
+            default=self.defaults['broadcast_roll_interval_seconds'],
+            min_val=1,
+            max_val=60,
+            field_name='broadcast_roll_interval_seconds'
         )
 
         # Enum fields (limited valid values)

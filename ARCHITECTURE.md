@@ -85,8 +85,15 @@ UI modules render data from `DriverState` objects and handle user interaction. T
 - `widgets.py` — Custom Qt widgets and signals
 - `styles.py` — Row styling strategies
 - `driver_row_renderer.py` — Driver row rendering
+- `broadcast_header.py` — Broadcast-quality header widget with league logo, session info, and track name
 - `settings_dialog.py` — Settings UI
 - `auto_center_controller.py` — Auto-centering logic
+
+Broadcast rolling standings mode is coordinated in `league_overlay.py` and configured in `settings_dialog.py`:
+- Active only when broadcast header is enabled and rolling mode is enabled
+- Locks top visible rows and reserves bottom 5 rows for timed rolling pages
+- Disables scrollbar and player auto-centering while rolling mode is active
+- Pads the final rolling page with blank rows when needed, then wraps to the first rolling page
 
 ---
 

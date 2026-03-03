@@ -184,7 +184,7 @@ class TestSessionStatusFormatting:
 
         mock_app.ir.__getitem__ = Mock(side_effect=mock_getitem)
         result = mock_app._format_lap_based_status("Qualify", 4, "4", "Qualify", {})
-        assert result == "Qualify - Lap 1/4 - 10:00"
+        assert result == "Qualify - Lap 1/4 (10:00)"
 
     # ═══════════════════════════════════════════════════════════════════
     # TIME-BASED STATUS FORMATTING TESTS
@@ -225,6 +225,14 @@ class TestSessionStatusFormatting:
         current_session = {'SessionTime': '7200 sec'}
         result = mock_app._format_time_based_status("Race", 4, current_session)
         assert result == "Race - 1:30:00"
+
+    def test_format_time_based_status_caution_keeps_lap_number(self, mock_app):
+        """CAUTION in time-based race should still show current lap."""
+        mock_app.ir.__getitem__ = Mock(return_value=600)
+        mock_app.class_leader_lap = 12
+        current_session = {'SessionTime': '1800 sec'}
+        result = mock_app._format_time_based_status("CAUTION", 4, current_session)
+        assert result == "CAUTION - 10:00 (Lap 12)"
 
     def test_format_time_based_status_time_expired(self, mock_app):
         """When time expires, show state name only."""
