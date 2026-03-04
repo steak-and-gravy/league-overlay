@@ -1,21 +1,13 @@
 """Tests for the broadcast header widget."""
 
 import os
+import base64
 import pytest
-from unittest.mock import MagicMock
-from PySide6.QtWidgets import QApplication
+from unittest.mock import MagicMock, Mock, patch
+import requests
 
 from ui.broadcast_header import BroadcastHeaderWidget
 from config.settings import AppSettings
-
-
-@pytest.fixture(scope='session')
-def qapp():
-    """Create QApplication for widget tests."""
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    yield app
 
 
 @pytest.fixture
@@ -73,7 +65,7 @@ class TestBroadcastHeaderWidget:
             get_bg_color_fn=_get_bg_color,
             get_font_size_fn=_get_font_size,
         )
-        assert widget.title_label.text() == ""
+        assert widget.title_label.text() == "BB'S LEAGUE OVERLAY"
         widget.deleteLater()
 
     def test_update_session_info(self, qapp, default_settings):
@@ -89,6 +81,24 @@ class TestBroadcastHeaderWidget:
         assert "RACE" in widget.session_label.text()
         assert "Lap 14/20" in widget.session_label.text()
         assert widget.track_label.text() == "Daytona International Speedway"
+        widget.deleteLater()
+
+    def test_update_session_info_clears_track_when_missing(self, qapp, default_settings):
+        widget = BroadcastHeaderWidget(
+            settings=default_settings,
+            get_bg_color_fn=_get_bg_color,
+            get_font_size_fn=_get_font_size,
+        )
+        widget.update_session_info({
+            'session_status': 'Race - Lap 14/20',
+            'track_display_name': 'Daytona International Speedway',
+        })
+        widget.update_session_info({
+            'session_status': 'Race - Lap 15/20',
+            'track_display_name': '',
+        })
+        assert widget.track_label.text() == ""
+        assert not widget.track_label.isVisible()
         widget.deleteLater()
 
     def test_update_session_info_no_dash(self, qapp, default_settings):
@@ -177,6 +187,49 @@ class TestBroadcastHeaderWidget:
         assert not widget.logo_label.isVisible()
         widget.deleteLater()
 
+    def test_logo_path_url_detection(self):
+        assert BroadcastHeaderWidget._is_logo_url("https://example.com/logo.png") is True
+        assert BroadcastHeaderWidget._is_logo_url("http://example.com/logo.png") is True
+        assert BroadcastHeaderWidget._is_logo_url("/tmp/logo.png") is False
+        assert BroadcastHeaderWidget._is_logo_url("relative/logo.png") is False
+
+    def test_logo_loads_from_url(self, qapp, default_settings):
+        settings = default_settings
+        settings.broadcast_header_logo = "https://example.com/logo.png"
+        widget = BroadcastHeaderWidget(
+            settings=settings,
+            get_bg_color_fn=_get_bg_color,
+            get_font_size_fn=_get_font_size,
+        )
+
+        png_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO1w1S8AAAAASUVORK5CYII="
+        )
+        response = Mock()
+        response.content = png_bytes
+        response.raise_for_status = Mock()
+
+        with patch("ui.broadcast_header.requests.get", return_value=response):
+            pixmap = widget._load_logo_from_url(settings.broadcast_header_logo)
+
+        assert pixmap is not None
+        widget.deleteLater()
+
+    def test_logo_url_failure_returns_none(self, qapp, default_settings):
+        settings = default_settings
+        settings.broadcast_header_logo = "https://example.com/logo.png"
+        widget = BroadcastHeaderWidget(
+            settings=settings,
+            get_bg_color_fn=_get_bg_color,
+            get_font_size_fn=_get_font_size,
+        )
+
+        with patch("ui.broadcast_header.requests.get", side_effect=requests.RequestException("network failure")):
+            pixmap = widget._load_logo_from_url(settings.broadcast_header_logo)
+
+        assert pixmap is None
+        widget.deleteLater()
+
     def test_refresh_styles_updates_title(self, qapp, default_settings):
         widget = BroadcastHeaderWidget(
             settings=default_settings,
@@ -188,7 +241,7 @@ class TestBroadcastHeaderWidget:
         assert widget.title_label.text() == "NEW LEAGUE NAME"
         widget.deleteLater()
 
-    def test_refresh_styles_clears_title_when_empty(self, qapp, default_settings):
+    def test_refresh_styles_uses_default_title_when_empty(self, qapp, default_settings):
         widget = BroadcastHeaderWidget(
             settings=default_settings,
             get_bg_color_fn=_get_bg_color,
@@ -196,7 +249,7 @@ class TestBroadcastHeaderWidget:
         )
         default_settings.broadcast_header_title = ""
         widget.refresh_styles()
-        assert widget.title_label.text() == ""
+        assert widget.title_label.text() == "BB'S LEAGUE OVERLAY"
         widget.deleteLater()
 
 

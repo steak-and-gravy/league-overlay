@@ -136,6 +136,7 @@ class LeagueOverlay(QMainWindow):
                 self.color_config_file = f"official:{OFFICIAL_LEAGUES[0].name}"
             else:
                 self.color_config_file = "league_divisions.json"
+        self.apply_official_league_broadcast_metadata()
 
         # User preferences not in settings (runtime state)
         self.top_elements_visible = True  # Current visibility of title/status
@@ -525,13 +526,6 @@ class LeagueOverlay(QMainWindow):
         self.status_label.setText(text)
         self.update_status_style(color)
 
-        # Forward to broadcast header when active (handles disconnect + flag states)
-        if self.settings.show_broadcast_header and hasattr(self, 'broadcast_header'):
-            self.broadcast_header.update_session_info({
-                'session_status': text,
-                'status_color': color,
-            })
-
     def update_footer_display(self, footer_data: Dict[str, Any]):
         """Update footer display with track temp, incidents, and SoF.
 
@@ -577,7 +571,7 @@ class LeagueOverlay(QMainWindow):
         """Update broadcast header with session metadata.
 
         Args:
-            session_data: Dictionary with session_status and track_display_name
+            session_data: Dictionary with session_status, status_color, track_display_name
         """
         if not self.settings.show_broadcast_header:
             return
@@ -913,6 +907,27 @@ class LeagueOverlay(QMainWindow):
 
         # Delegate to settings manager (all other settings already in self.settings)
         self.settings_manager.save(self.settings)
+
+    def apply_official_league_broadcast_metadata(self):
+        """Apply broadcast header title/logo from active official league metadata."""
+        if not isinstance(self.color_config_file, str) or not self.color_config_file.startswith("official:"):
+            return
+
+        from config.official_leagues import get_official_league
+
+        league_name = self.color_config_file.replace("official:", "")
+        try:
+            league = get_official_league(league_name)
+        except ValueError:
+            logger.warning(f"Could not apply broadcast metadata: official league not found ({league_name})")
+            return
+
+        self.settings.broadcast_header_title = league.title or ""
+        self.settings.broadcast_header_logo = league.logo
+
+        # Keep header widget in sync if UI already exists.
+        if hasattr(self, 'broadcast_header'):
+            self.broadcast_header.refresh_styles()
             
 
     def set_driver_division(self, driver_info: Dict[str, str], division_name: str) -> None:
@@ -1175,11 +1190,6 @@ class LeagueOverlay(QMainWindow):
                 if self.settings.show_footer:
                     footer_data = self.telemetry_processor.get_footer_data()
                     self.signals.update_footer.emit(footer_data)
-
-                if self.settings.show_broadcast_header:
-                    session_metadata = self.telemetry_processor.get_session_metadata()
-                    session_metadata['session_status'] = self._get_session_status_text()
-                    self.signals.update_session_metadata.emit(session_metadata)
             return
 
         # Check if starting positions were updated (qualifying results loaded)
@@ -1216,12 +1226,6 @@ class LeagueOverlay(QMainWindow):
         if self.settings.show_footer:
             footer_data = self.telemetry_processor.get_footer_data()
             self.signals.update_footer.emit(footer_data)
-
-        # Emit session metadata for broadcast header
-        if self.settings.show_broadcast_header:
-            session_metadata = self.telemetry_processor.get_session_metadata()
-            session_metadata['session_status'] = self._get_session_status_text()
-            self.signals.update_session_metadata.emit(session_metadata)
 
     def _has_data_changed(self, new_data: List[DriverState]) -> bool:
         """Check if the new data is different from the last emitted data.
@@ -1494,20 +1498,37 @@ class LeagueOverlay(QMainWindow):
             if time.time() - self.startup_time < TIMING.STARTUP_GRACE_PERIOD:
                 return
 
+            status_text = ""
+            status_color = "green"
             if not self.is_connected:
-                self.signals.update_status.emit("Connecting to iRacing...", 'orange')
-                return
+                status_text = "Connecting to iRacing..."
+                status_color = "orange"
+            elif self._should_show_connection_message():
+                # Show initial connection message for a few seconds
+                status_text = "Connected - Live Race Data"
+                status_color = "green"
+            else:
+                # Show detailed session status
+                status_text = self._get_session_status_text()
+                # Use yellow color for CAUTION state, green otherwise.
+                status_color = 'yellow' if 'CAUTION' in status_text else 'green'
 
-            # Show initial connection message for a few seconds
-            if self._should_show_connection_message():
-                self.signals.update_status.emit("Connected - Live Race Data", 'green')
-                return
-
-            # Show detailed session status
-            status_text = self._get_session_status_text()
-            # Use yellow color for CAUTION state, green otherwise.
-            status_color = 'yellow' if 'CAUTION' in status_text else 'green'
             self.signals.update_status.emit(status_text, status_color)
+
+            # Broadcast header uses the same status event payload in a single update path.
+            if self.settings.show_broadcast_header:
+                session_metadata: Dict[str, Any] = {
+                    'session_status': status_text,
+                    'status_color': status_color,
+                    'track_display_name': None,
+                }
+                try:
+                    metadata = self.telemetry_processor.get_session_metadata()
+                    if isinstance(metadata, dict):
+                        session_metadata.update(metadata)
+                except Exception as e:
+                    logger.debug(f"Broadcast header metadata unavailable: {e}")
+                self.signals.update_session_metadata.emit(session_metadata)
 
         except Exception as e:
             logger.error(f"GUI update error: {e}", exc_info=True)
@@ -1574,7 +1595,22 @@ class LeagueOverlay(QMainWindow):
                 'total_pages': 1
             }
 
-        if visible_rows <= roll_rows or total_drivers <= visible_rows:
+        # When the viewport is too short to support a locked section, roll all rows.
+        if visible_rows <= roll_rows and total_drivers > visible_rows:
+            total_pages = max(1, math.ceil(total_drivers / visible_rows))
+            page = page_index % total_pages
+            roll_start = page * visible_rows
+            roll_end = min(total_drivers, roll_start + visible_rows)
+            blank_rows = max(0, visible_rows - (roll_end - roll_start))
+            return {
+                'locked_count': 0,
+                'roll_start': roll_start,
+                'roll_end': roll_end,
+                'blank_rows': blank_rows,
+                'total_pages': total_pages
+            }
+
+        if total_drivers <= visible_rows:
             return {
                 'locked_count': min(total_drivers, visible_rows),
                 'roll_start': min(total_drivers, visible_rows),

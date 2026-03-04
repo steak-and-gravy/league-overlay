@@ -2,7 +2,9 @@
   {
     "name": "BWRL GT3 Sprint",
     "path": "bwrl/broken_wing_gt3.json",
+    "title": "Broken Wing GT3 Sprint",
     "description": "Broken Wing Racing League Sunday Night GT3",
+    "logo": "https://bwrl.net/_nuxt/bwrl-logo.DjQE3-f5.png",
     "cache_file": "cache_broken_wing_gt3.json"
   }
 ]

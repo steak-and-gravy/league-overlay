@@ -56,3 +56,28 @@ class TestBroadcastRollingWindow:
         assert window['roll_end'] == 10
         assert window['blank_rows'] == 0
         assert window['total_pages'] == 1
+
+    def test_rolls_all_rows_when_visible_rows_is_five_or_less(self):
+        """Small viewports should page through all rows instead of locking top rows."""
+        first_page = LeagueOverlay._calculate_broadcast_roll_window(
+            total_drivers=12,
+            visible_rows=5,
+            roll_rows=5,
+            page_index=0
+        )
+        assert first_page['locked_count'] == 0
+        assert first_page['roll_start'] == 0
+        assert first_page['roll_end'] == 5
+        assert first_page['total_pages'] == 3
+
+        last_page = LeagueOverlay._calculate_broadcast_roll_window(
+            total_drivers=12,
+            visible_rows=5,
+            roll_rows=5,
+            page_index=2
+        )
+        assert last_page['locked_count'] == 0
+        assert last_page['roll_start'] == 10
+        assert last_page['roll_end'] == 12
+        assert last_page['blank_rows'] == 3
+        assert last_page['total_pages'] == 3

@@ -1053,7 +1053,12 @@ class SettingsDialog(QDialog):
             self.parent_overlay.color_config_file = league_source
             self.parent_overlay.division_manager.config_file = league_source
             self.parent_overlay.division_manager.load_driver_config()
+            self.parent_overlay.apply_official_league_broadcast_metadata()
             self.parent_overlay.signals.refresh_colors.emit()
+
+            # Keep dialog fields in sync with auto-loaded official metadata.
+            self.broadcast_title_input.setText(self.parent_overlay.settings.broadcast_header_title)
+            self.broadcast_logo_input.setText(self.parent_overlay.settings.broadcast_header_logo or "")
 
             # Save to settings (but don't add to recent - it's official)
             self.parent_overlay.settings.league_config = league_source

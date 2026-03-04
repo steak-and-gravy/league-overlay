@@ -286,6 +286,8 @@ class TestSessionStatusFormatting:
         mock_app.signals = Mock()
         mock_app.signals.update_status = Mock()
         mock_app.signals.update_status.emit = Mock()
+        mock_app.signals.update_session_metadata = Mock()
+        mock_app.signals.update_session_metadata.emit = Mock()
         mock_app._should_show_connection_message = Mock(return_value=False)
         mock_app._get_session_status_text = Mock(return_value="CAUTION - Lap 5/20")
         mock_app.update_gui = LeagueOverlay.update_gui.__get__(mock_app)
@@ -293,6 +295,7 @@ class TestSessionStatusFormatting:
         mock_app.update_gui()
 
         mock_app.signals.update_status.emit.assert_called_once_with("CAUTION - Lap 5/20", "yellow")
+        mock_app.signals.update_session_metadata.emit.assert_not_called()
 
     def test_update_gui_caution_yellow_with_broadcast_mode(self, mock_app):
         """CAUTION styling should be yellow when broadcast mode is enabled."""
@@ -303,6 +306,12 @@ class TestSessionStatusFormatting:
         mock_app.signals = Mock()
         mock_app.signals.update_status = Mock()
         mock_app.signals.update_status.emit = Mock()
+        mock_app.signals.update_session_metadata = Mock()
+        mock_app.signals.update_session_metadata.emit = Mock()
+        mock_app.telemetry_processor = Mock()
+        mock_app.telemetry_processor.get_session_metadata = Mock(
+            return_value={'track_display_name': 'Daytona'}
+        )
         mock_app._should_show_connection_message = Mock(return_value=False)
         mock_app._get_session_status_text = Mock(return_value="CAUTION - Lap 5/20")
         mock_app.update_gui = LeagueOverlay.update_gui.__get__(mock_app)
@@ -310,3 +319,8 @@ class TestSessionStatusFormatting:
         mock_app.update_gui()
 
         mock_app.signals.update_status.emit.assert_called_once_with("CAUTION - Lap 5/20", "yellow")
+        mock_app.signals.update_session_metadata.emit.assert_called_once_with({
+            'session_status': "CAUTION - Lap 5/20",
+            'status_color': 'yellow',
+            'track_display_name': 'Daytona',
+        })

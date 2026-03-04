@@ -458,3 +458,42 @@ class TestSessionChangeFooterRefresh:
         assert app.class_leader_lap == 12
         app.telemetry_processor.get_footer_data.assert_not_called()
         app.signals.update_footer.emit.assert_not_called()
+
+
+class TestOfficialLeagueBroadcastMetadata:
+    """Tests for applying broadcast metadata from official leagues."""
+
+    def test_apply_official_league_broadcast_metadata_sets_title_and_logo(self):
+        app = Mock(spec=LeagueOverlay)
+        app.color_config_file = "official:BWRL GT3 Sprint"
+        app.settings = Mock(broadcast_header_title="", broadcast_header_logo=None)
+        app.broadcast_header = Mock()
+        app.apply_official_league_broadcast_metadata = (
+            LeagueOverlay.apply_official_league_broadcast_metadata.__get__(app)
+        )
+
+        with patch("config.official_leagues.get_official_league") as get_official_league:
+            get_official_league.return_value = Mock(
+                title="Broken Wing GT3 Sprint",
+                logo="https://bwrl.net/_nuxt/bwrl-logo.DjQE3-f5.png"
+            )
+            app.apply_official_league_broadcast_metadata()
+
+        assert app.settings.broadcast_header_title == "Broken Wing GT3 Sprint"
+        assert app.settings.broadcast_header_logo == "https://bwrl.net/_nuxt/bwrl-logo.DjQE3-f5.png"
+        app.broadcast_header.refresh_styles.assert_called_once()
+
+    def test_apply_official_league_broadcast_metadata_ignores_non_official_config(self):
+        app = Mock(spec=LeagueOverlay)
+        app.color_config_file = "league_divisions.json"
+        app.settings = Mock(broadcast_header_title="Existing", broadcast_header_logo="/tmp/logo.png")
+        app.apply_official_league_broadcast_metadata = (
+            LeagueOverlay.apply_official_league_broadcast_metadata.__get__(app)
+        )
+
+        with patch("config.official_leagues.get_official_league") as get_official_league:
+            app.apply_official_league_broadcast_metadata()
+
+        assert app.settings.broadcast_header_title == "Existing"
+        assert app.settings.broadcast_header_logo == "/tmp/logo.png"
+        get_official_league.assert_not_called()

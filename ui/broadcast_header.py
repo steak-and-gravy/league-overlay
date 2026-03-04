@@ -7,10 +7,12 @@ professional broadcast-quality layout suitable for spectator streams.
 import os
 import sys
 from typing import Optional, Dict, Any
+from urllib.parse import urlparse
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap
+import requests
 
 from config.constants import UI_COLORS, UI_DIMENSIONS
 from config.logging_config import get_logger
@@ -87,9 +89,13 @@ class BroadcastHeaderWidget(QWidget):
 
         main_layout.addLayout(text_layout, 1)
 
-        # Set initial title text
-        if self.settings.broadcast_header_title:
-            self.title_label.setText(self.settings.broadcast_header_title.upper())
+        # Set initial title text (with default fallback)
+        self.title_label.setText(self._get_display_title())
+
+    def _get_display_title(self) -> str:
+        """Return configured title or fallback default for broadcast header."""
+        title = self.settings.broadcast_header_title or "BB's League Overlay"
+        return title.upper()
 
     def _update_background(self):
         """Update the widget background color with opacity."""
@@ -157,6 +163,16 @@ class BroadcastHeaderWidget(QWidget):
         if not logo_path:
             logo_path = self._get_default_logo_path()
 
+        if self._is_logo_url(logo_path):
+            pixmap = self._load_logo_from_url(logo_path)
+            if pixmap is None:
+                self.logo_label.hide()
+                return
+            self._logo_pixmap = pixmap
+            self._apply_logo()
+            self.logo_label.show()
+            return
+
         # Support both absolute and relative paths
         if not os.path.isabs(logo_path):
             logo_path = os.path.join(self._get_app_base_dir(), logo_path)
@@ -177,6 +193,27 @@ class BroadcastHeaderWidget(QWidget):
         self._logo_pixmap = pixmap
         self._apply_logo()
         self.logo_label.show()
+
+    @staticmethod
+    def _is_logo_url(path: str) -> bool:
+        """Return True if a logo path is an HTTP(S) URL."""
+        parsed = urlparse(path)
+        return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+    def _load_logo_from_url(self, logo_url: str) -> Optional[QPixmap]:
+        """Load and decode logo image from web URL."""
+        try:
+            response = requests.get(logo_url, timeout=5)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            logger.warning(f"Failed to fetch broadcast header logo from URL {logo_url}: {e}")
+            return None
+
+        pixmap = QPixmap()
+        if not pixmap.loadFromData(response.content):
+            logger.warning(f"Failed to decode broadcast header logo from URL: {logo_url}")
+            return None
+        return pixmap
 
     def _get_default_logo_path(self) -> str:
         """Return the default broadcast logo path in the app base folder."""
@@ -225,7 +262,8 @@ class BroadcastHeaderWidget(QWidget):
         if track_name:
             self.track_label.setText(track_name)
             self.track_label.show()
-        elif not self.track_label.text():
+        else:
+            self.track_label.setText("")
             self.track_label.hide()
 
         # Update accent line color for flag status
@@ -247,10 +285,7 @@ class BroadcastHeaderWidget(QWidget):
         self._style_session_label()
         self._style_track_label()
 
-        if self.settings.broadcast_header_title:
-            self.title_label.setText(self.settings.broadcast_header_title.upper())
-        else:
-            self.title_label.setText("")
+        self.title_label.setText(self._get_display_title())
 
         self._load_logo()
 
