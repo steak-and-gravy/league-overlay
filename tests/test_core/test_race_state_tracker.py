@@ -762,3 +762,51 @@ class TestFinishGapWithPositionSwaps:
         # All gaps positive
         for car_idx in [3, 4, 5, 6]:
             assert tracker.driver_snapshots[car_idx].finish_gap > 0
+
+
+class TestSessionStateFallback:
+    """SessionState fallback behavior when iRacing reports transient None."""
+
+    def test_update_finish_status_handles_none_session_state(self, mock_ir):
+        """None SessionState should be treated as racing and not crash."""
+        def mock_getitem(key):
+            if key == 'SessionState':
+                return None
+            raise KeyError(key)
+
+        mock_ir.__getitem__ = Mock(side_effect=mock_getitem)
+        tracker = RaceStateTracker(mock_ir)
+
+        tracker.update_finish_status(lambda: 0)
+
+        assert tracker.is_checkered() is False
+
+    def test_handle_disconnected_drivers_handles_none_session_state(self, mock_ir):
+        """Disconnected restoration should not crash when SessionState is None."""
+        def mock_getitem(key):
+            if key == 'SessionState':
+                return None
+            if key == 'RaceLaps':
+                return 0
+            raise KeyError(key)
+
+        mock_ir.__getitem__ = Mock(side_effect=mock_getitem)
+        tracker = RaceStateTracker(mock_ir)
+        tracker.update_snapshot(0, DriverState(
+            car_idx=0,
+            driver_info={'UserName': 'Driver 0', 'CarClassID': 1},
+            position=1,
+            current_lap=3,
+            lap_pct=0.5,
+        ))
+
+        active_drivers = []
+        tracker.handle_disconnected_drivers(
+            active_drivers=active_drivers,
+            session_data={},
+            get_position_from_results_fn=lambda *_args: 1
+        )
+
+        assert len(active_drivers) == 1
+        assert active_drivers[0]['car_idx'] == 0
+        assert active_drivers[0]['disconnected'] is True

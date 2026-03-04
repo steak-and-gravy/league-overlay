@@ -84,7 +84,9 @@ class ColumnMinWidths:
 class Timing:
     """Timing and refresh rate constants."""
     AUTO_CENTER_CHECK_INTERVAL: int = 1000  # milliseconds
+    BROADCAST_ROLL_INTERVAL_SECONDS: int = 3  # seconds
     STARTUP_GRACE_PERIOD: float = 3.0  # seconds
+    RACE_JOIN_RESTORE_GRACE_SECONDS: float = 1.0  # seconds before showing results/DC fallback rows
     AUTO_HIDE_DELAY: int = 500  # milliseconds
     UPDATE_CHECK_DELAY: float = 1.0  # seconds
     CONNECTION_MESSAGE_DURATION: float = 3.0  # seconds - how long to show "Connected" message

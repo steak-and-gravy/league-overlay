@@ -580,6 +580,23 @@ class TestSessionTracking:
         assert processor._detect_session_change(session_data) is False
         assert processor.current_subsession_id == 999
 
+    def test_session_change_detection_when_subsession_becomes_known(self, mock_dependencies):
+        """Unknown -> known SubSessionID should trigger session reset once."""
+        processor = TelemetryProcessor(**mock_dependencies)
+
+        processor.current_session_id = 12345
+        processor.current_subsession_id = None
+        processor.current_session_type = 'Race'
+
+        session_data = {
+            'session_id': 12345,
+            'subsession_id': 999,
+            'session_type': 'Race',
+        }
+
+        assert processor._detect_session_change(session_data) is True
+        assert processor.current_subsession_id == 999
+
 
 class TestDriverInfoHandling:
     """Unit tests for robust DriverInfo data handling during session transitions."""
@@ -802,6 +819,252 @@ class TestOverallGapMode:
         # directly (position), which means only P1 overall (position == 1) will show "Leader"
 
         assert True, "Overall interval mode uses position_key for leader determination"
+
+
+class TestDeltaFallbacks:
+    """Delta calculation should be resilient to transient missing lap arrays."""
+
+    @pytest.fixture
+    def processor(self):
+        ir = MagicMock()
+        division_manager = MagicMock(spec=DivisionManager)
+        race_state_tracker = RaceStateTracker(ir)
+        gap_calculator = MagicMock(spec=GapCalculator)
+        position_calculator = MagicMock(spec=PositionCalculator)
+        return TelemetryProcessor(
+            ir=ir,
+            division_manager=division_manager,
+            race_state_tracker=race_state_tracker,
+            gap_calculator=gap_calculator,
+            position_calculator=position_calculator
+        )
+
+    def test_calculate_delta_returns_placeholder_when_last_lap_array_is_none(self, processor):
+        processor.position_calculator.player_car_idx = None
+        result = processor._calculate_delta(
+            driver_lap_time=90.0,
+            all_drivers_with_colors=[{'car_idx': 1, 'position': 1, 'color': '#fff'}],
+            car_idx_last_lap=None,
+            current_driver_color='#fff',
+            car_idx=1
+        )
+        assert result == "--"
+
+    def test_calculate_delta_returns_placeholder_when_division_leader_lap_is_none(self, processor):
+        processor.position_calculator.player_car_idx = None
+        result = processor._calculate_delta(
+            driver_lap_time=90.0,
+            all_drivers_with_colors=[{'car_idx': 1, 'position': 1, 'color': '#fff'}],
+            car_idx_last_lap=[None, None, None],
+            current_driver_color='#fff',
+            car_idx=2
+        )
+        assert result == "--"
+
+
+class TestRaceResultsRestoreWhenNoActiveDrivers:
+    """Regression tests for startup-before-join restoration path."""
+
+    def test_process_telemetry_restores_rows_from_results_when_active_lists_empty(self):
+        """Rows should still render when live + official active lists are empty."""
+        ir = MagicMock()
+        division_manager = MagicMock(spec=DivisionManager)
+        race_state_tracker = MagicMock(spec=RaceStateTracker)
+        gap_calculator = MagicMock(spec=GapCalculator)
+        position_calculator = MagicMock(spec=PositionCalculator)
+
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=division_manager,
+            race_state_tracker=race_state_tracker,
+            gap_calculator=gap_calculator,
+            position_calculator=position_calculator
+        )
+
+        drivers = {
+            7: {
+                'CarIdx': 7,
+                'UserName': 'Driver Seven',
+                'CarNumber': '7',
+                'CarClassID': 4091,
+                'IRating': 2500,
+                'LicLevel': 12,
+                'LicSubLevel': 350,
+            }
+        }
+        session_data = {
+            'session_id': 123,
+            'subsession_id': 456,
+            'session_type': 'Race',
+            'current_session': {'SessionType': 'Race'},
+            'results_lookup': {7: {'CarIdx': 7, 'ClassPosition': 0, 'FastestTime': 90.0, 'LastTime': 91.0}},
+            'fastest_lap_time': 90.0,
+        }
+
+        processor._get_session_info = Mock(return_value=(drivers, session_data, True))
+        processor._detect_session_change = Mock(return_value=False)
+        processor._populate_lap_time_cache_from_results = Mock()
+        processor._update_pit_tracking = Mock()
+        processor._update_tow_tracking = Mock()
+        processor._update_tow_sort_freeze_state = Mock()
+        processor._update_race_snapshots = Mock()
+        processor._calculate_division_positions = Mock(return_value=({7: 1}, []))
+        processor._calculate_interval = Mock(return_value="")
+        processor._calculate_gap_to_leader = Mock(return_value="")
+        processor._calculate_delta = Mock(return_value="--")
+        processor._build_race_data_entry = Mock(
+            side_effect=lambda driver, *_args, **_kwargs: DriverState(
+                car_idx=driver['car_idx'],
+                driver_info=driver['driver_info'],
+                position=driver['position'],
+                current_lap=driver.get('current_lap', 0),
+                lap_pct=driver.get('lap_pct', 0.0),
+            )
+        )
+
+        position_calculator.identify_player = Mock()
+        position_calculator.player_car_class_id = None
+        position_calculator.player_car_idx = None
+        position_calculator.calculate_real_time_positions = Mock(return_value=[])
+        position_calculator.get_official_positions = Mock(return_value=[])
+        position_calculator.get_overall_race_leader_idx = Mock(return_value=None)
+
+        race_state_tracker.update_finish_status = Mock()
+        race_state_tracker.is_checkered = Mock(return_value=False)
+        race_state_tracker.is_driver_finished = Mock(return_value=False)
+        race_state_tracker.get_starting_position = Mock(return_value=0)
+
+        def restore_from_results(active_drivers, _session_data, _get_position_from_results):
+            active_drivers.append({
+                'car_idx': 7,
+                'driver_info': drivers[7],
+                'position': 1,
+                'current_lap': 0,
+                'lap_pct': 0.0,
+                'total_track_position': 0.0,
+                'best_lap_time': 90.0,
+                'last_lap_time': 91.0,
+            })
+
+        race_state_tracker.handle_disconnected_drivers = Mock(side_effect=restore_from_results)
+        division_manager.get_driver_division = Mock(return_value=None)
+
+        result = processor.process_telemetry(get_driver_color_fn=lambda _driver_info: '#FFFFFF')
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].car_idx == 7
+        race_state_tracker.handle_disconnected_drivers.assert_called_once()
+
+    def test_process_telemetry_skips_results_restore_during_join_grace(self):
+        """Join grace should suppress temporary all-(DC) fallback rows."""
+        ir = MagicMock()
+        division_manager = MagicMock(spec=DivisionManager)
+        race_state_tracker = MagicMock(spec=RaceStateTracker)
+        gap_calculator = MagicMock(spec=GapCalculator)
+        position_calculator = MagicMock(spec=PositionCalculator)
+
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=division_manager,
+            race_state_tracker=race_state_tracker,
+            gap_calculator=gap_calculator,
+            position_calculator=position_calculator
+        )
+
+        drivers = {
+            7: {
+                'CarIdx': 7,
+                'UserName': 'Driver Seven',
+                'CarNumber': '7',
+                'CarClassID': 4091,
+            }
+        }
+        session_data = {
+            'session_id': 123,
+            'subsession_id': 456,
+            'session_type': 'Race',
+            'current_session': {'SessionType': 'Race'},
+            'results_lookup': {7: {'CarIdx': 7, 'ClassPosition': 0}},
+            'fastest_lap_time': 90.0,
+        }
+
+        processor._get_session_info = Mock(return_value=(drivers, session_data, True))
+        processor._detect_session_change = Mock(return_value=False)
+        processor._populate_lap_time_cache_from_results = Mock()
+        processor._update_core_telemetry_health = Mock()
+        processor._update_pit_tracking = Mock()
+        processor._update_tow_tracking = Mock()
+
+        position_calculator.identify_player = Mock()
+        position_calculator.player_car_class_id = None
+        position_calculator.player_car_idx = None
+        position_calculator.calculate_real_time_positions = Mock(return_value=[])
+        position_calculator.get_official_positions = Mock(return_value=[])
+        position_calculator.get_overall_race_leader_idx = Mock(return_value=None)
+
+        race_state_tracker.update_finish_status = Mock()
+        race_state_tracker.handle_disconnected_drivers = Mock()
+
+        processor._race_join_restore_grace_until = 9999999999.0
+
+        result = processor.process_telemetry(get_driver_color_fn=lambda _driver_info: '#FFFFFF')
+
+        assert result is None
+        race_state_tracker.handle_disconnected_drivers.assert_not_called()
+
+    def test_process_telemetry_skips_results_restore_when_core_telemetry_missing(self):
+        """Missing core telemetry arrays should suppress synthetic disconnected rows."""
+        ir = MagicMock()
+        division_manager = MagicMock(spec=DivisionManager)
+        race_state_tracker = MagicMock(spec=RaceStateTracker)
+        gap_calculator = MagicMock(spec=GapCalculator)
+        position_calculator = MagicMock(spec=PositionCalculator)
+
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=division_manager,
+            race_state_tracker=race_state_tracker,
+            gap_calculator=gap_calculator,
+            position_calculator=position_calculator
+        )
+
+        drivers = {
+            7: {'CarIdx': 7, 'UserName': 'Driver Seven', 'CarNumber': '7', 'CarClassID': 4091}
+        }
+        session_data = {
+            'session_id': 123,
+            'subsession_id': 456,
+            'session_type': 'Race',
+            'current_session': {'SessionType': 'Race'},
+            'results_lookup': {7: {'CarIdx': 7, 'ClassPosition': 0}},
+            'fastest_lap_time': 90.0,
+        }
+
+        processor._get_session_info = Mock(return_value=(drivers, session_data, True))
+        processor._detect_session_change = Mock(return_value=False)
+        processor._populate_lap_time_cache_from_results = Mock()
+        processor._update_core_telemetry_health = Mock()
+        processor._update_pit_tracking = Mock()
+        processor._update_tow_tracking = Mock()
+        processor._has_core_live_telemetry = Mock(return_value=False)
+
+        position_calculator.identify_player = Mock()
+        position_calculator.player_car_class_id = None
+        position_calculator.player_car_idx = None
+        position_calculator.calculate_real_time_positions = Mock(return_value=[])
+        position_calculator.get_official_positions = Mock(return_value=[])
+        position_calculator.get_overall_race_leader_idx = Mock(return_value=None)
+
+        race_state_tracker.update_finish_status = Mock()
+        race_state_tracker.handle_disconnected_drivers = Mock()
+
+        processor._race_join_restore_grace_until = None
+
+        result = processor.process_telemetry(get_driver_color_fn=lambda _driver_info: '#FFFFFF')
+
+        assert result is None
+        race_state_tracker.handle_disconnected_drivers.assert_not_called()
 
 
 class TestDisconnectedFinishersLeaderBug:
@@ -1461,6 +1724,92 @@ class TestCarSpecificTimeNormalization:
         # The exact format depends on GapCalculator but should indicate lap difference
         assert gap != "", "Gap should be calculated"
         assert gap != "Leader", "P2 should not show as leader"
+
+    def test_interval_handles_none_car_idx_est_time(self, mock_dependencies):
+        """Transient None CarIdxEstTime should fall back without crashing."""
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+
+        drivers_list = [
+            {'CarIdx': 0, 'CarClassEstLapTime': 90.0, 'CarClassID': 1},
+            {'CarIdx': 1, 'CarClassEstLapTime': 90.0, 'CarClassID': 1},
+        ]
+        ir.__getitem__.side_effect = lambda key: {
+            'CarIdxEstTime': None,
+            'DriverInfo': {'Drivers': drivers_list}
+        }[key]
+
+        driver_ahead = {
+            'car_idx': 0,
+            'driver_info': {'UserID': 100, 'CarClassID': 1},
+            'position': 1,
+            'current_lap': 10,
+            'lap_pct': 0.6,
+            'total_track_position': 10.6
+        }
+        driver_current = {
+            'car_idx': 1,
+            'driver_info': {'UserID': 200, 'CarClassID': 1},
+            'position': 2,
+            'current_lap': 10,
+            'lap_pct': 0.4,
+            'total_track_position': 10.4
+        }
+        active_drivers = [driver_ahead, driver_current]
+
+        gap = processor._calculate_live_race_interval(
+            driver_current,
+            "#FFFFFF",
+            active_drivers,
+            {'fastest_lap_time': 90.0},
+            lambda _x: "#FFFFFF",
+            show_division=False
+        )
+
+        assert isinstance(gap, str)
+
+    def test_gap_to_leader_handles_none_car_idx_est_time(self, mock_dependencies):
+        """Gap-to-leader should survive None CarIdxEstTime during join transitions."""
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+
+        drivers_list = [
+            {'CarIdx': 0, 'CarClassEstLapTime': 90.0, 'CarClassID': 1},
+            {'CarIdx': 1, 'CarClassEstLapTime': 90.0, 'CarClassID': 1},
+        ]
+        ir.__getitem__.side_effect = lambda key: {
+            'CarIdxEstTime': None,
+            'DriverInfo': {'Drivers': drivers_list}
+        }[key]
+
+        leader = {
+            'car_idx': 0,
+            'driver_info': {'UserID': 100, 'CarClassID': 1},
+            'position': 1,
+            'current_lap': 10,
+            'lap_pct': 0.7,
+            'total_track_position': 10.7
+        }
+        trailing = {
+            'car_idx': 1,
+            'driver_info': {'UserID': 200, 'CarClassID': 1},
+            'position': 2,
+            'current_lap': 10,
+            'lap_pct': 0.5,
+            'total_track_position': 10.5
+        }
+        active_drivers = [leader, trailing]
+
+        gap = processor._calculate_live_gap_to_leader(
+            trailing,
+            "#FFFFFF",
+            active_drivers,
+            {'fastest_lap_time': 90.0},
+            lambda _x: "#FFFFFF",
+            show_division=False
+        )
+
+        assert isinstance(gap, str)
 
 
 class TestFinishingGapCalculation:

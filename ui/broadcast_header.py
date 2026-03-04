@@ -4,8 +4,6 @@ Displays league logo, league name, session info, and track name in a
 professional broadcast-quality layout suitable for spectator streams.
 """
 
-import os
-import sys
 from typing import Optional, Dict, Any
 from urllib.parse import urlparse
 
@@ -23,7 +21,16 @@ logger = get_logger(__name__)
 class BroadcastHeaderWidget(QWidget):
     """Broadcast-quality header showing logo, league name, session info, and track name."""
 
-    def __init__(self, settings: Any, get_bg_color_fn, get_font_size_fn, parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        settings: Any,
+        get_bg_color_fn,
+        get_font_size_fn,
+        get_broadcast_title_fn=None,
+        get_broadcast_logo_fn=None,
+        get_broadcast_accent_fn=None,
+        parent: Optional[QWidget] = None,
+    ):
         """Initialize the broadcast header.
 
         Args:
@@ -36,6 +43,9 @@ class BroadcastHeaderWidget(QWidget):
         self.settings = settings
         self.get_bg_color = get_bg_color_fn
         self.get_font_size = get_font_size_fn
+        self.get_broadcast_title = get_broadcast_title_fn
+        self.get_broadcast_logo = get_broadcast_logo_fn
+        self.get_broadcast_accent = get_broadcast_accent_fn
         self._logo_pixmap: Optional[QPixmap] = None
         self._setup_ui()
         self._load_logo()
@@ -94,8 +104,32 @@ class BroadcastHeaderWidget(QWidget):
 
     def _get_display_title(self) -> str:
         """Return configured title or fallback default for broadcast header."""
-        title = self.settings.broadcast_header_title or "BB's League Overlay"
+        title = None
+        if callable(self.get_broadcast_title):
+            title = self.get_broadcast_title()
+        if not title:
+            title = getattr(self.settings, "broadcast_header_title", None)
+        if not title:
+            title = "BB's League Overlay"
         return title.upper()
+
+    def _get_accent_color(self) -> str:
+        """Return broadcast accent color (runtime provider takes precedence)."""
+        color = None
+        if callable(self.get_broadcast_accent):
+            color = self.get_broadcast_accent()
+        if not color:
+            color = getattr(self.settings, "broadcast_header_accent_color", None)
+        return color or "#FF8C00"
+
+    def _get_logo_path(self) -> str:
+        """Return runtime broadcast logo URL with default fallback."""
+        logo_path = None
+        if callable(self.get_broadcast_logo):
+            logo_path = self.get_broadcast_logo()
+        if not logo_path:
+            logo_path = getattr(self.settings, "broadcast_header_logo", None)
+        return logo_path or self._get_default_logo_path()
 
     def _update_background(self):
         """Update the widget background color with opacity."""
@@ -118,7 +152,7 @@ class BroadcastHeaderWidget(QWidget):
 
     def _style_accent_line(self):
         """Apply styling to the accent divider line."""
-        color = self.settings.broadcast_header_accent_color
+        color = self._get_accent_color()
         self.accent_line.setStyleSheet(f"background-color: {color};")
 
     def _style_session_label(self):
@@ -158,35 +192,16 @@ class BroadcastHeaderWidget(QWidget):
         """)
 
     def _load_logo(self):
-        """Load the league logo from the configured path."""
-        logo_path = self.settings.broadcast_header_logo
-        if not logo_path:
-            logo_path = self._get_default_logo_path()
+        """Load the league logo from configured URL or default URL."""
+        logo_path = self._get_logo_path()
 
-        if self._is_logo_url(logo_path):
-            pixmap = self._load_logo_from_url(logo_path)
-            if pixmap is None:
-                self.logo_label.hide()
-                return
-            self._logo_pixmap = pixmap
-            self._apply_logo()
-            self.logo_label.show()
-            return
-
-        # Support both absolute and relative paths
-        if not os.path.isabs(logo_path):
-            logo_path = os.path.join(self._get_app_base_dir(), logo_path)
-
-        if not os.path.isfile(logo_path):
-            # Warn only when user explicitly configured a path.
-            if self.settings.broadcast_header_logo:
-                logger.warning(f"Broadcast header logo not found: {logo_path}")
+        if not self._is_logo_url(logo_path):
+            logger.warning(f"Broadcast header logo must be an HTTP(S) URL: {logo_path}")
             self.logo_label.hide()
             return
 
-        pixmap = QPixmap(logo_path)
-        if pixmap.isNull():
-            logger.warning(f"Failed to load broadcast header logo: {logo_path}")
+        pixmap = self._load_logo_from_url(logo_path)
+        if pixmap is None:
             self.logo_label.hide()
             return
 
@@ -216,14 +231,8 @@ class BroadcastHeaderWidget(QWidget):
         return pixmap
 
     def _get_default_logo_path(self) -> str:
-        """Return the default broadcast logo path in the app base folder."""
-        return os.path.join(self._get_app_base_dir(), "BBLeagueOverlay.png")
-
-    def _get_app_base_dir(self) -> str:
-        """Resolve the application base directory for bundled and source runs."""
-        if getattr(sys, "frozen", False):
-            return os.path.dirname(sys.executable)
-        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        """Return the default broadcast logo URL."""
+        return "https://leagueoverlay.com/assets/img/BBLeagueOverlay96.png"
 
     def _apply_logo(self):
         """Scale and apply the cached logo pixmap to the label."""
@@ -272,9 +281,9 @@ class BroadcastHeaderWidget(QWidget):
             color_map = {
                 'yellow': '#FFD700',   # Caution flag
                 'orange': '#FF8C00',   # Connecting/warning
-                'green': self.settings.broadcast_header_accent_color,  # Normal - user's accent
+                'green': self._get_accent_color(),  # Normal accent
             }
-            accent = color_map.get(status_color, self.settings.broadcast_header_accent_color)
+            accent = color_map.get(status_color, self._get_accent_color())
             self.accent_line.setStyleSheet(f"background-color: {accent};")
 
     def refresh_styles(self):

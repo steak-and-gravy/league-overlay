@@ -141,6 +141,19 @@ class RaceStateTracker:
         """
         self.player_car_class_id = player_car_class_id
 
+    def _get_session_state(self) -> int:
+        """Get current session state with safe fallback."""
+        try:
+            session_state = self.ir['SessionState']
+        except (KeyError, TypeError):
+            return 4
+        if session_state is None:
+            return 4
+        try:
+            return int(session_state)
+        except (TypeError, ValueError):
+            return 4
+
     def _cancel_retry_timer(self) -> None:
         """Cancel any pending retry timer."""
         if self._retry_timer is not None:
@@ -330,7 +343,7 @@ class RaceStateTracker:
             get_overall_leader_fn: Function to get overall race leader car_idx
         """
         # SessionState < 5 means race hasn't reached checkered flag yet
-        if self.ir['SessionState'] < 5:
+        if self._get_session_state() < 5:
             return
 
         car_idx_lap = self.ir['CarIdxLap']
@@ -438,7 +451,7 @@ class RaceStateTracker:
             driver_state = self.get_snapshot(car_idx)
             if driver_state and car_idx not in active_car_indices:
                 # This driver disconnected or retired
-                if self.ir['SessionState'] < 5:
+                if self._get_session_state() < 5:
                     # Still racing - mark as DC, position unknown
                     driver_state.position = -1
                     # Mark as disconnected
@@ -476,7 +489,7 @@ class RaceStateTracker:
                 }
 
                 # Only show disconnected drivers if they have a valid position or race is ongoing
-                if self.ir['SessionState'] < 5 or driver_state.position >= 0:
+                if self._get_session_state() < 5 or driver_state.position >= 0:
                     active_drivers.append(disconnected_driver)
 
         # Also check ResultsPositions for drivers who participated but don't have snapshots

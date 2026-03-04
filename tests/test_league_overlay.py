@@ -466,7 +466,9 @@ class TestOfficialLeagueBroadcastMetadata:
     def test_apply_official_league_broadcast_metadata_sets_title_and_logo(self):
         app = Mock(spec=LeagueOverlay)
         app.color_config_file = "official:BWRL GT3 Sprint"
-        app.settings = Mock(broadcast_header_title="", broadcast_header_logo=None)
+        app.broadcast_header_title = ""
+        app.broadcast_header_logo = None
+        app.broadcast_header_accent_color = "#000000"
         app.broadcast_header = Mock()
         app.apply_official_league_broadcast_metadata = (
             LeagueOverlay.apply_official_league_broadcast_metadata.__get__(app)
@@ -479,14 +481,17 @@ class TestOfficialLeagueBroadcastMetadata:
             )
             app.apply_official_league_broadcast_metadata()
 
-        assert app.settings.broadcast_header_title == "Broken Wing GT3 Sprint"
-        assert app.settings.broadcast_header_logo == "https://bwrl.net/_nuxt/bwrl-logo.DjQE3-f5.png"
+        assert app.broadcast_header_title == "Broken Wing GT3 Sprint"
+        assert app.broadcast_header_logo == "https://bwrl.net/_nuxt/bwrl-logo.DjQE3-f5.png"
+        assert app.broadcast_header_accent_color == "#FF8C00"
         app.broadcast_header.refresh_styles.assert_called_once()
 
-    def test_apply_official_league_broadcast_metadata_ignores_non_official_config(self):
+    def test_apply_official_league_broadcast_metadata_resets_to_defaults_for_non_official_config(self):
         app = Mock(spec=LeagueOverlay)
         app.color_config_file = "league_divisions.json"
-        app.settings = Mock(broadcast_header_title="Existing", broadcast_header_logo="/tmp/logo.png")
+        app.broadcast_header_title = "Existing"
+        app.broadcast_header_logo = "https://example.com/logo.png"
+        app.broadcast_header_accent_color = "#123456"
         app.apply_official_league_broadcast_metadata = (
             LeagueOverlay.apply_official_league_broadcast_metadata.__get__(app)
         )
@@ -494,6 +499,7 @@ class TestOfficialLeagueBroadcastMetadata:
         with patch("config.official_leagues.get_official_league") as get_official_league:
             app.apply_official_league_broadcast_metadata()
 
-        assert app.settings.broadcast_header_title == "Existing"
-        assert app.settings.broadcast_header_logo == "/tmp/logo.png"
+        assert app.broadcast_header_title == "BB's League Overlay"
+        assert app.broadcast_header_logo == "https://leagueoverlay.com/assets/img/BBLeagueOverlay96.png"
+        assert app.broadcast_header_accent_color == "#FF8C00"
         get_official_league.assert_not_called()

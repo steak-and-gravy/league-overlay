@@ -63,6 +63,11 @@ class TestSessionStatusFormatting:
         assert mock_app._get_session_state_name("Race", 1) == "Race"
         assert mock_app._get_session_state_name("Race", 99) == "Race"
 
+    def test_get_session_state_name_race_none_state(self, mock_app):
+        """None session state should be treated as Racing."""
+        mock_app.ir.__getitem__ = Mock(side_effect=KeyError("SessionFlags"))
+        assert mock_app._get_session_state_name("Race", None) == "Race"
+
     def test_get_session_state_name_full_course_yellow(self, mock_app):
         """Race under Full Course Yellow should return 'CAUTION'."""
         mock_app.ir.__getitem__ = Mock(return_value=TELEMETRY_CONFIG.FLAG_CAUTION)
@@ -276,6 +281,50 @@ class TestSessionStatusFormatting:
         mock_app.connection_time = time.time() - 5.0
         # Should be False (not <  5.0)
         assert mock_app._should_show_connection_message() is False
+
+    def test_get_session_status_text_handles_none_session_num(self, mock_app):
+        """Transient None SessionNum should infer a session and still format status."""
+        def mock_getitem(key):
+            if key == "SessionInfo":
+                return {"Sessions": [{"SessionType": "Practice"}, {"SessionType": "Race", "SessionLaps": "20"}]}
+            if key == "SessionNum":
+                return None
+            if key == "SessionState":
+                return 4
+            if key == "SessionFlags":
+                return 0
+            if key == "RaceLaps":
+                return 5
+            raise KeyError(key)
+
+        mock_app.ir.__getitem__ = Mock(side_effect=mock_getitem)
+        mock_app._get_session_status_text = LeagueOverlay._get_session_status_text.__get__(mock_app)
+
+        result = mock_app._get_session_status_text()
+
+        assert result == "Race - Lap 5/20"
+
+    def test_get_session_status_text_handles_none_session_state(self, mock_app):
+        """Transient None SessionState should default to Racing instead of failing."""
+        def mock_getitem(key):
+            if key == "SessionInfo":
+                return {"Sessions": [{"SessionType": "Race", "SessionLaps": "20"}]}
+            if key == "SessionNum":
+                return 0
+            if key == "SessionState":
+                return None
+            if key == "SessionFlags":
+                return 0
+            if key == "RaceLaps":
+                return 5
+            raise KeyError(key)
+
+        mock_app.ir.__getitem__ = Mock(side_effect=mock_getitem)
+        mock_app._get_session_status_text = LeagueOverlay._get_session_status_text.__get__(mock_app)
+
+        result = mock_app._get_session_status_text()
+
+        assert result == "Race - Lap 5/20"
 
     def test_update_gui_caution_yellow_without_broadcast_mode(self, mock_app):
         """CAUTION styling should remain yellow when broadcast mode is disabled."""

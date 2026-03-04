@@ -114,25 +114,56 @@ class TestIdentifyPlayer:
         assert calculator.player_car_idx == 5
         assert calculator.player_car_class_id is None
 
-    def test_only_identifies_once(self):
-        """Test player identification only happens once."""
+    def test_reidentifies_when_player_car_idx_changes(self):
+        """Player identity should refresh when SDK PlayerCarIdx changes."""
         mock_ir = MagicMock()
         mock_ir.__getitem__.return_value = 5
 
         calculator = PositionCalculator(mock_ir)
         drivers = [
-            {'CarIdx': 5, 'UserID': '12345', 'CarClassID': 2}
+            {'CarIdx': 5, 'UserID': '12345', 'CarClassID': 2},
+            {'CarIdx': 10, 'UserID': '67890', 'CarClassID': 3}
         ]
 
         calculator.identify_player(make_drivers_dict(drivers))
         assert calculator.player_car_idx == 5
+        assert calculator.player_car_class_id == 2
 
         # Call again with different car index
         mock_ir.__getitem__.return_value = 10
         calculator.identify_player(make_drivers_dict(drivers))
 
-        # Should still be 5 (not re-identified)
+        assert calculator.player_car_idx == 10
+        assert calculator.player_car_class_id == 3
+
+    def test_updates_player_class_id_when_same_player_idx_changes_class(self):
+        """Class cache should refresh even when PlayerCarIdx stays the same."""
+        mock_ir = MagicMock()
+        mock_ir.__getitem__.return_value = 5
+
+        calculator = PositionCalculator(mock_ir)
+
+        drivers_class_2 = [{'CarIdx': 5, 'UserID': '12345', 'CarClassID': 2}]
+        calculator.identify_player(make_drivers_dict(drivers_class_2))
+        assert calculator.player_car_class_id == 2
+
+        drivers_class_3 = [{'CarIdx': 5, 'UserID': '12345', 'CarClassID': 3}]
+        calculator.identify_player(make_drivers_dict(drivers_class_3))
+        assert calculator.player_car_class_id == 3
+
+    def test_clears_player_class_id_when_player_not_in_driver_list(self):
+        """Class cache should clear when PlayerCarIdx is not present in drivers."""
+        mock_ir = MagicMock()
+        mock_ir.__getitem__.return_value = 5
+
+        calculator = PositionCalculator(mock_ir)
+        drivers = [{'CarIdx': 5, 'UserID': '12345', 'CarClassID': 2}]
+        calculator.identify_player(make_drivers_dict(drivers))
+        assert calculator.player_car_class_id == 2
+
+        calculator.identify_player(make_drivers_dict([]))
         assert calculator.player_car_idx == 5
+        assert calculator.player_car_class_id is None
 
 
 class TestCalculateRealTimePositions:
@@ -280,8 +311,8 @@ class TestCalculateRealTimePositions:
 
         assert result[0]['lap_pct'] == 0  # Clamped
 
-    def test_skips_position_zero(self):
-        """Test skips cars with position 0 (not participating)."""
+    def test_includes_active_cars_when_class_position_zero(self):
+        """Race telemetry should still include active cars during transient class-position zeros."""
         mock_ir = MagicMock()
         calculator = PositionCalculator(mock_ir)
 
@@ -300,9 +331,8 @@ class TestCalculateRealTimePositions:
 
         result = calculator.calculate_real_time_positions(make_drivers_dict(drivers))
 
-        # Should only include car 2
-        assert len(result) == 1
-        assert result[0]['car_idx'] == 2
+        assert len(result) == 2
+        assert [d['car_idx'] for d in result] == [1, 2]
 
     def test_returns_empty_on_missing_data(self):
         """Test returns empty list if telemetry data missing."""

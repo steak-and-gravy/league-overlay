@@ -1,6 +1,5 @@
 """Tests for the broadcast header widget."""
 
-import os
 import base64
 import pytest
 from unittest.mock import MagicMock, Mock, patch
@@ -163,16 +162,21 @@ class TestBroadcastHeaderWidget:
         widget.deleteLater()
 
     def test_logo_uses_default_when_no_path(self, qapp, default_settings):
-        widget = BroadcastHeaderWidget(
-            settings=default_settings,
-            get_bg_color_fn=_get_bg_color,
-            get_font_size_fn=_get_font_size,
+        png_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO1w1S8AAAAASUVORK5CYII="
         )
-        default_logo = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "BBLeagueOverlay.png"
-        )
-        assert os.path.isfile(default_logo)
+        response = Mock()
+        response.content = png_bytes
+        response.raise_for_status = Mock()
+
+        with patch("ui.broadcast_header.requests.get", return_value=response):
+            widget = BroadcastHeaderWidget(
+                settings=default_settings,
+                get_bg_color_fn=_get_bg_color,
+                get_font_size_fn=_get_font_size,
+            )
+        default_logo = widget._get_default_logo_path()
+        assert widget._is_logo_url(default_logo)
         assert widget.logo_label.isVisible()
         widget.deleteLater()
 
@@ -259,11 +263,7 @@ class TestBroadcastHeaderSettings:
     def test_default_settings(self):
         settings = AppSettings()
         assert settings.show_broadcast_header is False
-        assert settings.broadcast_header_logo is None
-        assert settings.broadcast_header_title == ""
-        assert settings.broadcast_header_accent_color == "#FF8C00"
         assert settings.broadcast_roll_enabled is False
-        assert settings.broadcast_roll_interval_seconds == 5
 
     def test_settings_round_trip(self, tmp_path):
         from config.settings import SettingsManager
@@ -272,21 +272,13 @@ class TestBroadcastHeaderSettings:
 
         settings = AppSettings()
         settings.show_broadcast_header = True
-        settings.broadcast_header_title = "MY LEAGUE"
-        settings.broadcast_header_logo = "/path/to/logo.png"
-        settings.broadcast_header_accent_color = "#00FF00"
         settings.broadcast_roll_enabled = True
-        settings.broadcast_roll_interval_seconds = 9
 
         manager.save(settings)
         loaded = manager.load()
 
         assert loaded.show_broadcast_header is True
-        assert loaded.broadcast_header_title == "MY LEAGUE"
-        assert loaded.broadcast_header_logo == "/path/to/logo.png"
-        assert loaded.broadcast_header_accent_color == "#00FF00"
         assert loaded.broadcast_roll_enabled is True
-        assert loaded.broadcast_roll_interval_seconds == 9
 
 
 class TestBroadcastHeaderValidation:
@@ -298,19 +290,11 @@ class TestBroadcastHeaderValidation:
 
         data = {
             'show_broadcast_header': 'true',
-            'broadcast_header_title': 'TEST',
-            'broadcast_header_logo': None,
-            'broadcast_header_accent_color': '#FF0000',
             'broadcast_roll_enabled': 'true',
-            'broadcast_roll_interval_seconds': '12',
         }
         result = validator.validate_and_coerce(data)
         assert result['show_broadcast_header'] is True
-        assert result['broadcast_header_title'] == 'TEST'
-        assert result['broadcast_header_logo'] is None
-        assert result['broadcast_header_accent_color'] == '#FF0000'
         assert result['broadcast_roll_enabled'] is True
-        assert result['broadcast_roll_interval_seconds'] == 12
 
     def test_validator_defaults_for_missing_broadcast_fields(self):
         from config.settings_validator import SettingsValidator
@@ -318,24 +302,20 @@ class TestBroadcastHeaderValidation:
 
         result = validator.validate_and_coerce({})
         assert result['show_broadcast_header'] is False
-        assert result['broadcast_header_title'] == ""
-        assert result['broadcast_header_logo'] is None
-        assert result['broadcast_header_accent_color'] == '#FF8C00'
         assert result['broadcast_roll_enabled'] is False
-        assert result['broadcast_roll_interval_seconds'] == 5
 
-    def test_validator_rejects_invalid_accent_color(self):
+    def test_validator_ignores_removed_broadcast_fields(self):
         from config.settings_validator import SettingsValidator
         validator = SettingsValidator()
 
-        data = {'broadcast_header_accent_color': 'not-a-color'}
+        data = {
+            'broadcast_header_title': 'TEST',
+            'broadcast_header_logo': 'https://example.com/logo.png',
+            'broadcast_header_accent_color': '#FF0000',
+            'broadcast_roll_interval_seconds': '12',
+        }
         result = validator.validate_and_coerce(data)
-        assert result['broadcast_header_accent_color'] == '#FF8C00'  # Falls back to default
-
-    def test_validator_clamps_invalid_roll_interval(self):
-        from config.settings_validator import SettingsValidator
-        validator = SettingsValidator()
-
-        data = {'broadcast_roll_interval_seconds': 999}
-        result = validator.validate_and_coerce(data)
-        assert result['broadcast_roll_interval_seconds'] == 60
+        assert 'broadcast_header_title' not in result
+        assert 'broadcast_header_logo' not in result
+        assert 'broadcast_header_accent_color' not in result
+        assert 'broadcast_roll_interval_seconds' not in result

@@ -52,6 +52,10 @@ from PySide6.QtGui import QColor, QPalette, QCursor
 # Get logger for this module
 logger = get_logger(__name__)
 
+DEFAULT_BROADCAST_ACCENT_COLOR = "#FF8C00"
+DEFAULT_BROADCAST_TITLE = "BB's League Overlay"
+DEFAULT_BROADCAST_LOGO_URL = "https://leagueoverlay.com/assets/img/BBLeagueOverlay96.png"
+
 
 def lighten_hex_color(hex_color: str, factor: float = 0.2) -> str:
     """Lighten a hex color by a given factor.
@@ -136,6 +140,9 @@ class LeagueOverlay(QMainWindow):
                 self.color_config_file = f"official:{OFFICIAL_LEAGUES[0].name}"
             else:
                 self.color_config_file = "league_divisions.json"
+        self.broadcast_header_title = DEFAULT_BROADCAST_TITLE
+        self.broadcast_header_logo = DEFAULT_BROADCAST_LOGO_URL
+        self.broadcast_header_accent_color = DEFAULT_BROADCAST_ACCENT_COLOR
         self.apply_official_league_broadcast_metadata()
 
         # User preferences not in settings (runtime state)
@@ -390,6 +397,9 @@ class LeagueOverlay(QMainWindow):
             settings=self.settings,
             get_bg_color_fn=self.get_bg_color,
             get_font_size_fn=self.get_font_size,
+            get_broadcast_title_fn=lambda: self.broadcast_header_title,
+            get_broadcast_logo_fn=lambda: self.broadcast_header_logo,
+            get_broadcast_accent_fn=lambda: self.broadcast_header_accent_color,
             parent=main_widget
         )
         self.broadcast_header.setVisible(self.settings.show_broadcast_header)
@@ -909,21 +919,30 @@ class LeagueOverlay(QMainWindow):
         self.settings_manager.save(self.settings)
 
     def apply_official_league_broadcast_metadata(self):
-        """Apply broadcast header title/logo from active official league metadata."""
-        if not isinstance(self.color_config_file, str) or not self.color_config_file.startswith("official:"):
-            return
+        """Apply broadcast branding rules based on selected league source.
 
-        from config.official_leagues import get_official_league
+        Official leagues provide title/logo metadata. Local leagues use defaults.
+        Accent color is fixed and not user-configurable.
+        """
+        # Accent is fixed globally.
+        self.broadcast_header_accent_color = DEFAULT_BROADCAST_ACCENT_COLOR
 
-        league_name = self.color_config_file.replace("official:", "")
-        try:
-            league = get_official_league(league_name)
-        except ValueError:
-            logger.warning(f"Could not apply broadcast metadata: official league not found ({league_name})")
-            return
+        # Defaults for non-official sources.
+        default_title = DEFAULT_BROADCAST_TITLE
+        default_logo = DEFAULT_BROADCAST_LOGO_URL
+        self.broadcast_header_title = default_title
+        self.broadcast_header_logo = default_logo
 
-        self.settings.broadcast_header_title = league.title or ""
-        self.settings.broadcast_header_logo = league.logo
+        if isinstance(self.color_config_file, str) and self.color_config_file.startswith("official:"):
+            from config.official_leagues import get_official_league
+
+            league_name = self.color_config_file.replace("official:", "")
+            try:
+                league = get_official_league(league_name)
+                self.broadcast_header_title = league.title or default_title
+                self.broadcast_header_logo = league.logo or default_logo
+            except ValueError:
+                logger.warning(f"Could not apply broadcast metadata: official league not found ({league_name})")
 
         # Keep header widget in sync if UI already exists.
         if hasattr(self, 'broadcast_header'):
@@ -968,6 +987,7 @@ class LeagueOverlay(QMainWindow):
 
         # Reload DivisionManager with the new config file
         self.division_manager = DivisionManager(config_file_path)
+        self.apply_official_league_broadcast_metadata()
 
         # Refresh the UI to show new colors (reset change tracking to force update)
         self._last_emitted_data = []
@@ -1135,6 +1155,16 @@ class LeagueOverlay(QMainWindow):
 
                         # Handle the telemetry update (session sync, data update)
                         self._handle_telemetry_update(race_data)
+
+                        # If telemetry processor reports persistent missing core vars,
+                        # force SDK reconnect (equivalent to manual app restart).
+                        if self.telemetry_processor.consume_reconnect_request():
+                            logger.warning("Forcing iRacing SDK reconnect due to missing core telemetry data")
+                            self.is_connected = False
+                            self.connection_time = None
+                            self.ir.shutdown()
+                            time.sleep(0.5)
+                            continue
                     else:
                         self.is_connected = False
                         self.connection_time = None  # Reset connection time on disconnect
@@ -1320,6 +1350,9 @@ class LeagueOverlay(QMainWindow):
         if session_type != "Race":
             return session_type
 
+        if session_state is None:
+            session_state = 4
+
         # Map session states (some take precedence over FCY)
         state_map = {
             2: "Warmup",
@@ -1458,7 +1491,16 @@ class LeagueOverlay(QMainWindow):
         """
         try:
             session_info = self.ir['SessionInfo']
-            current_session = session_info['Sessions'][self.ir['SessionNum']]
+            session_num = self.ir['SessionNum']
+            sessions = session_info['Sessions']
+            if session_num is None:
+                race_idx = next(
+                    (idx for idx, s in enumerate(sessions)
+                     if str(s.get('SessionType', '')).lower() == 'race'),
+                    None
+                )
+                session_num = race_idx if race_idx is not None else 0
+            current_session = sessions[int(session_num)]
             session_type = current_session['SessionType']
 
             # Get session state with fallback
@@ -1466,6 +1508,8 @@ class LeagueOverlay(QMainWindow):
                 session_state = self.ir['SessionState']
             except (KeyError, TypeError):
                 session_state = 4  # Default to Racing
+            if session_state is None:
+                session_state = 4
 
             # Map session state to display name
             state_name = self._get_session_state_name(session_type, session_state)
@@ -1703,7 +1747,7 @@ class LeagueOverlay(QMainWindow):
         separator = QWidget()
         separator.setFixedHeight(1)
         separator.setStyleSheet(
-            f"background-color: {self.settings.broadcast_header_accent_color}; border: none;"
+            f"background-color: {self.broadcast_header_accent_color}; border: none;"
         )
         return separator
 
@@ -1716,8 +1760,8 @@ class LeagueOverlay(QMainWindow):
             self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             self.auto_center_timer.stop()
 
-            # Keep timer in sync with configured rotation interval.
-            interval_ms = max(1, int(self.settings.broadcast_roll_interval_seconds)) * 1000
+            # Keep timer in sync with fixed broadcast rotation interval.
+            interval_ms = TIMING.BROADCAST_ROLL_INTERVAL_SECONDS * 1000
             if self.broadcast_roll_timer.interval() != interval_ms:
                 self.broadcast_roll_timer.setInterval(interval_ms)
 

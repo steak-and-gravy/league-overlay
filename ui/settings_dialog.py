@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog, QComboBox,
-    QLineEdit, QSpinBox, QAbstractSpinBox, QSizePolicy
+    QSizePolicy
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -29,7 +29,7 @@ class SettingsDialog(QDialog):
         self.parent_overlay = parent
         self.setWindowTitle("BB's League Overlay - Settings")
         self.setModal(True)
-        self.setFixedSize(UI_DIMENSIONS.SETTINGS_DIALOG_WIDTH, UI_DIMENSIONS.SETTINGS_DIALOG_HEIGHT + 160)
+        self.setFixedSize(UI_DIMENSIONS.SETTINGS_DIALOG_WIDTH, UI_DIMENSIONS.SETTINGS_DIALOG_HEIGHT)
 
         self.setup_ui()
         
@@ -289,10 +289,6 @@ class SettingsDialog(QDialog):
         slower_color_row.addStretch()
         colors_layout.addLayout(slower_color_row)
 
-        # RIGHT COLUMN
-        right_column = QVBoxLayout()
-        right_column.setSpacing(5)
-
         # Window settings
         window_group = QFrame()
         window_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
@@ -474,289 +470,148 @@ class SettingsDialog(QDialog):
         window_layout.addLayout(log_level_row)
 
         # Checkboxes in 2-column grid
-        # Row 1: UI elements
+        # Row 1: Broadcast/header visibility
         checkbox_row1 = QHBoxLayout()
         checkbox_row1.setSpacing(10)
 
-        self.hide_headers_cb = QCheckBox("Auto-hide headers")
+        self.broadcast_header_cb = QCheckBox("Broadcast header")
+        self.broadcast_header_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.broadcast_header_cb.setChecked(self.parent_overlay.settings.show_broadcast_header)
+        checkbox_row1.addWidget(self.broadcast_header_cb)
+
+        self.hide_headers_cb = QCheckBox("Auto-hide title bar")
         self.hide_headers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.hide_headers_cb.setChecked(self.parent_overlay.settings.hide_headers)
         checkbox_row1.addWidget(self.hide_headers_cb)
+
+        window_layout.addLayout(checkbox_row1)
+
+        # Row 2: Broadcast rolling + division gap scope
+        checkbox_row2 = QHBoxLayout()
+        checkbox_row2.setSpacing(10)
+
+        self.broadcast_roll_enabled_cb = QCheckBox("Rolling standings")
+        self.broadcast_roll_enabled_cb.setStyleSheet("""
+            QCheckBox { border: none; color: white; font-size: 9pt; }
+            QCheckBox:disabled { color: #777777; }
+        """)
+        self.broadcast_roll_enabled_cb.setChecked(self.parent_overlay.settings.broadcast_roll_enabled)
+        checkbox_row2.addWidget(self.broadcast_roll_enabled_cb)
 
         self.show_division_cb = QCheckBox("Show division gaps")
         self.show_division_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_division_cb.setChecked(self.parent_overlay.settings.show_division)
         self.show_division_cb.setToolTip("When enabled, Gap and Interval are scoped to your division only")
-        checkbox_row1.addWidget(self.show_division_cb)
+        checkbox_row2.addWidget(self.show_division_cb)
 
-        window_layout.addLayout(checkbox_row1)
+        window_layout.addLayout(checkbox_row2)
+        self.broadcast_header_cb.toggled.connect(self._sync_broadcast_roll_control_state)
+        self._sync_broadcast_roll_control_state()
 
-        # Row 2: Text display
-        checkbox_row2 = QHBoxLayout()
-        checkbox_row2.setSpacing(10)
+        # Row 3: Text display
+        checkbox_row3 = QHBoxLayout()
+        checkbox_row3.setSpacing(10)
 
         self.center_drivers_cb = QCheckBox("Center driver names")
         self.center_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.center_drivers_cb.setChecked(self.parent_overlay.settings.center_drivers)
-        checkbox_row2.addWidget(self.center_drivers_cb)
+        checkbox_row3.addWidget(self.center_drivers_cb)
 
         self.bold_drivers_cb = QCheckBox("Bold all driver rows")
         self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.bold_drivers_cb.setChecked(self.parent_overlay.settings.bold_drivers)
-        checkbox_row2.addWidget(self.bold_drivers_cb)
+        checkbox_row3.addWidget(self.bold_drivers_cb)
 
-        window_layout.addLayout(checkbox_row2)
+        window_layout.addLayout(checkbox_row3)
 
-        # Row 3: Column visibility - Gap and Interval
-        checkbox_row3 = QHBoxLayout()
-        checkbox_row3.setSpacing(10)
+        # Row 4: Column visibility - Gap and Interval
+        checkbox_row4 = QHBoxLayout()
+        checkbox_row4.setSpacing(10)
 
         self.show_gap_cb = QCheckBox("Show gap")
         self.show_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_gap_cb.setChecked(self.parent_overlay.settings.show_gap)
         self.show_gap_cb.setToolTip("Gap to division/overall leader")
-        checkbox_row3.addWidget(self.show_gap_cb)
+        checkbox_row4.addWidget(self.show_gap_cb)
 
         self.show_interval_cb = QCheckBox("Show interval")
         self.show_interval_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_interval_cb.setChecked(self.parent_overlay.settings.show_interval)
         self.show_interval_cb.setToolTip("Interval to car ahead")
-        checkbox_row3.addWidget(self.show_interval_cb)
+        checkbox_row4.addWidget(self.show_interval_cb)
 
-        window_layout.addLayout(checkbox_row3)
+        window_layout.addLayout(checkbox_row4)
 
-        # Row 4: Column visibility - Position and Delta
-        checkbox_row4 = QHBoxLayout()
-        checkbox_row4.setSpacing(10)
+        # Row 5: Column visibility - Position and Delta
+        checkbox_row5 = QHBoxLayout()
+        checkbox_row5.setSpacing(10)
 
         self.show_positions_gained_cb = QCheckBox("Show positions +/-")
         self.show_positions_gained_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_positions_gained_cb.setChecked(self.parent_overlay.settings.show_positions_gained)
-        checkbox_row4.addWidget(self.show_positions_gained_cb)
+        checkbox_row5.addWidget(self.show_positions_gained_cb)
 
         self.show_delta_cb = QCheckBox("Show delta")
         self.show_delta_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_delta_cb.setChecked(self.parent_overlay.settings.show_delta)
-        checkbox_row4.addWidget(self.show_delta_cb)
+        checkbox_row5.addWidget(self.show_delta_cb)
 
-        window_layout.addLayout(checkbox_row4)
+        window_layout.addLayout(checkbox_row5)
 
-        # Row 5: Column visibility - Lap times
-        checkbox_row5 = QHBoxLayout()
-        checkbox_row5.setSpacing(10)
+        # Row 6: Column visibility - Lap times
+        checkbox_row6 = QHBoxLayout()
+        checkbox_row6.setSpacing(10)
 
         self.show_best_lap_cb = QCheckBox("Show best lap")
         self.show_best_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_best_lap_cb.setChecked(self.parent_overlay.settings.show_best_lap)
-        checkbox_row5.addWidget(self.show_best_lap_cb)
+        checkbox_row6.addWidget(self.show_best_lap_cb)
 
         self.show_last_lap_cb = QCheckBox("Show last lap")
         self.show_last_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_last_lap_cb.setChecked(self.parent_overlay.settings.show_last_lap)
-        checkbox_row5.addWidget(self.show_last_lap_cb)
+        checkbox_row6.addWidget(self.show_last_lap_cb)
 
-        window_layout.addLayout(checkbox_row5)
+        window_layout.addLayout(checkbox_row6)
 
-        # Row 6: Column visibility - Driver info and pit strategy
-        checkbox_row6 = QHBoxLayout()
-        checkbox_row6.setSpacing(10)
+        # Row 7: Column visibility - Driver info and pit strategy
+        checkbox_row7 = QHBoxLayout()
+        checkbox_row7.setSpacing(10)
 
         self.show_rating_cb = QCheckBox("Show rating")
         self.show_rating_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_rating_cb.setChecked(self.parent_overlay.settings.show_rating)
-        checkbox_row6.addWidget(self.show_rating_cb)
+        checkbox_row7.addWidget(self.show_rating_cb)
 
         self.show_pit_lap_cb = QCheckBox("Show pit lap")
         self.show_pit_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_pit_lap_cb.setChecked(self.parent_overlay.settings.show_pit_lap)
-        checkbox_row6.addWidget(self.show_pit_lap_cb)
+        checkbox_row7.addWidget(self.show_pit_lap_cb)
 
-        window_layout.addLayout(checkbox_row6)
+        window_layout.addLayout(checkbox_row7)
 
-        # Row 7: Footer visibility
-        checkbox_row7 = QHBoxLayout()
-        checkbox_row7.setSpacing(10)
+        # Row 8: Footer visibility
+        checkbox_row8 = QHBoxLayout()
+        checkbox_row8.setSpacing(10)
 
         self.show_footer_cb = QCheckBox("Show footer")
         self.show_footer_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_footer_cb.setChecked(self.parent_overlay.settings.show_footer)
-        checkbox_row7.addWidget(self.show_footer_cb)
+        checkbox_row8.addWidget(self.show_footer_cb)
 
-        window_layout.addLayout(checkbox_row7)
+        window_layout.addLayout(checkbox_row8)
 
         # Spacer after last checkbox row
         window_layout.addSpacing(10)
 
-        left_column.addWidget(window_group, 1)
+        left_column.addWidget(colors_group, 1)
+        left_column.addStretch()
 
-        # Broadcast Header section
-        broadcast_group = QFrame()
-        broadcast_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
-        broadcast_group.setMinimumWidth(300)
-        broadcast_group.setMaximumWidth(300)
-        broadcast_layout = QVBoxLayout(broadcast_group)
-        broadcast_layout.setSpacing(8)
-
-        broadcast_title = QLabel("Broadcast Header")
-        broadcast_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
-        broadcast_layout.addWidget(broadcast_title)
-
-        # Enable toggle
-        self.broadcast_header_cb = QCheckBox("Show broadcast header")
-        self.broadcast_header_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.broadcast_header_cb.setChecked(self.parent_overlay.settings.show_broadcast_header)
-        broadcast_layout.addWidget(self.broadcast_header_cb)
-
-        # Rolling standings toggle (broadcast mode only)
-        self.broadcast_roll_enabled_cb = QCheckBox("Enable rolling standings")
-        self.broadcast_roll_enabled_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.broadcast_roll_enabled_cb.setChecked(self.parent_overlay.settings.broadcast_roll_enabled)
-        broadcast_layout.addWidget(self.broadcast_roll_enabled_cb)
-
-        # Rolling timer
-        rolling_timer_row = QHBoxLayout()
-        rolling_timer_label = QLabel("Roll timer:")
-        rolling_timer_label.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        rolling_timer_label.setFixedWidth(80)
-        rolling_timer_row.addWidget(rolling_timer_label)
-
-        timer_control = QFrame()
-        timer_control.setObjectName("roll_timer_control")
-        timer_control.setStyleSheet("""
-            QFrame#roll_timer_control {
-                background-color: #444444;
-                border: 1px solid #666666;
-            }
-            QPushButton#roll_timer_up, QPushButton#roll_timer_down {
-                background-color: #555555;
-                color: white;
-                border: none;
-                font-size: 8pt;
-                padding: 0px;
-                margin: 0px;
-            }
-            QPushButton#roll_timer_up:hover, QPushButton#roll_timer_down:hover {
-                background-color: #666666;
-            }
-            QPushButton#roll_timer_up {
-                border-left: 1px solid #666666;
-                border-bottom: 1px solid #666666;
-            }
-            QPushButton#roll_timer_down {
-                border-left: 1px solid #666666;
-            }
-        """)
-        timer_control_layout = QHBoxLayout(timer_control)
-        timer_control_layout.setContentsMargins(0, 0, 0, 0)
-        timer_control_layout.setSpacing(0)
-
-        self.broadcast_roll_interval_spin = QSpinBox()
-        self.broadcast_roll_interval_spin.setRange(1, 60)
-        self.broadcast_roll_interval_spin.setSuffix(" sec")
-        self.broadcast_roll_interval_spin.setButtonSymbols(QAbstractSpinBox.NoButtons)
-        self.broadcast_roll_interval_spin.setValue(
-            self.parent_overlay.settings.broadcast_roll_interval_seconds
-        )
-        self.broadcast_roll_interval_spin.setFrame(False)
-        self.broadcast_roll_interval_spin.setStyleSheet("""
-            QSpinBox {
-                background-color: transparent; color: white; border: none;
-                padding: 3px 5px; font-size: 9pt;
-            }
-        """)
-        timer_control_layout.addWidget(self.broadcast_roll_interval_spin, 1)
-
-        timer_buttons = QVBoxLayout()
-        timer_buttons.setContentsMargins(0, 0, 0, 0)
-        timer_buttons.setSpacing(0)
-
-        roll_timer_up_btn = QPushButton("▲")
-        roll_timer_up_btn.setObjectName("roll_timer_up")
-        roll_timer_up_btn.setFixedWidth(18)
-        roll_timer_up_btn.setFixedHeight(12)
-        roll_timer_up_btn.clicked.connect(self.broadcast_roll_interval_spin.stepUp)
-        timer_buttons.addWidget(roll_timer_up_btn)
-
-        roll_timer_down_btn = QPushButton("▼")
-        roll_timer_down_btn.setObjectName("roll_timer_down")
-        roll_timer_down_btn.setFixedWidth(18)
-        roll_timer_down_btn.setFixedHeight(12)
-        roll_timer_down_btn.clicked.connect(self.broadcast_roll_interval_spin.stepDown)
-        timer_buttons.addWidget(roll_timer_down_btn)
-
-        timer_control_layout.addLayout(timer_buttons)
-        rolling_timer_row.addWidget(timer_control)
-        rolling_timer_row.addStretch()
-        broadcast_layout.addLayout(rolling_timer_row)
-
-        # Broadcast Title
-        title_row = QHBoxLayout()
-        title_label = QLabel("Title:")
-        title_label.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        title_label.setFixedWidth(80)
-        title_row.addWidget(title_label)
-        self.broadcast_title_input = QLineEdit(self.parent_overlay.settings.broadcast_header_title)
-        self.broadcast_title_input.setPlaceholderText("e.g. BWRL")
-        self.broadcast_title_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #444444; color: white; border: 1px solid #666666;
-                padding: 3px 5px; font-size: 9pt;
-            }
-        """)
-        title_row.addWidget(self.broadcast_title_input)
-        broadcast_layout.addLayout(title_row)
-
-        # Logo path
-        logo_row = QHBoxLayout()
-        logo_label = QLabel("Logo:")
-        logo_label.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        logo_label.setFixedWidth(80)
-        logo_row.addWidget(logo_label)
-        self.broadcast_logo_input = QLineEdit(self.parent_overlay.settings.broadcast_header_logo or "")
-        self.broadcast_logo_input.setPlaceholderText("Path to logo image...")
-        self.broadcast_logo_input.setStyleSheet("""
-            QLineEdit {
-                background-color: #444444; color: white; border: 1px solid #666666;
-                padding: 3px 5px; font-size: 9pt;
-            }
-        """)
-        logo_row.addWidget(self.broadcast_logo_input)
-        browse_logo_btn = QPushButton("...")
-        browse_logo_btn.setFixedWidth(30)
-        browse_logo_btn.setStyleSheet("""
-            QPushButton { background-color: #555555; color: white; border: none; padding: 3px; font-size: 9pt; }
-            QPushButton:hover { background-color: #666666; }
-        """)
-        browse_logo_btn.clicked.connect(self._browse_logo)
-        logo_row.addWidget(browse_logo_btn)
-        broadcast_layout.addLayout(logo_row)
-
-        # Accent color
-        accent_row = QHBoxLayout()
-        accent_label = QLabel("Accent color:")
-        accent_label.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        accent_label.setFixedWidth(80)
-        accent_row.addWidget(accent_label)
-
-        self._broadcast_accent_color = self.parent_overlay.settings.broadcast_header_accent_color
-        self.broadcast_accent_btn = QPushButton()
-        self.broadcast_accent_btn.setFixedSize(60, 22)
-        self.broadcast_accent_btn.setStyleSheet(
-            f"QPushButton {{ background-color: {self._broadcast_accent_color}; border: 1px solid #666666; }}"
-            f"QPushButton:hover {{ border: 1px solid white; }}"
-        )
-        self.broadcast_accent_btn.clicked.connect(self._pick_accent_color)
-        accent_row.addWidget(self.broadcast_accent_btn)
-
-        self.broadcast_accent_value_label = QLabel(self._broadcast_accent_color)
-        self.broadcast_accent_value_label.setStyleSheet("border: none; color: #888888; font-size: 8pt;")
-        accent_row.addWidget(self.broadcast_accent_value_label)
-
-        accent_row.addStretch()
-        broadcast_layout.addLayout(accent_row)
-
-        right_column.addWidget(broadcast_group)
-        right_column.addWidget(colors_group)
+        # RIGHT COLUMN
+        right_column = QVBoxLayout()
+        right_column.setSpacing(5)
+        right_column.addWidget(window_group, 1)
+        right_column.addStretch()
 
         # Add columns to main layout with equal stretch factors (1:1 ratio)
         columns_layout.addLayout(left_column, 1)
@@ -1056,10 +911,6 @@ class SettingsDialog(QDialog):
             self.parent_overlay.apply_official_league_broadcast_metadata()
             self.parent_overlay.signals.refresh_colors.emit()
 
-            # Keep dialog fields in sync with auto-loaded official metadata.
-            self.broadcast_title_input.setText(self.parent_overlay.settings.broadcast_header_title)
-            self.broadcast_logo_input.setText(self.parent_overlay.settings.broadcast_header_logo or "")
-
             # Save to settings (but don't add to recent - it's official)
             self.parent_overlay.settings.league_config = league_source
             self.parent_overlay.save_settings()
@@ -1086,6 +937,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.color_config_file = file_path
             self.parent_overlay.division_manager.config_file = file_path
             self.parent_overlay.division_manager.load_driver_config()
+            self.parent_overlay.apply_official_league_broadcast_metadata()
             self.parent_overlay.signals.refresh_colors.emit()
 
             # Add to recent files and save settings
@@ -1254,15 +1106,7 @@ class SettingsDialog(QDialog):
             self.show_footer_cb.setChecked(defaults.show_footer)
             self.broadcast_header_cb.setChecked(defaults.show_broadcast_header)
             self.broadcast_roll_enabled_cb.setChecked(defaults.broadcast_roll_enabled)
-            self.broadcast_roll_interval_spin.setValue(defaults.broadcast_roll_interval_seconds)
-            self.broadcast_title_input.setText(defaults.broadcast_header_title)
-            self.broadcast_logo_input.setText(defaults.broadcast_header_logo or "")
-            self._broadcast_accent_color = defaults.broadcast_header_accent_color
-            self.broadcast_accent_btn.setStyleSheet(
-                f"QPushButton {{ background-color: {self._broadcast_accent_color}; border: 1px solid #666666; }}"
-                f"QPushButton:hover {{ border: 1px solid white; }}"
-            )
-            self.broadcast_accent_value_label.setText(self._broadcast_accent_color)
+            self._sync_broadcast_roll_control_state()
             self.font_size_combo.setCurrentText(defaults.font_size)
             self.color_style_combo.setCurrentText(defaults.row_color_style)
             self.log_level_combo.setCurrentText(defaults.log_level)
@@ -1310,27 +1154,10 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.opacity = defaults.opacity
             self.parent_overlay.update_all_backgrounds()
 
-    def _browse_logo(self):
-        """Open file dialog to select a logo image."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Logo Image", "",
-            "Image Files (*.png *.jpg *.jpeg *.svg *.bmp);;All Files (*)"
-        )
-        if file_path:
-            self.broadcast_logo_input.setText(file_path)
-
-    def _pick_accent_color(self):
-        """Open color picker for broadcast header accent color."""
-        color = QColorDialog.getColor(
-            QColor(self._broadcast_accent_color), self, "Select Accent Color"
-        )
-        if color.isValid():
-            self._broadcast_accent_color = color.name()
-            self.broadcast_accent_btn.setStyleSheet(
-                f"QPushButton {{ background-color: {self._broadcast_accent_color}; border: 1px solid #666666; }}"
-                f"QPushButton:hover {{ border: 1px solid white; }}"
-            )
-            self.broadcast_accent_value_label.setText(self._broadcast_accent_color)
+    def _sync_broadcast_roll_control_state(self):
+        """Enable rolling only when broadcast header is enabled."""
+        is_enabled = self.broadcast_header_cb.isChecked()
+        self.broadcast_roll_enabled_cb.setEnabled(is_enabled)
 
     def apply_settings(self):
         """Apply all settings"""
@@ -1352,12 +1179,9 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()
             self.parent_overlay.settings.show_broadcast_header = self.broadcast_header_cb.isChecked()
             self.parent_overlay.settings.broadcast_roll_enabled = self.broadcast_roll_enabled_cb.isChecked()
-            self.parent_overlay.settings.broadcast_roll_interval_seconds = self.broadcast_roll_interval_spin.value()
-            self.parent_overlay.settings.broadcast_header_title = self.broadcast_title_input.text()
-            self.parent_overlay.settings.broadcast_header_logo = self.broadcast_logo_input.text() or None
-            self.parent_overlay.settings.broadcast_header_accent_color = self._broadcast_accent_color
             self.parent_overlay.settings.font_size = self.font_size_combo.currentText()
             self.parent_overlay.settings.row_color_style = self.color_style_combo.currentText()
+            self.parent_overlay.apply_official_league_broadcast_metadata()
 
             # Apply log level change immediately
             new_log_level = self.log_level_combo.currentText()

@@ -92,6 +92,11 @@ class TelemetryProcessor:
         self.tow_end_time: Dict[int, float] = {}
         self.tow_frozen_track_position: Dict[int, float] = {}
         self.tow_last_live_track_position: Dict[int, float] = {}
+        self._probe_last_log_ts: float = 0.0
+        self._probe_last_signature: Optional[Tuple[Any, ...]] = None
+        self._core_missing_since: Optional[float] = None
+        self._reconnect_requested: bool = False
+        self._race_join_restore_grace_until: Optional[float] = None
 
     def reset_fields(self) -> None:
         """Clear all session-specific tracking data.
@@ -128,6 +133,120 @@ class TelemetryProcessor:
 
         # Reset prepopulation retry tracking
         self.prepopulate_retry_count = 0
+        self._core_missing_since = None
+        self._reconnect_requested = False
+        self._race_join_restore_grace_until = None
+
+    def _safe_ir_get(self, key: str, default: Any = None) -> Any:
+        """Read optional iRacing telemetry key safely."""
+        try:
+            value = self.ir[key]
+        except (KeyError, TypeError):
+            return default
+        return default if value is None else value
+
+    def _count_numeric(self, values: Any, predicate: Callable[[float], bool]) -> int:
+        """Count numeric entries in a telemetry list that match predicate."""
+        if not isinstance(values, (list, tuple)):
+            return -1
+        count = 0
+        for value in values:
+            if isinstance(value, (int, float)) and predicate(float(value)):
+                count += 1
+        return count
+
+    def _log_pipeline_probe(
+        self,
+        session_data: Dict,
+        drivers_total: int,
+        live_count: int,
+        official_count: int,
+        pre_restore_count: int,
+        post_restore_count: int,
+    ) -> None:
+        """Emit throttled telemetry diagnostics for startup/join troubleshooting."""
+        session_state = self._safe_ir_get('SessionState')
+        player_idx_raw = self._safe_ir_get('PlayerCarIdx')
+        car_idx_lap = self._safe_ir_get('CarIdxLap')
+        car_idx_class_pos = self._safe_ir_get('CarIdxClassPosition')
+        car_idx_est = self._safe_ir_get('CarIdxEstTime')
+
+        lap_non_negative = self._count_numeric(car_idx_lap, lambda x: x >= 0)
+        class_pos_positive = self._count_numeric(car_idx_class_pos, lambda x: x > 0)
+        est_positive = self._count_numeric(car_idx_est, lambda x: x > 0)
+
+        signature = (
+            session_data.get('session_id'),
+            session_data.get('subsession_id'),
+            session_data.get('session_type'),
+            session_state,
+            player_idx_raw,
+            self.position_calculator.player_car_idx,
+            self.position_calculator.player_car_class_id,
+            drivers_total,
+            live_count,
+            official_count,
+            post_restore_count,
+            lap_non_negative,
+            class_pos_positive,
+            est_positive,
+        )
+
+        now = time.time()
+        if self._probe_last_signature == signature and (now - self._probe_last_log_ts) < 1.0:
+            return
+
+        self._probe_last_signature = signature
+        self._probe_last_log_ts = now
+
+        logger.debug(
+            "TELEMETRY_PROBE "
+            f"session={session_data.get('session_type')} "
+            f"sid={session_data.get('session_id')} "
+            f"ssid={session_data.get('subsession_id')} "
+            f"state={session_state} "
+            f"player_raw={player_idx_raw} "
+            f"player_cached={self.position_calculator.player_car_idx} "
+            f"class_cached={self.position_calculator.player_car_class_id} "
+            f"drivers_total={drivers_total} "
+            f"live={live_count} official={official_count} "
+            f"pre_restore={pre_restore_count} post_restore={post_restore_count} "
+            f"laps_nonneg={lap_non_negative} classpos_pos={class_pos_positive} est_pos={est_positive}"
+        )
+
+    def _update_core_telemetry_health(self, is_race: bool, session_data: Dict) -> None:
+        """Detect long-lived missing core telemetry and request SDK reconnect."""
+        if not is_race:
+            self._core_missing_since = None
+            return
+
+        missing_core = not self._has_core_live_telemetry()
+
+        now = time.time()
+        if missing_core:
+            if self._core_missing_since is None:
+                self._core_missing_since = now
+            elif (now - self._core_missing_since) >= 5.0 and not self._reconnect_requested:
+                self._reconnect_requested = True
+                logger.warning(
+                    "Core telemetry vars missing for >5s in race session; requesting SDK reconnect "
+                    f"(sid={session_data.get('session_id')}, ssid={session_data.get('subsession_id')})"
+                )
+        else:
+            self._core_missing_since = None
+
+    def _has_core_live_telemetry(self) -> bool:
+        """Return True when core race-position telemetry arrays are present."""
+        car_idx_lap = self._safe_ir_get('CarIdxLap')
+        car_idx_class_pos = self._safe_ir_get('CarIdxClassPosition')
+        return isinstance(car_idx_lap, (list, tuple)) and isinstance(car_idx_class_pos, (list, tuple))
+
+    def consume_reconnect_request(self) -> bool:
+        """Return and clear pending SDK reconnect request."""
+        if self._reconnect_requested:
+            self._reconnect_requested = False
+            return True
+        return False
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SESSION INFO AND TRACKING
@@ -162,7 +281,18 @@ class TelemetryProcessor:
 
         try:
             session_num = self.ir['SessionNum']
-            current_session = self.ir['SessionInfo']['Sessions'][session_num]
+            sessions = self.ir['SessionInfo']['Sessions']
+            if session_num is None:
+                # SessionNum can be transiently unavailable when joining from menus.
+                # Fall back to a deterministic session index so telemetry can continue.
+                race_idx = next(
+                    (idx for idx, s in enumerate(sessions)
+                     if str(s.get('SessionType', '')).lower() == 'race'),
+                    None
+                )
+                session_num = race_idx if race_idx is not None else 0
+
+            current_session = sessions[int(session_num)]
             session_type = current_session['SessionType']
             weekend_info = self.ir['WeekendInfo']
             session_id = weekend_info['SessionID']
@@ -218,11 +348,15 @@ class TelemetryProcessor:
         session_type = session_data['session_type']
 
         # SubSessionID can be transiently unavailable during transitions.
-        # Treat None as "unknown" and avoid false session resets unless both are known.
+        # Treat known transitions as changes:
+        # - unknown -> known (app started before joining a live subsession)
+        # - known -> different known (actual subsession switch)
         subsession_changed = (
             subsession_id is not None
-            and self.current_subsession_id is not None
-            and self.current_subsession_id != subsession_id
+            and (
+                self.current_subsession_id is None
+                or self.current_subsession_id != subsession_id
+            )
         )
 
         if (self.current_session_id != session_id
@@ -867,10 +1001,16 @@ class TelemetryProcessor:
         player_car_idx = self.position_calculator.player_car_idx
         reference_lap_time = 0.0
         reference_car_idx = None
+        if not car_idx_last_lap:
+            return "--"
 
         if is_driving:
             # DRIVING MODE: Compare to player's last lap
+            if player_car_idx is None or player_car_idx >= len(car_idx_last_lap):
+                return "--"
             reference_lap_time = car_idx_last_lap[player_car_idx]
+            if reference_lap_time is None:
+                return "--"
             reference_car_idx = player_car_idx
             # If player hasn't completed a lap yet, don't show delta for anyone
             if reference_lap_time <= 0 or reference_lap_time >= 999:
@@ -882,7 +1022,11 @@ class TelemetryProcessor:
             if division_drivers:
                 division_drivers.sort(key=lambda x: x['position'])
                 division_leader_idx = division_drivers[0]['car_idx']
+                if division_leader_idx >= len(car_idx_last_lap):
+                    return "--"
                 reference_lap_time = car_idx_last_lap[division_leader_idx]
+                if reference_lap_time is None:
+                    return "--"
                 reference_car_idx = division_leader_idx
 
         # If this is the reference driver, show "--" instead of "+0.0"
@@ -896,9 +1040,13 @@ class TelemetryProcessor:
         # - SPECTATING MODE: Flipped order (reference, driver) shows how each driver compares to their leader
         if is_driving:
             # DRIVING MODE: Normal calculation (driver vs player)
+            if driver_lap_time is None:
+                return "--"
             return GapCalculator.format_delta_display(driver_lap_time, reference_lap_time)
         else:
             # SPECTATING MODE: Flip the calculation (driver vs division leader)
+            if driver_lap_time is None:
+                return "--"
             return GapCalculator.format_delta_display(reference_lap_time, driver_lap_time)
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -1021,17 +1169,33 @@ class TelemetryProcessor:
             return "-"
 
         # Both cars still racing - calculate live time gap
-        car_idx_est_time = self.ir['CarIdxEstTime']
-        current_est_time = car_idx_est_time[car_idx]
-        ahead_est_time = car_idx_est_time[car_ahead_idx]
+        try:
+            car_idx_est_time = self.ir['CarIdxEstTime']
+        except (KeyError, TypeError):
+            car_idx_est_time = None
+        if not car_idx_est_time:
+            car_idx_est_time = []
+
+        if car_idx < len(car_idx_est_time):
+            current_est_time = car_idx_est_time[car_idx]
+        else:
+            current_est_time = 0.0
+        if car_ahead_idx < len(car_idx_est_time):
+            ahead_est_time = car_idx_est_time[car_ahead_idx]
+        else:
+            ahead_est_time = 0.0
+        if current_est_time is None:
+            current_est_time = 0.0
+        if ahead_est_time is None:
+            ahead_est_time = 0.0
 
         # Get lap times with bounds checking
         normalize_lap_time_pct = 0
         ahead_lap_time = 0
         drivers = self.ir['DriverInfo']['Drivers']
         if car_ahead_idx < len(drivers) and car_idx < len(drivers):
-            ahead_lap_time = drivers[car_ahead_idx]['CarClassEstLapTime']
-            current_lap_time = drivers[car_idx]['CarClassEstLapTime']
+            ahead_lap_time = drivers[car_ahead_idx].get('CarClassEstLapTime', 0)
+            current_lap_time = drivers[car_idx].get('CarClassEstLapTime', 0)
             if (ahead_lap_time > 0 and current_lap_time > 0):
                 # Normalize Car Ahead EstTime
                 normalize_lap_time_pct = ahead_lap_time/current_lap_time
@@ -1189,16 +1353,32 @@ class TelemetryProcessor:
             return "-"
 
         # Get estimated times
-        car_idx_est_time = self.ir['CarIdxEstTime']
-        current_est_time = car_idx_est_time[car_idx]
-        leader_est_time = car_idx_est_time[leader_idx]
+        try:
+            car_idx_est_time = self.ir['CarIdxEstTime']
+        except (KeyError, TypeError):
+            car_idx_est_time = None
+        if not car_idx_est_time:
+            car_idx_est_time = []
+
+        if car_idx < len(car_idx_est_time):
+            current_est_time = car_idx_est_time[car_idx]
+        else:
+            current_est_time = 0.0
+        if leader_idx < len(car_idx_est_time):
+            leader_est_time = car_idx_est_time[leader_idx]
+        else:
+            leader_est_time = 0.0
+        if current_est_time is None:
+            current_est_time = 0.0
+        if leader_est_time is None:
+            leader_est_time = 0.0
 
         normalize_lap_time_pct = 0
         leader_lap_time = 0
         drivers = self.ir['DriverInfo']['Drivers']
         if leader_idx < len(drivers) and car_idx < len(drivers):
-            leader_lap_time = drivers[leader_idx]['CarClassEstLapTime']
-            current_lap_time = drivers[car_idx]['CarClassEstLapTime']
+            leader_lap_time = drivers[leader_idx].get('CarClassEstLapTime', 0)
+            current_lap_time = drivers[car_idx].get('CarClassEstLapTime', 0)
             if leader_lap_time > 0 and current_lap_time > 0:
                 normalize_lap_time_pct = leader_lap_time / current_lap_time
                 leader_est_time = leader_est_time / normalize_lap_time_pct
@@ -1680,9 +1860,13 @@ class TelemetryProcessor:
                 # Load starting positions if entering a race session
                 if is_race:
                     self.race_state_tracker.load_starting_positions_from_qualify()
+                    self._race_join_restore_grace_until = (
+                        time.time() + TIMING.RACE_JOIN_RESTORE_GRACE_SECONDS
+                    )
 
             # Update lap time cache
             self._populate_lap_time_cache_from_results(session_data)
+            self._update_core_telemetry_health(is_race, session_data)
 
             # Update pit tracking only during race sessions (practice/qualifying don't need pit tracking)
             if is_race:
@@ -1702,7 +1886,66 @@ class TelemetryProcessor:
             if is_race:
                 self.race_state_tracker.update_finish_status(self.position_calculator.get_overall_race_leader_idx)
 
-                active_drivers = self.position_calculator.calculate_real_time_positions(drivers)
+                live_active_drivers = self.position_calculator.calculate_real_time_positions(drivers)
+                active_drivers = live_active_drivers
+                official_active_drivers: List[Dict] = []
+                if not active_drivers:
+                    # Join transitions can temporarily yield incomplete lap telemetry.
+                    # Fall back to official timing positions so the overlay can render rows.
+                    official_active_drivers = self.position_calculator.get_official_positions(drivers)
+                    active_drivers = official_active_drivers
+                    if active_drivers:
+                        logger.debug(
+                            f"RACE_POSITION_FALLBACK - Using official positions for {len(active_drivers)} drivers"
+                        )
+
+                # Never show synthetic disconnected/results rows while core live telemetry
+                # arrays are still missing. This avoids brief full-board "(DC)" flashes.
+                if not active_drivers and not self._has_core_live_telemetry():
+                    self._log_pipeline_probe(
+                        session_data=session_data,
+                        drivers_total=len(drivers),
+                        live_count=len(live_active_drivers),
+                        official_count=len(official_active_drivers),
+                        pre_restore_count=0,
+                        post_restore_count=0,
+                    )
+                    return None
+
+                # Avoid brief full-board "(DC)" flash while session telemetry is still materializing.
+                if (not active_drivers
+                        and self._race_join_restore_grace_until is not None
+                        and time.time() < self._race_join_restore_grace_until):
+                    self._log_pipeline_probe(
+                        session_data=session_data,
+                        drivers_total=len(drivers),
+                        live_count=len(live_active_drivers),
+                        official_count=len(official_active_drivers),
+                        pre_restore_count=0,
+                        post_restore_count=0,
+                    )
+                    return None
+
+                if active_drivers:
+                    self._race_join_restore_grace_until = None
+
+                # Always attempt disconnected/results restoration in race sessions, even when
+                # live and official active telemetry are empty. This allows ResultsPositions to
+                # seed rows during early join transitions.
+                pre_restore_count = len(active_drivers)
+                self.race_state_tracker.handle_disconnected_drivers(
+                    active_drivers,
+                    session_data,
+                    self.get_position_from_results
+                )
+                self._log_pipeline_probe(
+                    session_data=session_data,
+                    drivers_total=len(drivers),
+                    live_count=len(live_active_drivers),
+                    official_count=len(official_active_drivers),
+                    pre_restore_count=pre_restore_count,
+                    post_restore_count=len(active_drivers),
+                )
 
                 if active_drivers:
                     # Maintain tow-freeze state for sorting without mutating live telemetry track position.
@@ -1710,13 +1953,6 @@ class TelemetryProcessor:
 
                     # Update snapshots for active drivers
                     self._update_race_snapshots(active_drivers)
-
-                    # Handle disconnected/retired drivers
-                    self.race_state_tracker.handle_disconnected_drivers(
-                        active_drivers,
-                        session_data,
-                        self.get_position_from_results
-                    )
 
                     # Update all finished drivers with official positions from ResultsPositions
                     # This ensures we always show correct final results, even for disconnected drivers
@@ -1784,6 +2020,12 @@ class TelemetryProcessor:
                 active_drivers = self.position_calculator.get_official_positions(drivers)
 
             if not active_drivers:
+                logger.debug(
+                    f"No active drivers after processing (session_type={session_data.get('session_type')}, "
+                    f"player_idx={self.position_calculator.player_car_idx}, "
+                    f"player_class_id={self.position_calculator.player_car_class_id}, "
+                    f"drivers_total={len(drivers)})"
+                )
                 return None
 
             # Calculate division positions
@@ -1951,7 +2193,7 @@ class TelemetryProcessor:
 
         try:
             metadata['track_display_name'] = self.ir['WeekendInfo']['TrackDisplayName']
-        except (KeyError, TypeError):
+        except (KeyError, TypeError, AttributeError):
             metadata['track_display_name'] = None
 
         return metadata

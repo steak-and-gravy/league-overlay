@@ -42,25 +42,42 @@ class PositionCalculator:
         Args:
             drivers: Dict mapping CarIdx to driver info
         """
-        if self.player_car_idx is None:
-            try:
-                self.player_car_idx = self.ir['PlayerCarIdx']
-                logger.info(f"Player car index identified: {self.player_car_idx}")
-            except (KeyError, TypeError):
-                self.player_car_idx = None
+        try:
+            current_player_idx = self.ir['PlayerCarIdx']
+        except (KeyError, TypeError):
+            current_player_idx = None
 
-        if self.player_car_idx is not None and self.player_car_class_id is None:
-            try:
-                driver = drivers.get(self.player_car_idx)
-                if driver:
-                    class_id = driver.get('CarClassID')
-                    if class_id is not None:
-                        self.player_car_class_id = class_id
-                        logger.info(f"Player class ID identified: {self.player_car_class_id} for car {self.player_car_idx}")
-                    else:
-                        logger.warning(f"Found player car {self.player_car_idx} but CarClassID is None")
-            except (KeyError, TypeError) as e:
-                logger.warning(f"Error identifying player class: {e}")
+        # PlayerCarIdx can change when joining from menus/spectator state.
+        # Refresh cached identity whenever SDK value changes.
+        if current_player_idx != self.player_car_idx:
+            self.player_car_idx = current_player_idx
+            self.player_car_class_id = None
+            logger.info(f"Player car index identified: {self.player_car_idx}")
+
+        if self.player_car_idx is None:
+            self.player_car_class_id = None
+            return
+
+        try:
+            driver = drivers.get(self.player_car_idx)
+            if not driver:
+                # Player index can briefly reference a non-present entry during transitions.
+                self.player_car_class_id = None
+                return
+
+            class_id = driver.get('CarClassID')
+            if class_id is None:
+                logger.warning(f"Found player car {self.player_car_idx} but CarClassID is None")
+                self.player_car_class_id = None
+                return
+
+            if class_id != self.player_car_class_id:
+                self.player_car_class_id = class_id
+                logger.info(
+                    f"Player class ID identified: {self.player_car_class_id} for car {self.player_car_idx}"
+                )
+        except (KeyError, TypeError) as e:
+            logger.warning(f"Error identifying player class: {e}")
 
     def calculate_real_time_positions(self, drivers: Dict[int, Dict]) -> List[Dict]:
         """Calculate real-time positions based on actual track position.
@@ -95,10 +112,6 @@ class PositionCalculator:
             if not car_number or car_number == '0':
                 continue
 
-            # Position 0 means car is not active/participating
-            if car_idx_class_position[car_idx] == 0:
-                continue
-
             # Multi-class support: only show cars in the player's class (works for both driving and spectating)
             if self.player_car_class_id is not None:
                 if driver_info.get('CarClassID') != self.player_car_class_id:
@@ -107,6 +120,8 @@ class PositionCalculator:
             current_lap = car_idx_lap[car_idx]
             lap_pct = car_idx_lap_dist_pct[car_idx]
 
+            # During join transitions iRacing can report ClassPosition=0 for active cars.
+            # Activity is determined from lap telemetry; exclude only truly inactive entries.
             if current_lap < 0:
                 continue
 

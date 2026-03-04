@@ -46,11 +46,7 @@ class AppSettings:
 
     # Broadcast header
     show_broadcast_header: bool = False  # Show broadcast-style header with logo/session info
-    broadcast_header_logo: Optional[str] = None  # Path to league logo image (absolute or relative)
-    broadcast_header_title: str = ""  # Title displayed in header
-    broadcast_header_accent_color: str = "#FF8C00"  # Accent color for header divider line
     broadcast_roll_enabled: bool = False  # Lock top rows and roll lower standings in broadcast mode
-    broadcast_roll_interval_seconds: int = 5  # Seconds per rolling standings page in broadcast mode
 
     # Performance indicator colors
     faster_color: str = "#00FF00"  # Green - for faster lap times and positions gained
@@ -156,11 +152,7 @@ class SettingsManager:
                 'show_pit_lap': settings.show_pit_lap,
                 'show_footer': settings.show_footer,
                 'show_broadcast_header': settings.show_broadcast_header,
-                'broadcast_header_logo': settings.broadcast_header_logo,
-                'broadcast_header_title': settings.broadcast_header_title,
-                'broadcast_header_accent_color': settings.broadcast_header_accent_color,
                 'broadcast_roll_enabled': settings.broadcast_roll_enabled,
-                'broadcast_roll_interval_seconds': settings.broadcast_roll_interval_seconds,
                 'font_size': settings.font_size,
                 'row_color_style': settings.row_color_style,
                 'log_level': settings.log_level,
@@ -216,11 +208,7 @@ class SettingsManager:
             'show_pit_lap': settings.show_pit_lap,
             'show_footer': settings.show_footer,
             'show_broadcast_header': settings.show_broadcast_header,
-            'broadcast_header_logo': settings.broadcast_header_logo,
-            'broadcast_header_title': settings.broadcast_header_title,
-            'broadcast_header_accent_color': settings.broadcast_header_accent_color,
             'broadcast_roll_enabled': settings.broadcast_roll_enabled,
-            'broadcast_roll_interval_seconds': settings.broadcast_roll_interval_seconds,
             'font_size': settings.font_size,
             'row_color_style': settings.row_color_style,
             'log_level': settings.log_level,
