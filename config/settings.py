@@ -43,6 +43,8 @@ class AppSettings:
     show_pit_lap: bool = False  # Combined Last Pit + Out Lap column
     show_footer: bool = False  # Show footer with track temp, incidents, and SoF
     log_level: str = "INFO"
+    show_broadcast_header: bool = False  # Show broadcast-style header with logo/session info
+    broadcast_roll_enabled: bool = False  # Lock top rows and roll lower standings in broadcast mode
 
     # Performance indicator colors
     faster_color: str = "#00FF00"  # Green - for faster lap times and positions gained
@@ -147,6 +149,8 @@ class SettingsManager:
                 'show_rating': settings.show_rating,
                 'show_pit_lap': settings.show_pit_lap,
                 'show_footer': settings.show_footer,
+                'show_broadcast_header': settings.show_broadcast_header,
+                'broadcast_roll_enabled': settings.broadcast_roll_enabled,
                 'font_size': settings.font_size,
                 'row_color_style': settings.row_color_style,
                 'log_level': settings.log_level,
@@ -201,6 +205,8 @@ class SettingsManager:
             'show_rating': settings.show_rating,
             'show_pit_lap': settings.show_pit_lap,
             'show_footer': settings.show_footer,
+            'show_broadcast_header': settings.show_broadcast_header,
+            'broadcast_roll_enabled': settings.broadcast_roll_enabled,
             'font_size': settings.font_size,
             'row_color_style': settings.row_color_style,
             'log_level': settings.log_level,

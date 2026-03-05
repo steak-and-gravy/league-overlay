@@ -17,6 +17,7 @@ import time
 import os
 import re
 import json
+import math
 from typing import Dict, List, Optional, Any
 import irsdk
 
@@ -39,6 +40,7 @@ from ui.widgets import DataUpdateSignal, CustomSizeGrip
 from ui.driver_row_renderer import DriverRowRenderer
 from ui.settings_dialog import SettingsDialog
 from ui.auto_center_controller import AutoCenterController
+from ui.broadcast_header import BroadcastHeaderWidget
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -49,6 +51,10 @@ from PySide6.QtGui import QColor, QPalette, QCursor
 
 # Get logger for this module
 logger = get_logger(__name__)
+
+DEFAULT_BROADCAST_ACCENT_COLOR = "#FF8C00"
+DEFAULT_BROADCAST_TITLE = "BB's League Overlay"
+DEFAULT_BROADCAST_LOGO_URL = "https://leagueoverlay.com/assets/img/BBLeagueOverlay96.png"
 
 
 def lighten_hex_color(hex_color: str, factor: float = 0.2) -> str:
@@ -133,6 +139,9 @@ class LeagueOverlay(QMainWindow):
                 self.color_config_file = f"official:{OFFICIAL_LEAGUES[0].name}"
             else:
                 self.color_config_file = "league_divisions.json"
+        self.broadcast_header_title = DEFAULT_BROADCAST_TITLE
+        self.broadcast_header_logo = DEFAULT_BROADCAST_LOGO_URL
+        self.broadcast_header_accent_color = DEFAULT_BROADCAST_ACCENT_COLOR
 
         # User preferences not in settings (runtime state)
         self.top_elements_visible = True  # Current visibility of title/status
@@ -174,6 +183,7 @@ class LeagueOverlay(QMainWindow):
         self.race_data = []  # Unfiltered - all drivers from telemetry
         self.displayed_data = []  # Filtered - what's currently shown in UI
         self._last_emitted_data = []  # Track last data sent to UI to avoid redundant updates
+        self.broadcast_roll_page_index = 0
 
         self.startup_time = time.time()
         
@@ -194,6 +204,11 @@ class LeagueOverlay(QMainWindow):
         self.auto_center_timer = QTimer()
         self.auto_center_timer.timeout.connect(self.check_auto_center)
         self.auto_center_timer.setInterval(TIMING.AUTO_CENTER_CHECK_INTERVAL)
+
+        # Broadcast rolling standings timer (rotates the bottom group)
+        self.broadcast_roll_timer = QTimer()
+        self.broadcast_roll_timer.timeout.connect(self.advance_broadcast_roll_window)
+        self._update_broadcast_roll_mode()
 
         # Show version
         self.show_version_on_startup()
@@ -261,6 +276,7 @@ class LeagueOverlay(QMainWindow):
             # Update header text when show_division changes
             self._update_header_labels()
         if hasattr(self, 'scroll_area'):
+            self._update_broadcast_roll_mode()
             self.update_scroll_area_style()
         if hasattr(self, 'scroll_content'):
             self.scroll_content.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.BACKGROUND_BLACK)};")
@@ -327,10 +343,17 @@ class LeagueOverlay(QMainWindow):
         if hasattr(self, 'status_label'):
             if 'green' in self.status_label.styleSheet().lower():
                 self.update_status_style('green')
+            elif 'yellow' in self.status_label.styleSheet().lower():
+                self.update_status_style('yellow')
             elif 'orange' in self.status_label.styleSheet().lower():
                 self.update_status_style('orange')
             else:
                 self.update_status_style('white')
+            self.status_label.setVisible(not self.settings.show_broadcast_header)
+        if hasattr(self, 'broadcast_header'):
+            self.broadcast_header.settings = self.settings
+            self.broadcast_header.refresh_styles()
+            self.broadcast_header.setVisible(self.settings.show_broadcast_header)
         # Update scroll layout spacing
         if hasattr(self, 'scroll_layout'):
             self.scroll_layout.setSpacing(self.get_font_size('spacing'))
@@ -363,11 +386,24 @@ class LeagueOverlay(QMainWindow):
         
         # Title bar
         self.create_title_bar()
-        
-        # Status label
+
+        # Broadcast header (optional, for broadcast/spectator use)
+        self.broadcast_header = BroadcastHeaderWidget(
+            settings=self.settings,
+            get_bg_color_fn=self.get_bg_color,
+            get_font_size_fn=self.get_font_size,
+            get_broadcast_title_fn=lambda: self.broadcast_header_title,
+            get_broadcast_logo_fn=lambda: self.broadcast_header_logo,
+            get_broadcast_accent_fn=lambda: self.broadcast_header_accent_color,
+        )
+        self.broadcast_header.setVisible(self.settings.show_broadcast_header)
+        self.main_layout.addWidget(self.broadcast_header)
+
+        # Status label (hidden when broadcast header is active)
         self.status_label = QLabel("Connecting to iRacing...")
         self.update_status_style("orange")
         self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setVisible(not self.settings.show_broadcast_header)
         self.main_layout.addWidget(self.status_label)
 
         # Header frame
@@ -493,6 +529,19 @@ class LeagueOverlay(QMainWindow):
         """
         self.status_label.setText(text)
         self.update_status_style(color)
+        if self.settings.show_broadcast_header and hasattr(self, 'broadcast_header'):
+            normalized_color = color
+            if isinstance(color, str) and color.startswith('#'):
+                if color.lower() in ('#ffa500', '#ff8c00'):
+                    normalized_color = 'orange'
+                elif color.lower() in ('#ffff00', '#ffd700'):
+                    normalized_color = 'yellow'
+                else:
+                    normalized_color = 'green'
+            self.broadcast_header.update_session_info({
+                'session_status': text,
+                'status_color': normalized_color,
+            })
 
     def update_footer_display(self, footer_data: Dict[str, Any]):
         """Update footer display with track temp, incidents, and SoF.
@@ -816,6 +865,8 @@ class LeagueOverlay(QMainWindow):
         
     def on_manual_scroll(self):
         """Record when user manually scrolls, to temporarily disable auto-centering."""
+        if self._is_broadcast_roll_active():
+            return
         self.auto_center.on_manual_interaction()
         # Start the auto-center check timer (restarts if already running)
         if not self.auto_center_timer.isActive():
@@ -1212,6 +1263,8 @@ class LeagueOverlay(QMainWindow):
         This ensures auto-centering resumes after the timeout period even if
         the race data hasn't changed (event-driven updates wouldn't trigger).
         """
+        if self._is_broadcast_roll_active():
+            return
         if self.auto_center.should_auto_center():
             # Timeout has elapsed, try to center on player
             if self.player_car_idx is not None and self.displayed_data:
@@ -1440,6 +1493,14 @@ class LeagueOverlay(QMainWindow):
         if not data:
             return
 
+        render_data = data
+        blank_rows = 0
+        separator_index = None
+        if self._is_broadcast_roll_active():
+            render_data, blank_rows, separator_index = self._get_broadcast_roll_render_data(data)
+        else:
+            self.broadcast_roll_page_index = 0
+
         # Clear existing widgets
         while self.scroll_layout.count() > 1:
             item = self.scroll_layout.takeAt(0)
@@ -1447,18 +1508,208 @@ class LeagueOverlay(QMainWindow):
                 item.widget().deleteLater()
 
         # Add new driver rows
-        for driver in data:
+        for idx, driver in enumerate(render_data):
+            if separator_index is not None and idx == separator_index:
+                self.scroll_layout.insertWidget(
+                    self.scroll_layout.count() - 1,
+                    self._create_broadcast_roll_separator_line()
+                )
             row = self.row_renderer.create_row(driver)
             self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, row)
 
+        for _ in range(blank_rows):
+            self.scroll_layout.insertWidget(
+                self.scroll_layout.count() - 1,
+                self._create_empty_row_placeholder()
+            )
+
         # Auto-center on player
-        if self.player_car_idx is not None and self.auto_center.should_auto_center():
+        if (not self._is_broadcast_roll_active()
+                and self.player_car_idx is not None
+                and self.auto_center.should_auto_center()):
             self.center_on_player(data)
 
         self.displayed_data = data.copy()
+        self._update_broadcast_roll_mode()
 
         # Adjust header margins to match scroll area width (accounting for scrollbar)
         self.adjust_header_margins()
+
+    @staticmethod
+    def _calculate_broadcast_roll_window(total_drivers: int, visible_rows: int,
+                                         roll_rows: int, page_index: int) -> Dict[str, int]:
+        """Calculate locked and rolling slices for broadcast standings mode."""
+        if total_drivers <= 0 or visible_rows <= 0:
+            return {
+                'locked_count': 0,
+                'roll_start': 0,
+                'roll_end': 0,
+                'blank_rows': 0,
+                'total_pages': 1,
+            }
+
+        if visible_rows <= roll_rows and total_drivers > visible_rows:
+            total_pages = max(1, math.ceil(total_drivers / visible_rows))
+            page = page_index % total_pages
+            roll_start = page * visible_rows
+            roll_end = min(total_drivers, roll_start + visible_rows)
+            blank_rows = max(0, visible_rows - (roll_end - roll_start))
+            return {
+                'locked_count': 0,
+                'roll_start': roll_start,
+                'roll_end': roll_end,
+                'blank_rows': blank_rows,
+                'total_pages': total_pages,
+            }
+
+        if total_drivers <= visible_rows:
+            return {
+                'locked_count': total_drivers,
+                'roll_start': min(total_drivers, visible_rows),
+                'roll_end': min(total_drivers, visible_rows),
+                'blank_rows': 0,
+                'total_pages': 1,
+            }
+
+        locked_count = max(0, visible_rows - roll_rows)
+        rolling_pool = max(0, total_drivers - locked_count)
+        total_pages = max(1, math.ceil(rolling_pool / roll_rows))
+        page = page_index % total_pages
+        roll_start = locked_count + (page * roll_rows)
+        roll_end = min(total_drivers, roll_start + roll_rows)
+        blank_rows = max(0, roll_rows - (roll_end - roll_start))
+
+        return {
+            'locked_count': locked_count,
+            'roll_start': roll_start,
+            'roll_end': roll_end,
+            'blank_rows': blank_rows,
+            'total_pages': total_pages,
+        }
+
+    def _is_broadcast_roll_active(self) -> bool:
+        show_broadcast_header = (getattr(self.settings, 'show_broadcast_header', False) is True)
+        broadcast_roll_enabled = (getattr(self.settings, 'broadcast_roll_enabled', False) is True)
+        return show_broadcast_header and broadcast_roll_enabled
+
+    def _estimate_visible_row_capacity(self) -> int:
+        if not hasattr(self, 'scroll_area'):
+            return len(self.displayed_data) if self.displayed_data else 0
+
+        viewport_height = self.scroll_area.viewport().height()
+        margins = self.scroll_layout.contentsMargins()
+        spacing = self.scroll_layout.spacing()
+        available_height = max(0, viewport_height - margins.top() - margins.bottom())
+
+        sample_row = self.row_renderer.create_row(DriverState(
+            car_idx=0,
+            driver_info={"CarNumber": "0", "UserName": "Sample"},
+            position=1,
+            division_position=1,
+            division_name="Default",
+            division_color="#FFFFFF",
+            gap_to_leader="",
+            interval="",
+            delta="",
+            last_lap="",
+            best_lap="",
+            positions_gained="",
+            combined_rating="",
+            pit_lap="",
+            is_player=False,
+            is_finished=False,
+            current_lap=0,
+            lap_pct=0.0,
+        ))
+        row_height = sample_row.sizeHint().height()
+        sample_row.deleteLater()
+
+        if row_height <= 0:
+            return len(self.displayed_data) if self.displayed_data else 0
+
+        per_row = row_height + max(0, spacing)
+        if per_row <= 0:
+            return len(self.displayed_data) if self.displayed_data else 0
+
+        return max(1, available_height // per_row)
+
+    def _get_broadcast_roll_render_data(self, data: List[DriverState]) -> tuple[List[DriverState], int, Optional[int]]:
+        visible_rows = self._estimate_visible_row_capacity()
+        window = self._calculate_broadcast_roll_window(
+            total_drivers=len(data),
+            visible_rows=visible_rows,
+            roll_rows=5,
+            page_index=self.broadcast_roll_page_index
+        )
+        self.broadcast_roll_page_index %= window['total_pages']
+        locked = data[:window['locked_count']]
+        rolling = data[window['roll_start']:window['roll_end']]
+        separator_index: Optional[int] = len(locked) if locked and rolling else None
+        return (locked + rolling, window['blank_rows'], separator_index)
+
+    def _create_empty_row_placeholder(self) -> QWidget:
+        spacer = QWidget()
+        spacer.setFixedHeight(self.get_font_size('spacing') + 18)
+        spacer.setStyleSheet("background-color: transparent; border: none;")
+        return spacer
+
+    def _create_broadcast_roll_separator_line(self) -> QWidget:
+        separator = QWidget()
+        separator.setFixedHeight(1)
+        separator.setStyleSheet(
+            f"background-color: {self.broadcast_header_accent_color}; border: none;"
+        )
+        return separator
+
+    def _update_broadcast_roll_mode(self) -> None:
+        if not hasattr(self, 'scroll_area'):
+            return
+
+        if self._is_broadcast_roll_active():
+            self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            interval_ms = int(TIMING.BROADCAST_ROLL_INTERVAL_SECONDS * 1000)
+            if self.broadcast_roll_timer.interval() != interval_ms:
+                self.broadcast_roll_timer.setInterval(interval_ms)
+
+            should_roll = False
+            if self.displayed_data:
+                window = self._calculate_broadcast_roll_window(
+                    total_drivers=len(self.displayed_data),
+                    visible_rows=self._estimate_visible_row_capacity(),
+                    roll_rows=5,
+                    page_index=self.broadcast_roll_page_index
+                )
+                should_roll = window['total_pages'] > 1
+
+            if should_roll:
+                if not self.broadcast_roll_timer.isActive():
+                    self.broadcast_roll_timer.start()
+            else:
+                self.broadcast_roll_timer.stop()
+                self.broadcast_roll_page_index = 0
+        else:
+            self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            self.broadcast_roll_timer.stop()
+            self.broadcast_roll_page_index = 0
+
+    def advance_broadcast_roll_window(self) -> None:
+        if not self._is_broadcast_roll_active() or not self.displayed_data:
+            self.broadcast_roll_timer.stop()
+            return
+
+        window = self._calculate_broadcast_roll_window(
+            total_drivers=len(self.displayed_data),
+            visible_rows=self._estimate_visible_row_capacity(),
+            roll_rows=5,
+            page_index=self.broadcast_roll_page_index
+        )
+        if window['total_pages'] <= 1:
+            self.broadcast_roll_timer.stop()
+            self.broadcast_roll_page_index = 0
+            return
+
+        self.broadcast_roll_page_index = (self.broadcast_roll_page_index + 1) % window['total_pages']
+        self.display_race_data(self.displayed_data.copy())
 
     def adjust_header_margins(self):
         """Adjust header right margin based on scrollbar visibility to maintain column alignment."""

@@ -189,6 +189,16 @@ class SettingsValidator:
             default=self.defaults['show_footer'],
             field_name='show_footer'
         )
+        validated['show_broadcast_header'] = self.coerce_bool(
+            data.get('show_broadcast_header'),
+            default=self.defaults['show_broadcast_header'],
+            field_name='show_broadcast_header'
+        )
+        validated['broadcast_roll_enabled'] = self.coerce_bool(
+            data.get('broadcast_roll_enabled'),
+            default=self.defaults['broadcast_roll_enabled'],
+            field_name='broadcast_roll_enabled'
+        )
 
         # Enum fields (limited valid values)
         validated['font_size'] = self.coerce_enum(

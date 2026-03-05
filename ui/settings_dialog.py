@@ -490,6 +490,11 @@ class SettingsDialog(QDialog):
         self.show_division_cb.setToolTip("When enabled, Gap and Interval are scoped to your division only")
         checkbox_row1.addWidget(self.show_division_cb)
 
+        self.broadcast_header_cb = QCheckBox("Broadcast header")
+        self.broadcast_header_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.broadcast_header_cb.setChecked(self.parent_overlay.settings.show_broadcast_header)
+        checkbox_row1.addWidget(self.broadcast_header_cb)
+
         window_layout.addLayout(checkbox_row1)
 
         # Row 2: Text display
@@ -506,7 +511,15 @@ class SettingsDialog(QDialog):
         self.bold_drivers_cb.setChecked(self.parent_overlay.settings.bold_drivers)
         checkbox_row2.addWidget(self.bold_drivers_cb)
 
+        self.broadcast_roll_enabled_cb = QCheckBox("Rolling standings")
+        self.broadcast_roll_enabled_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.broadcast_roll_enabled_cb.setChecked(self.parent_overlay.settings.broadcast_roll_enabled)
+        self.broadcast_roll_enabled_cb.setToolTip("When enabled, top rows stay fixed while lower rows rotate")
+        checkbox_row2.addWidget(self.broadcast_roll_enabled_cb)
+
         window_layout.addLayout(checkbox_row2)
+        self.broadcast_header_cb.toggled.connect(self._sync_broadcast_roll_control_state)
+        self._sync_broadcast_roll_control_state()
 
         # Row 3: Column visibility - Gap and Interval
         checkbox_row3 = QHBoxLayout()
@@ -1079,6 +1092,9 @@ class SettingsDialog(QDialog):
             self.show_rating_cb.setChecked(defaults.show_rating)
             self.show_pit_lap_cb.setChecked(defaults.show_pit_lap)
             self.show_footer_cb.setChecked(defaults.show_footer)
+            self.broadcast_header_cb.setChecked(defaults.show_broadcast_header)
+            self.broadcast_roll_enabled_cb.setChecked(defaults.broadcast_roll_enabled)
+            self._sync_broadcast_roll_control_state()
             self.font_size_combo.setCurrentText(defaults.font_size)
             self.color_style_combo.setCurrentText(defaults.row_color_style)
             self.log_level_combo.setCurrentText(defaults.log_level)
@@ -1144,6 +1160,8 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_rating = self.show_rating_cb.isChecked()
             self.parent_overlay.settings.show_pit_lap = self.show_pit_lap_cb.isChecked()
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()
+            self.parent_overlay.settings.show_broadcast_header = self.broadcast_header_cb.isChecked()
+            self.parent_overlay.settings.broadcast_roll_enabled = self.broadcast_roll_enabled_cb.isChecked()
             self.parent_overlay.settings.font_size = self.font_size_combo.currentText()
             self.parent_overlay.settings.row_color_style = self.color_style_combo.currentText()
 
@@ -1162,8 +1180,14 @@ class SettingsDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to apply settings: {e}")
+
+    def _sync_broadcast_roll_control_state(self):
+        """Enable rolling standings only when broadcast header is enabled."""
+        is_enabled = self.broadcast_header_cb.isChecked()
+        self.broadcast_roll_enabled_cb.setEnabled(is_enabled)
+        if not is_enabled:
+            self.broadcast_roll_enabled_cb.setChecked(False)
             
     def on_cancel(self):
         """Cancel settings"""
         self.reject()
-

@@ -43,6 +43,7 @@ class UIDimensions:
     CLOSE_BUTTON_WIDTH: int = 25
     SETTINGS_DIALOG_WIDTH: int = 630
     SETTINGS_DIALOG_HEIGHT: int = 520
+    BROADCAST_HEADER_MIN_HEIGHT: int = 60
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,7 @@ class Timing:
     UPDATE_CHECK_DELAY: float = 1.0  # seconds
     CONNECTION_MESSAGE_DURATION: float = 3.0  # seconds - how long to show "Connected" message
     DEFAULT_LAP_TIME_FALLBACK: float = 90.0  # seconds - fallback lap time when no data available
+    BROADCAST_ROLL_INTERVAL_SECONDS: int = 3  # seconds
 
 
 @dataclass(frozen=True)
@@ -112,6 +114,9 @@ class UIConfig:
                     "status": "8pt",
                     "header": "8pt",
                     "data": "8pt",
+                    "broadcast_title": "10pt",
+                    "broadcast_session": "7.5pt",
+                    "broadcast_track": "7pt",
                     "spacing": 2
                 },
                 "Medium": {
@@ -120,6 +125,9 @@ class UIConfig:
                     "status": "9pt",
                     "header": "9pt",
                     "data": "9pt",
+                    "broadcast_title": "11pt",
+                    "broadcast_session": "8.5pt",
+                    "broadcast_track": "8pt",
                     "spacing": 3
                 },
                 "Large": {
@@ -128,6 +136,9 @@ class UIConfig:
                     "status": "10pt",
                     "header": "10pt",
                     "data": "10pt",
+                    "broadcast_title": "12pt",
+                    "broadcast_session": "9.5pt",
+                    "broadcast_track": "9pt",
                     "spacing": 4
                 },
                 "Extra Large": {
@@ -136,6 +147,9 @@ class UIConfig:
                     "status": "11pt",
                     "header": "11pt",
                     "data": "11pt",
+                    "broadcast_title": "13pt",
+                    "broadcast_session": "10.5pt",
+                    "broadcast_track": "10pt",
                     "spacing": 5
                 }
             })
