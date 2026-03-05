@@ -142,6 +142,7 @@ class LeagueOverlay(QMainWindow):
         self.broadcast_header_title = DEFAULT_BROADCAST_TITLE
         self.broadcast_header_logo = DEFAULT_BROADCAST_LOGO_URL
         self.broadcast_header_accent_color = DEFAULT_BROADCAST_ACCENT_COLOR
+        self.apply_official_league_broadcast_metadata()
 
         # User preferences not in settings (runtime state)
         self.top_elements_visible = True  # Current visibility of title/status
@@ -913,6 +914,36 @@ class LeagueOverlay(QMainWindow):
 
         # Delegate to settings manager (all other settings already in self.settings)
         self.settings_manager.save(self.settings)
+
+    def apply_official_league_broadcast_metadata(self):
+        """Apply broadcast branding rules based on selected league source.
+
+        Official leagues provide title/logo metadata. Local leagues use defaults.
+        Accent color is fixed and not user-configurable.
+        """
+        # Accent is fixed globally.
+        self.broadcast_header_accent_color = DEFAULT_BROADCAST_ACCENT_COLOR
+
+        # Defaults for non-official sources.
+        default_title = DEFAULT_BROADCAST_TITLE
+        default_logo = DEFAULT_BROADCAST_LOGO_URL
+        self.broadcast_header_title = default_title
+        self.broadcast_header_logo = default_logo
+
+        if isinstance(self.color_config_file, str) and self.color_config_file.startswith("official:"):
+            from config.official_leagues import get_official_league
+
+            league_name = self.color_config_file.replace("official:", "")
+            try:
+                league = get_official_league(league_name)
+                self.broadcast_header_title = getattr(league, 'title', None) or default_title
+                self.broadcast_header_logo = getattr(league, 'logo', None) or default_logo
+            except ValueError:
+                logger.warning(f"Could not apply broadcast metadata: official league not found ({league_name})")
+
+        # Keep header widget in sync if UI already exists.
+        if hasattr(self, 'broadcast_header'):
+            self.broadcast_header.refresh_styles()
             
 
     def set_driver_division(self, driver_info: Dict[str, str], division_name: str) -> None:

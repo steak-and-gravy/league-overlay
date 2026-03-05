@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import requests
 
@@ -20,7 +20,9 @@ FALLBACK_LEAGUES = [
     {
         "name": "BWRL GT3 Sprint",
         "path": "bwrl/broken_wing_gt3.json",
+        "title": "Broken Wing GT3 Sprint",
         "description": "Broken Wing Racing League Sunday Night GT3",
+        "logo": "https://bwrl.net/_nuxt/bwrl-logo.DjQE3-f5.png",
         "cache_file": "cache_broken_wing_gt3.json"
     }
 ]
@@ -31,7 +33,9 @@ class OfficialLeague:
     """Configuration for an official remotely-managed league."""
     name: str           # Display name in dropdown
     path: str           # Relative path (e.g., "bwrl/broken_wing_gt3.json")
+    title: Optional[str]  # Optional broadcast header title
     description: str    # Tooltip/description
+    logo: Optional[str]  # Optional broadcast header logo URL/path
     cache_file: str     # Local cache filename
     icon: str = "🏁"    # Fixed flag emoji for all official leagues
 
@@ -58,6 +62,28 @@ def _validate_league_dict(league_dict: dict) -> bool:
             logger.warning(f"Invalid league entry: {field} is empty/null in {league_dict}")
             return False
     return True
+
+
+def _parse_optional_string(value) -> Optional[str]:
+    """Parse optional string field from league JSON."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        return value if value else None
+    return None
+
+
+def _build_official_league(league_dict: dict) -> OfficialLeague:
+    """Build an OfficialLeague from a validated dictionary."""
+    return OfficialLeague(
+        name=league_dict["name"].strip(),
+        path=league_dict["path"].strip(),
+        title=_parse_optional_string(league_dict.get("title")),
+        description=league_dict["description"].strip(),
+        logo=_parse_optional_string(league_dict.get("logo")),
+        cache_file=league_dict["cache_file"].strip()
+    )
 
 
 def load_official_leagues_from_json() -> List[OfficialLeague]:
@@ -91,12 +117,7 @@ def load_official_leagues_from_json() -> List[OfficialLeague]:
         leagues = []
         for league_dict in remote_data:
             if _validate_league_dict(league_dict):
-                league = OfficialLeague(
-                    name=league_dict["name"].strip(),
-                    path=league_dict["path"].strip(),
-                    description=league_dict["description"].strip(),
-                    cache_file=league_dict["cache_file"].strip()
-                )
+                league = _build_official_league(league_dict)
                 leagues.append(league)
         
         if not leagues:
@@ -128,12 +149,7 @@ def load_official_leagues_from_json() -> List[OfficialLeague]:
                     leagues = []
                     for league_dict in cached_data:
                         if _validate_league_dict(league_dict):
-                            league = OfficialLeague(
-                                name=league_dict["name"].strip(),
-                                path=league_dict["path"].strip(),
-                                description=league_dict["description"].strip(),
-                                cache_file=league_dict["cache_file"].strip()
-                            )
+                            league = _build_official_league(league_dict)
                             leagues.append(league)
                     
                     if leagues:
@@ -163,12 +179,7 @@ def _leagues_from_dicts(league_dicts: List[dict]) -> List[OfficialLeague]:
     leagues = []
     for league_dict in league_dicts:
         if _validate_league_dict(league_dict):
-            league = OfficialLeague(
-                name=league_dict["name"].strip(),
-                path=league_dict["path"].strip(),
-                description=league_dict["description"].strip(),
-                cache_file=league_dict["cache_file"].strip()
-            )
+            league = _build_official_league(league_dict)
             leagues.append(league)
     return leagues
 

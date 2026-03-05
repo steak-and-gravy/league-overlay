@@ -475,128 +475,137 @@ class SettingsDialog(QDialog):
         window_layout.addLayout(log_level_row)
 
         # Checkboxes in 2-column grid
-        # Row 1: UI elements
+        # Row 1: Broadcast/header visibility
         checkbox_row1 = QHBoxLayout()
         checkbox_row1.setSpacing(10)
-
-        self.hide_headers_cb = QCheckBox("Auto-hide headers")
-        self.hide_headers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.hide_headers_cb.setChecked(self.parent_overlay.settings.hide_headers)
-        checkbox_row1.addWidget(self.hide_headers_cb)
-
-        self.show_division_cb = QCheckBox("Show division gaps")
-        self.show_division_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_division_cb.setChecked(self.parent_overlay.settings.show_division)
-        self.show_division_cb.setToolTip("When enabled, Gap and Interval are scoped to your division only")
-        checkbox_row1.addWidget(self.show_division_cb)
 
         self.broadcast_header_cb = QCheckBox("Broadcast header")
         self.broadcast_header_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.broadcast_header_cb.setChecked(self.parent_overlay.settings.show_broadcast_header)
         checkbox_row1.addWidget(self.broadcast_header_cb)
 
+        self.hide_headers_cb = QCheckBox("Auto-hide title bar")
+        self.hide_headers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.hide_headers_cb.setChecked(self.parent_overlay.settings.hide_headers)
+        checkbox_row1.addWidget(self.hide_headers_cb)
+
         window_layout.addLayout(checkbox_row1)
 
-        # Row 2: Text display
+        # Row 2: Broadcast rolling + division gap scope
         checkbox_row2 = QHBoxLayout()
         checkbox_row2.setSpacing(10)
 
-        self.center_drivers_cb = QCheckBox("Center driver names")
-        self.center_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.center_drivers_cb.setChecked(self.parent_overlay.settings.center_drivers)
-        checkbox_row2.addWidget(self.center_drivers_cb)
-
-        self.bold_drivers_cb = QCheckBox("Bold all driver rows")
-        self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.bold_drivers_cb.setChecked(self.parent_overlay.settings.bold_drivers)
-        checkbox_row2.addWidget(self.bold_drivers_cb)
-
         self.broadcast_roll_enabled_cb = QCheckBox("Rolling standings")
-        self.broadcast_roll_enabled_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.broadcast_roll_enabled_cb.setStyleSheet("""
+            QCheckBox { border: none; color: white; font-size: 9pt; }
+            QCheckBox:disabled { color: #777777; }
+        """)
         self.broadcast_roll_enabled_cb.setChecked(self.parent_overlay.settings.broadcast_roll_enabled)
         self.broadcast_roll_enabled_cb.setToolTip("When enabled, top rows stay fixed while lower rows rotate")
         checkbox_row2.addWidget(self.broadcast_roll_enabled_cb)
+
+        self.show_division_cb = QCheckBox("Show division gaps")
+        self.show_division_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_division_cb.setChecked(self.parent_overlay.settings.show_division)
+        self.show_division_cb.setToolTip("When enabled, Gap and Interval are scoped to your division only")
+        checkbox_row2.addWidget(self.show_division_cb)
 
         window_layout.addLayout(checkbox_row2)
         self.broadcast_header_cb.toggled.connect(self._sync_broadcast_roll_control_state)
         self._sync_broadcast_roll_control_state()
 
-        # Row 3: Column visibility - Gap and Interval
+        # Row 3: Text display
         checkbox_row3 = QHBoxLayout()
         checkbox_row3.setSpacing(10)
+
+        self.center_drivers_cb = QCheckBox("Center driver names")
+        self.center_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.center_drivers_cb.setChecked(self.parent_overlay.settings.center_drivers)
+        checkbox_row3.addWidget(self.center_drivers_cb)
+
+        self.bold_drivers_cb = QCheckBox("Bold all driver rows")
+        self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.bold_drivers_cb.setChecked(self.parent_overlay.settings.bold_drivers)
+        checkbox_row3.addWidget(self.bold_drivers_cb)
+
+        window_layout.addLayout(checkbox_row3)
+
+        # Row 4: Column visibility - Gap and Interval
+        checkbox_row4 = QHBoxLayout()
+        checkbox_row4.setSpacing(10)
 
         self.show_gap_cb = QCheckBox("Show gap")
         self.show_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_gap_cb.setChecked(self.parent_overlay.settings.show_gap)
         self.show_gap_cb.setToolTip("Gap to division/overall leader")
-        checkbox_row3.addWidget(self.show_gap_cb)
+        checkbox_row4.addWidget(self.show_gap_cb)
 
         self.show_interval_cb = QCheckBox("Show interval")
         self.show_interval_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_interval_cb.setChecked(self.parent_overlay.settings.show_interval)
         self.show_interval_cb.setToolTip("Interval to car ahead")
-        checkbox_row3.addWidget(self.show_interval_cb)
+        checkbox_row4.addWidget(self.show_interval_cb)
 
-        window_layout.addLayout(checkbox_row3)
+        window_layout.addLayout(checkbox_row4)
 
-        # Row 4: Column visibility - Position and Delta
-        checkbox_row4 = QHBoxLayout()
-        checkbox_row4.setSpacing(10)
+        # Row 5: Column visibility - Position and Delta
+        checkbox_row5 = QHBoxLayout()
+        checkbox_row5.setSpacing(10)
 
         self.show_positions_gained_cb = QCheckBox("Show positions +/-")
         self.show_positions_gained_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_positions_gained_cb.setChecked(self.parent_overlay.settings.show_positions_gained)
-        checkbox_row4.addWidget(self.show_positions_gained_cb)
+        checkbox_row5.addWidget(self.show_positions_gained_cb)
 
         self.show_delta_cb = QCheckBox("Show delta")
         self.show_delta_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_delta_cb.setChecked(self.parent_overlay.settings.show_delta)
-        checkbox_row4.addWidget(self.show_delta_cb)
+        checkbox_row5.addWidget(self.show_delta_cb)
 
-        window_layout.addLayout(checkbox_row4)
+        window_layout.addLayout(checkbox_row5)
 
-        # Row 5: Column visibility - Lap times
-        checkbox_row5 = QHBoxLayout()
-        checkbox_row5.setSpacing(10)
+        # Row 6: Column visibility - Lap times
+        checkbox_row6 = QHBoxLayout()
+        checkbox_row6.setSpacing(10)
 
         self.show_best_lap_cb = QCheckBox("Show best lap")
         self.show_best_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_best_lap_cb.setChecked(self.parent_overlay.settings.show_best_lap)
-        checkbox_row5.addWidget(self.show_best_lap_cb)
+        checkbox_row6.addWidget(self.show_best_lap_cb)
 
         self.show_last_lap_cb = QCheckBox("Show last lap")
         self.show_last_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_last_lap_cb.setChecked(self.parent_overlay.settings.show_last_lap)
-        checkbox_row5.addWidget(self.show_last_lap_cb)
+        checkbox_row6.addWidget(self.show_last_lap_cb)
 
-        window_layout.addLayout(checkbox_row5)
+        window_layout.addLayout(checkbox_row6)
 
-        # Row 6: Column visibility - Driver info and pit strategy
-        checkbox_row6 = QHBoxLayout()
-        checkbox_row6.setSpacing(10)
+        # Row 7: Column visibility - Driver info and pit strategy
+        checkbox_row7 = QHBoxLayout()
+        checkbox_row7.setSpacing(10)
 
         self.show_rating_cb = QCheckBox("Show rating")
         self.show_rating_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_rating_cb.setChecked(self.parent_overlay.settings.show_rating)
-        checkbox_row6.addWidget(self.show_rating_cb)
+        checkbox_row7.addWidget(self.show_rating_cb)
 
         self.show_pit_lap_cb = QCheckBox("Show pit lap")
         self.show_pit_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_pit_lap_cb.setChecked(self.parent_overlay.settings.show_pit_lap)
-        checkbox_row6.addWidget(self.show_pit_lap_cb)
+        checkbox_row7.addWidget(self.show_pit_lap_cb)
 
-        window_layout.addLayout(checkbox_row6)
+        window_layout.addLayout(checkbox_row7)
 
-        # Row 7: Footer visibility
-        checkbox_row7 = QHBoxLayout()
-        checkbox_row7.setSpacing(10)
+        # Row 8: Footer visibility
+        checkbox_row8 = QHBoxLayout()
+        checkbox_row8.setSpacing(10)
 
         self.show_footer_cb = QCheckBox("Show footer")
         self.show_footer_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_footer_cb.setChecked(self.parent_overlay.settings.show_footer)
-        checkbox_row7.addWidget(self.show_footer_cb)
+        checkbox_row8.addWidget(self.show_footer_cb)
 
-        window_layout.addLayout(checkbox_row7)
+        window_layout.addLayout(checkbox_row8)
 
         # Spacer after last checkbox row
         window_layout.addSpacing(10)
@@ -898,6 +907,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.color_config_file = league_source
             self.parent_overlay.division_manager.config_file = league_source
             self.parent_overlay.division_manager.load_driver_config()
+            self.parent_overlay.apply_official_league_broadcast_metadata()
             self.parent_overlay.signals.refresh_colors.emit()
 
             # Save to settings (but don't add to recent - it's official)
@@ -926,6 +936,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.color_config_file = file_path
             self.parent_overlay.division_manager.config_file = file_path
             self.parent_overlay.division_manager.load_driver_config()
+            self.parent_overlay.apply_official_league_broadcast_metadata()
             self.parent_overlay.signals.refresh_colors.emit()
 
             # Add to recent files and save settings
@@ -956,6 +967,7 @@ class SettingsDialog(QDialog):
 
         # Repopulate dropdown in case anything changed
         self.populate_league_dropdown()
+        self.parent_overlay.apply_official_league_broadcast_metadata()
 
     def save_local_copy(self):
         """Save current official league as a local editable copy."""
@@ -1164,6 +1176,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.broadcast_roll_enabled = self.broadcast_roll_enabled_cb.isChecked()
             self.parent_overlay.settings.font_size = self.font_size_combo.currentText()
             self.parent_overlay.settings.row_color_style = self.color_style_combo.currentText()
+            self.parent_overlay.apply_official_league_broadcast_metadata()
 
             # Apply log level change immediately
             new_log_level = self.log_level_combo.currentText()
@@ -1185,8 +1198,6 @@ class SettingsDialog(QDialog):
         """Enable rolling standings only when broadcast header is enabled."""
         is_enabled = self.broadcast_header_cb.isChecked()
         self.broadcast_roll_enabled_cb.setEnabled(is_enabled)
-        if not is_enabled:
-            self.broadcast_roll_enabled_cb.setChecked(False)
             
     def on_cancel(self):
         """Cancel settings"""
