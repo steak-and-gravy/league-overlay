@@ -105,7 +105,6 @@ class LeagueOverlay(QMainWindow):
         self.signals.update_status.connect(self.update_status_label)
         self.signals.refresh_colors.connect(self.refresh_driver_colors)
         self.signals.update_footer.connect(self.update_footer_display)
-        self.signals.update_session_metadata.connect(self.update_broadcast_header)
 
         self.player_car_idx = None  # Player's car (from iRacing API)
         self.class_leader_lap: Optional[int] = None  # Cached class leader lap for status display
@@ -184,10 +183,8 @@ class LeagueOverlay(QMainWindow):
 
         self.race_data = []  # Unfiltered - all drivers from telemetry
         self.displayed_data = []  # Filtered - what's currently shown in UI
-        self.visible_display_data = []  # Data currently rendered in the viewport
         self._last_emitted_data = []  # Track last data sent to UI to avoid redundant updates
         self.broadcast_roll_page_index = 0
-        self._cached_row_height: Optional[int] = None
 
         self.startup_time = time.time()
         
@@ -347,13 +344,13 @@ class LeagueOverlay(QMainWindow):
         if hasattr(self, 'status_label'):
             if 'green' in self.status_label.styleSheet().lower():
                 self.update_status_style('green')
+            elif 'yellow' in self.status_label.styleSheet().lower():
+                self.update_status_style('yellow')
             elif 'orange' in self.status_label.styleSheet().lower():
                 self.update_status_style('orange')
             else:
                 self.update_status_style('white')
-            # Hide status label when broadcast header is active
             self.status_label.setVisible(not self.settings.show_broadcast_header)
-        # Update broadcast header
         if hasattr(self, 'broadcast_header'):
             self.broadcast_header.settings = self.settings
             self.broadcast_header.refresh_styles()
@@ -361,7 +358,6 @@ class LeagueOverlay(QMainWindow):
         # Update scroll layout spacing
         if hasattr(self, 'scroll_layout'):
             self.scroll_layout.setSpacing(self.get_font_size('spacing'))
-            self._cached_row_height = None
         # Refresh displayed data to update driver rows
         if hasattr(self, 'displayed_data') and self.displayed_data:
             self.display_race_data(self.displayed_data.copy())
@@ -400,7 +396,6 @@ class LeagueOverlay(QMainWindow):
             get_broadcast_title_fn=lambda: self.broadcast_header_title,
             get_broadcast_logo_fn=lambda: self.broadcast_header_logo,
             get_broadcast_accent_fn=lambda: self.broadcast_header_accent_color,
-            parent=main_widget
         )
         self.broadcast_header.setVisible(self.settings.show_broadcast_header)
         self.main_layout.addWidget(self.broadcast_header)
@@ -535,6 +530,19 @@ class LeagueOverlay(QMainWindow):
         """
         self.status_label.setText(text)
         self.update_status_style(color)
+        if self.settings.show_broadcast_header and hasattr(self, 'broadcast_header'):
+            normalized_color = color
+            if isinstance(color, str) and color.startswith('#'):
+                if color.lower() in ('#ffa500', '#ff8c00'):
+                    normalized_color = 'orange'
+                elif color.lower() in ('#ffff00', '#ffd700'):
+                    normalized_color = 'yellow'
+                else:
+                    normalized_color = 'green'
+            self.broadcast_header.update_session_info({
+                'session_status': text,
+                'status_color': normalized_color,
+            })
 
     def update_footer_display(self, footer_data: Dict[str, Any]):
         """Update footer display with track temp, incidents, and SoF.
@@ -576,16 +584,6 @@ class LeagueOverlay(QMainWindow):
             self.sof_label.setText(f"SoF: {sof_k:.1f}k")
         else:
             self.sof_label.setText("SoF: ----")
-
-    def update_broadcast_header(self, session_data: Dict[str, Any]):
-        """Update broadcast header with session metadata.
-
-        Args:
-            session_data: Dictionary with session_status, status_color, track_display_name
-        """
-        if not self.settings.show_broadcast_header:
-            return
-        self.broadcast_header.update_session_info(session_data)
 
     def create_title_bar(self):
         """Create custom title bar"""
@@ -679,9 +677,8 @@ class LeagueOverlay(QMainWindow):
         self.header_layout.setContentsMargins(5, 2, 5, 2)
         self.header_layout.setSpacing(2)
 
-        # Reset all column stretches first (clear old values from hidden columns).
-        # Max columns: 4 base (Pos, D-Pos, Driver, Car#) + 8 optional = 12.
-        for col_idx in range(12):
+        # Reset all column stretches first (clear old values from hidden columns)
+        for col_idx in range(11):  # Max possible columns (5 base + 6 optional)
             self.header_layout.setColumnStretch(col_idx, 0)
 
         # Build column configuration based on settings
@@ -939,8 +936,8 @@ class LeagueOverlay(QMainWindow):
             league_name = self.color_config_file.replace("official:", "")
             try:
                 league = get_official_league(league_name)
-                self.broadcast_header_title = league.title or default_title
-                self.broadcast_header_logo = league.logo or default_logo
+                self.broadcast_header_title = getattr(league, 'title', None) or default_title
+                self.broadcast_header_logo = getattr(league, 'logo', None) or default_logo
             except ValueError:
                 logger.warning(f"Could not apply broadcast metadata: official league not found ({league_name})")
 
@@ -987,7 +984,6 @@ class LeagueOverlay(QMainWindow):
 
         # Reload DivisionManager with the new config file
         self.division_manager = DivisionManager(config_file_path)
-        self.apply_official_league_broadcast_metadata()
 
         # Refresh the UI to show new colors (reset change tracking to force update)
         self._last_emitted_data = []
@@ -1155,16 +1151,6 @@ class LeagueOverlay(QMainWindow):
 
                         # Handle the telemetry update (session sync, data update)
                         self._handle_telemetry_update(race_data)
-
-                        # If telemetry processor reports persistent missing core vars,
-                        # force SDK reconnect (equivalent to manual app restart).
-                        if self.telemetry_processor.consume_reconnect_request():
-                            logger.warning("Forcing iRacing SDK reconnect due to missing core telemetry data")
-                            self.is_connected = False
-                            self.connection_time = None
-                            self.ir.shutdown()
-                            time.sleep(0.5)
-                            continue
                     else:
                         self.is_connected = False
                         self.connection_time = None  # Reset connection time on disconnect
@@ -1196,11 +1182,17 @@ class LeagueOverlay(QMainWindow):
         Args:
             race_data: Processed race data from TelemetryProcessor, or None if unavailable
         """
+        if race_data is None:
+            return
+
         # Detect session change by comparing with processor's session info
         session_changed = (
             self.current_session_id != self.telemetry_processor.current_session_id or
             self.current_session_type != self.telemetry_processor.current_session_type
         )
+
+        # Check if starting positions were updated (qualifying results loaded)
+        starting_positions_updated = self.race_state_tracker.consume_starting_positions_update()
 
         # Sync session info from telemetry processor
         self.current_session_id = self.telemetry_processor.current_session_id
@@ -1210,20 +1202,7 @@ class LeagueOverlay(QMainWindow):
         if session_changed and self.current_session_id is not None:
             self.race_data = []
             self._last_emitted_data = []  # Reset change tracking on session change
-            self.class_leader_lap = None
             # Note: Division filter state is intentionally preserved across session changes
-
-        # Recalculate footer/session metadata on session change even if race data is temporarily unavailable.
-        # This prevents stale SoF when transitioning between sessions.
-        if race_data is None:
-            if session_changed:
-                if self.settings.show_footer:
-                    footer_data = self.telemetry_processor.get_footer_data()
-                    self.signals.update_footer.emit(footer_data)
-            return
-
-        # Check if starting positions were updated (qualifying results loaded)
-        starting_positions_updated = self.race_state_tracker.consume_starting_positions_update()
 
         # Update race data and player info
         self.race_data = race_data
@@ -1316,9 +1295,7 @@ class LeagueOverlay(QMainWindow):
         the race data hasn't changed (event-driven updates wouldn't trigger).
         """
         if self._is_broadcast_roll_active():
-            self.auto_center_timer.stop()
             return
-
         if self.auto_center.should_auto_center():
             # Timeout has elapsed, try to center on player
             if self.player_car_idx is not None and self.displayed_data:
@@ -1349,9 +1326,6 @@ class LeagueOverlay(QMainWindow):
         """
         if session_type != "Race":
             return session_type
-
-        if session_state is None:
-            session_state = 4
 
         # Map session states (some take precedence over FCY)
         state_map = {
@@ -1474,11 +1448,7 @@ class LeagueOverlay(QMainWindow):
             # During active session, show remaining time
             total_seconds = int(session_time_remain)
             class_leader_lap = getattr(self, "class_leader_lap", None)
-            lap_suffix = (
-                f" (Lap {class_leader_lap})"
-                if state_name in ["Race", "CAUTION"] and class_leader_lap is not None
-                else ""
-            )
+            lap_suffix = f" (Lap {class_leader_lap})" if state_name == "Race" and class_leader_lap is not None else ""
             return f"{state_name} - {self._format_time_duration(total_seconds)}{lap_suffix}"
         else:
             return state_name
@@ -1491,16 +1461,7 @@ class LeagueOverlay(QMainWindow):
         """
         try:
             session_info = self.ir['SessionInfo']
-            session_num = self.ir['SessionNum']
-            sessions = session_info['Sessions']
-            if session_num is None:
-                race_idx = next(
-                    (idx for idx, s in enumerate(sessions)
-                     if str(s.get('SessionType', '')).lower() == 'race'),
-                    None
-                )
-                session_num = race_idx if race_idx is not None else 0
-            current_session = sessions[int(session_num)]
+            current_session = session_info['Sessions'][self.ir['SessionNum']]
             session_type = current_session['SessionType']
 
             # Get session state with fallback
@@ -1508,8 +1469,6 @@ class LeagueOverlay(QMainWindow):
                 session_state = self.ir['SessionState']
             except (KeyError, TypeError):
                 session_state = 4  # Default to Racing
-            if session_state is None:
-                session_state = 4
 
             # Map session state to display name
             state_name = self._get_session_state_name(session_type, session_state)
@@ -1542,37 +1501,20 @@ class LeagueOverlay(QMainWindow):
             if time.time() - self.startup_time < TIMING.STARTUP_GRACE_PERIOD:
                 return
 
-            status_text = ""
-            status_color = "green"
             if not self.is_connected:
-                status_text = "Connecting to iRacing..."
-                status_color = "orange"
-            elif self._should_show_connection_message():
-                # Show initial connection message for a few seconds
-                status_text = "Connected - Live Race Data"
-                status_color = "green"
-            else:
-                # Show detailed session status
-                status_text = self._get_session_status_text()
-                # Use yellow color for CAUTION state, green otherwise.
-                status_color = 'yellow' if 'CAUTION' in status_text else 'green'
+                self.signals.update_status.emit("Connecting to iRacing...", 'orange')
+                return
 
+            # Show initial connection message for a few seconds
+            if self._should_show_connection_message():
+                self.signals.update_status.emit("Connected - Live Race Data", 'green')
+                return
+
+            # Show detailed session status
+            status_text = self._get_session_status_text()
+            # Use yellow color for CAUTION state, green otherwise
+            status_color = 'yellow' if 'CAUTION' in status_text else 'green'
             self.signals.update_status.emit(status_text, status_color)
-
-            # Broadcast header uses the same status event payload in a single update path.
-            if self.settings.show_broadcast_header:
-                session_metadata: Dict[str, Any] = {
-                    'session_status': status_text,
-                    'status_color': status_color,
-                    'track_display_name': None,
-                }
-                try:
-                    metadata = self.telemetry_processor.get_session_metadata()
-                    if isinstance(metadata, dict):
-                        session_metadata.update(metadata)
-                except Exception as e:
-                    logger.debug(f"Broadcast header metadata unavailable: {e}")
-                self.signals.update_session_metadata.emit(session_metadata)
 
         except Exception as e:
             logger.error(f"GUI update error: {e}", exc_info=True)
@@ -1582,11 +1524,9 @@ class LeagueOverlay(QMainWindow):
         if not data:
             return
 
-        self.displayed_data = data.copy()
         render_data = data
         blank_rows = 0
         separator_index = None
-
         if self._is_broadcast_roll_active():
             render_data, blank_rows, separator_index = self._get_broadcast_roll_render_data(data)
         else:
@@ -1611,7 +1551,7 @@ class LeagueOverlay(QMainWindow):
         for _ in range(blank_rows):
             self.scroll_layout.insertWidget(
                 self.scroll_layout.count() - 1,
-                self._create_blank_row()
+                self._create_empty_row_placeholder()
             )
 
         # Auto-center on player
@@ -1620,7 +1560,7 @@ class LeagueOverlay(QMainWindow):
                 and self.auto_center.should_auto_center()):
             self.center_on_player(data)
 
-        self.visible_display_data = render_data.copy()
+        self.displayed_data = data.copy()
         self._update_broadcast_roll_mode()
 
         # Adjust header margins to match scroll area width (accounting for scrollbar)
@@ -1630,16 +1570,15 @@ class LeagueOverlay(QMainWindow):
     def _calculate_broadcast_roll_window(total_drivers: int, visible_rows: int,
                                          roll_rows: int, page_index: int) -> Dict[str, int]:
         """Calculate locked and rolling slices for broadcast standings mode."""
-        if total_drivers <= 0:
+        if total_drivers <= 0 or visible_rows <= 0:
             return {
                 'locked_count': 0,
                 'roll_start': 0,
                 'roll_end': 0,
                 'blank_rows': 0,
-                'total_pages': 1
+                'total_pages': 1,
             }
 
-        # When the viewport is too short to support a locked section, roll all rows.
         if visible_rows <= roll_rows and total_drivers > visible_rows:
             total_pages = max(1, math.ceil(total_drivers / visible_rows))
             page = page_index % total_pages
@@ -1651,16 +1590,16 @@ class LeagueOverlay(QMainWindow):
                 'roll_start': roll_start,
                 'roll_end': roll_end,
                 'blank_rows': blank_rows,
-                'total_pages': total_pages
+                'total_pages': total_pages,
             }
 
         if total_drivers <= visible_rows:
             return {
-                'locked_count': min(total_drivers, visible_rows),
+                'locked_count': total_drivers,
                 'roll_start': min(total_drivers, visible_rows),
                 'roll_end': min(total_drivers, visible_rows),
                 'blank_rows': 0,
-                'total_pages': 1
+                'total_pages': 1,
             }
 
         locked_count = max(0, visible_rows - roll_rows)
@@ -1676,49 +1615,57 @@ class LeagueOverlay(QMainWindow):
             'roll_start': roll_start,
             'roll_end': roll_end,
             'blank_rows': blank_rows,
-            'total_pages': total_pages
+            'total_pages': total_pages,
         }
 
     def _is_broadcast_roll_active(self) -> bool:
-        """Return True when broadcast rolling standings mode is active."""
         show_broadcast_header = (getattr(self.settings, 'show_broadcast_header', False) is True)
         broadcast_roll_enabled = (getattr(self.settings, 'broadcast_roll_enabled', False) is True)
         return show_broadcast_header and broadcast_roll_enabled
 
-    def _get_driver_row_height(self, sample_driver: DriverState) -> int:
-        """Estimate a single row height for viewport row-capacity calculations."""
-        if self._cached_row_height:
-            return self._cached_row_height
+    def _estimate_visible_row_capacity(self) -> int:
+        if not hasattr(self, 'scroll_area'):
+            return len(self.displayed_data) if self.displayed_data else 0
 
-        row_widget = self.row_renderer.create_row(sample_driver)
-        row_height = row_widget.sizeHint().height()
-        row_widget.deleteLater()
-        self._cached_row_height = max(1, row_height)
-        return self._cached_row_height
-
-    def _get_visible_row_capacity(self, sample_driver: DriverState) -> int:
-        """Estimate how many rows are visible in the standings viewport."""
         viewport_height = self.scroll_area.viewport().height()
         margins = self.scroll_layout.contentsMargins()
         spacing = self.scroll_layout.spacing()
-        usable_height = viewport_height - margins.top() - margins.bottom()
+        available_height = max(0, viewport_height - margins.top() - margins.bottom())
 
-        if usable_height <= 0:
-            return 1
+        sample_row = self.row_renderer.create_row(DriverState(
+            car_idx=0,
+            driver_info={"CarNumber": "0", "UserName": "Sample"},
+            position=1,
+            division_position=1,
+            division_name="Default",
+            division_color="#FFFFFF",
+            gap_to_leader="",
+            interval="",
+            delta="",
+            last_lap="",
+            best_lap="",
+            positions_gained="",
+            combined_rating="",
+            pit_lap="",
+            is_player=False,
+            is_finished=False,
+            current_lap=0,
+            lap_pct=0.0,
+        ))
+        row_height = sample_row.sizeHint().height()
+        sample_row.deleteLater()
 
-        row_height = self._get_driver_row_height(sample_driver)
-        slot_height = row_height + spacing
-        if slot_height <= 0:
-            return 1
+        if row_height <= 0:
+            return len(self.displayed_data) if self.displayed_data else 0
 
-        return max(1, int((usable_height + spacing) // slot_height))
+        per_row = row_height + max(0, spacing)
+        if per_row <= 0:
+            return len(self.displayed_data) if self.displayed_data else 0
+
+        return max(1, available_height // per_row)
 
     def _get_broadcast_roll_render_data(self, data: List[DriverState]) -> tuple[List[DriverState], int, Optional[int]]:
-        """Build locked+rolling data, trailing blank rows, and separator position."""
-        if not data:
-            return ([], 0, None)
-
-        visible_rows = self._get_visible_row_capacity(data[0])
+        visible_rows = self._estimate_visible_row_capacity()
         window = self._calculate_broadcast_roll_window(
             total_drivers=len(data),
             visible_rows=visible_rows,
@@ -1726,24 +1673,18 @@ class LeagueOverlay(QMainWindow):
             page_index=self.broadcast_roll_page_index
         )
         self.broadcast_roll_page_index %= window['total_pages']
-
-        if window['total_pages'] <= 1:
-            return (data[:visible_rows], 0, None)
-
         locked = data[:window['locked_count']]
         rolling = data[window['roll_start']:window['roll_end']]
         separator_index: Optional[int] = len(locked) if locked and rolling else None
         return (locked + rolling, window['blank_rows'], separator_index)
 
-    def _create_blank_row(self) -> QWidget:
-        """Create an empty row placeholder for incomplete rolling pages."""
-        blank_row = QWidget()
-        blank_row.setFixedHeight(self._cached_row_height or 1)
-        blank_row.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.BACKGROUND_BLACK)};")
-        return blank_row
+    def _create_empty_row_placeholder(self) -> QWidget:
+        spacer = QWidget()
+        spacer.setFixedHeight(self.get_font_size('spacing') + 18)
+        spacer.setStyleSheet("background-color: transparent; border: none;")
+        return spacer
 
     def _create_broadcast_roll_separator_line(self) -> QWidget:
-        """Create a 1px separator at the static/rolling boundary."""
         separator = QWidget()
         separator.setFixedHeight(1)
         separator.setStyleSheet(
@@ -1752,26 +1693,20 @@ class LeagueOverlay(QMainWindow):
         return separator
 
     def _update_broadcast_roll_mode(self) -> None:
-        """Apply scrollbar/timer behavior for broadcast rolling standings mode."""
         if not hasattr(self, 'scroll_area'):
             return
 
         if self._is_broadcast_roll_active():
             self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            self.auto_center_timer.stop()
-
-            # Keep timer in sync with fixed broadcast rotation interval.
-            interval_ms = TIMING.BROADCAST_ROLL_INTERVAL_SECONDS * 1000
+            interval_ms = int(TIMING.BROADCAST_ROLL_INTERVAL_SECONDS * 1000)
             if self.broadcast_roll_timer.interval() != interval_ms:
                 self.broadcast_roll_timer.setInterval(interval_ms)
 
-            # Timer only runs when there are enough rows to actually roll.
             should_roll = False
             if self.displayed_data:
-                visible_rows = self._get_visible_row_capacity(self.displayed_data[0])
                 window = self._calculate_broadcast_roll_window(
                     total_drivers=len(self.displayed_data),
-                    visible_rows=visible_rows,
+                    visible_rows=self._estimate_visible_row_capacity(),
                     roll_rows=5,
                     page_index=self.broadcast_roll_page_index
                 )
@@ -1789,15 +1724,13 @@ class LeagueOverlay(QMainWindow):
             self.broadcast_roll_page_index = 0
 
     def advance_broadcast_roll_window(self) -> None:
-        """Advance rolling standings to the next page in broadcast mode."""
         if not self._is_broadcast_roll_active() or not self.displayed_data:
             self.broadcast_roll_timer.stop()
             return
 
-        visible_rows = self._get_visible_row_capacity(self.displayed_data[0])
         window = self._calculate_broadcast_roll_window(
             total_drivers=len(self.displayed_data),
-            visible_rows=visible_rows,
+            visible_rows=self._estimate_visible_row_capacity(),
             roll_rows=5,
             page_index=self.broadcast_roll_page_index
         )

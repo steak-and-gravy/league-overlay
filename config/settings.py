@@ -43,8 +43,6 @@ class AppSettings:
     show_pit_lap: bool = False  # Combined Last Pit + Out Lap column
     show_footer: bool = False  # Show footer with track temp, incidents, and SoF
     log_level: str = "INFO"
-
-    # Broadcast header
     show_broadcast_header: bool = False  # Show broadcast-style header with logo/session info
     broadcast_roll_enabled: bool = False  # Lock top rows and roll lower standings in broadcast mode
 

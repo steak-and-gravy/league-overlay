@@ -7,8 +7,7 @@ import re
 from typing import TYPE_CHECKING
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog, QComboBox,
-    QSizePolicy
+    QFrame, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog, QComboBox
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -152,7 +151,7 @@ class SettingsDialog(QDialog):
         self._update_refresh_button()
         left_column.addWidget(config_group)
 
-        # Division colors
+        # Division colors (moved to left column)
         colors_group = QFrame()
         colors_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
         colors_group.setMinimumWidth(300)
@@ -289,12 +288,18 @@ class SettingsDialog(QDialog):
         slower_color_row.addStretch()
         colors_layout.addLayout(slower_color_row)
 
-        # Window settings
+        left_column.addWidget(colors_group)
+        left_column.addStretch()
+
+        # RIGHT COLUMN
+        right_column = QVBoxLayout()
+        right_column.setSpacing(5)
+
+        # Window settings (moved to right column)
         window_group = QFrame()
         window_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
         window_group.setMinimumWidth(300)
         window_group.setMaximumWidth(300)
-        window_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         window_layout = QVBoxLayout(window_group)
         window_layout.setSpacing(8)
         
@@ -496,6 +501,7 @@ class SettingsDialog(QDialog):
             QCheckBox:disabled { color: #777777; }
         """)
         self.broadcast_roll_enabled_cb.setChecked(self.parent_overlay.settings.broadcast_roll_enabled)
+        self.broadcast_roll_enabled_cb.setToolTip("When enabled, top rows stay fixed while lower rows rotate")
         checkbox_row2.addWidget(self.broadcast_roll_enabled_cb)
 
         self.show_division_cb = QCheckBox("Show division gaps")
@@ -604,14 +610,7 @@ class SettingsDialog(QDialog):
         # Spacer after last checkbox row
         window_layout.addSpacing(10)
 
-        left_column.addWidget(colors_group, 1)
-        left_column.addStretch()
-
-        # RIGHT COLUMN
-        right_column = QVBoxLayout()
-        right_column.setSpacing(5)
-        right_column.addWidget(window_group, 1)
-        right_column.addStretch()
+        right_column.addWidget(window_group)
 
         # Add columns to main layout with equal stretch factors (1:1 ratio)
         columns_layout.addLayout(left_column, 1)
@@ -968,6 +967,7 @@ class SettingsDialog(QDialog):
 
         # Repopulate dropdown in case anything changed
         self.populate_league_dropdown()
+        self.parent_overlay.apply_official_league_broadcast_metadata()
 
     def save_local_copy(self):
         """Save current official league as a local editable copy."""
@@ -1154,11 +1154,6 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.opacity = defaults.opacity
             self.parent_overlay.update_all_backgrounds()
 
-    def _sync_broadcast_roll_control_state(self):
-        """Enable rolling only when broadcast header is enabled."""
-        is_enabled = self.broadcast_header_cb.isChecked()
-        self.broadcast_roll_enabled_cb.setEnabled(is_enabled)
-
     def apply_settings(self):
         """Apply all settings"""
         try:
@@ -1198,6 +1193,11 @@ class SettingsDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to apply settings: {e}")
+
+    def _sync_broadcast_roll_control_state(self):
+        """Enable rolling standings only when broadcast header is enabled."""
+        is_enabled = self.broadcast_header_cb.isChecked()
+        self.broadcast_roll_enabled_cb.setEnabled(is_enabled)
             
     def on_cancel(self):
         """Cancel settings"""
