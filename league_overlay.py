@@ -803,6 +803,11 @@ class LeagueOverlay(QMainWindow):
         """Show version on startup"""
         self.status_label.setText(f"BB's League Overlay v{VERSION}")
         self.update_status_style("orange")
+        if self.settings.show_broadcast_header and hasattr(self, 'broadcast_header'):
+            self.broadcast_header.update_session_info({
+                'session_status': f"BB's League Overlay v{VERSION}",
+                'status_color': 'orange',
+            })
         threading.Thread(target=self.check_and_notify_updates, daemon=True).start()
         
     def check_and_notify_updates(self):

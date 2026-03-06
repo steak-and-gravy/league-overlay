@@ -54,8 +54,16 @@ class TestBroadcastHeaderWidget:
         widget = BroadcastHeaderWidget(default_settings, _get_bg_color, _get_font_size)
         widget.update_session_info({'session_status': 'CAUTION - Lap 5/20', 'status_color': 'yellow'})
         widget.update_session_info({'session_status': 'Race - Lap 6/20', 'status_color': 'green'})
-        assert 'color: #CCCCCC;' in widget.session_label.styleSheet()
+        assert 'color: white;' in widget.session_label.styleSheet()
+        assert 'font-weight: bold;' in widget.session_label.styleSheet()
         assert '#FF8C00' in widget.accent_line.styleSheet()
+        widget.deleteLater()
+
+    def test_update_session_info_update_available_uses_green_bold_style(self, qapp, default_settings):
+        widget = BroadcastHeaderWidget(default_settings, _get_bg_color, _get_font_size)
+        widget.update_session_info({'session_status': 'Update available: v1.2.3', 'status_color': 'green'})
+        assert 'color: #00FF00;' in widget.session_label.styleSheet()
+        assert 'font-weight: bold;' in widget.session_label.styleSheet()
         widget.deleteLater()
 
     def test_logo_hidden_when_not_url(self, qapp):

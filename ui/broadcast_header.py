@@ -142,9 +142,9 @@ class BroadcastHeaderWidget(QWidget):
         self.session_label.setStyleSheet(
             f"""
             QLabel {{
-                color: #CCCCCC;
+                color: white;
                 font-size: {font_size};
-                font-weight: normal;
+                font-weight: bold;
                 background-color: transparent;
             }}
         """
@@ -156,6 +156,19 @@ class BroadcastHeaderWidget(QWidget):
             f"""
             QLabel {{
                 color: #FFD700;
+                font-size: {font_size};
+                font-weight: bold;
+                background-color: transparent;
+            }}
+        """
+        )
+
+    def _set_session_label_update_available_style(self):
+        font_size = self.get_font_size("broadcast_session")
+        self.session_label.setStyleSheet(
+            f"""
+            QLabel {{
+                color: #00FF00;
                 font-size: {font_size};
                 font-weight: bold;
                 background-color: transparent;
@@ -260,6 +273,8 @@ class BroadcastHeaderWidget(QWidget):
             self.session_label.setText(formatted)
             if "CAUTION" in status_text.upper():
                 self._set_session_label_caution_style()
+            elif "UPDATE AVAILABLE" in status_text.upper():
+                self._set_session_label_update_available_style()
             else:
                 self._style_session_label()
 
