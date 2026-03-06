@@ -1,5 +1,7 @@
 """Tests for broadcast rolling standings calculations."""
 
+from unittest.mock import Mock
+
 from league_overlay import LeagueOverlay
 
 
@@ -81,3 +83,24 @@ class TestBroadcastRollingWindow:
         assert last_page['roll_end'] == 12
         assert last_page['blank_rows'] == 3
         assert last_page['total_pages'] == 3
+
+    def test_update_mode_rerenders_full_list_when_resize_disables_rolling(self):
+        """When resizing makes everything fit, stale rolling page should be replaced immediately."""
+        overlay = Mock()
+        overlay.scroll_area = Mock()
+        overlay.settings = Mock(show_broadcast_header=True, broadcast_roll_enabled=True)
+        overlay._is_broadcast_roll_active = Mock(return_value=True)
+        overlay.displayed_data = [object() for _ in range(15)]
+        overlay.broadcast_roll_page_index = 2
+        overlay.broadcast_roll_timer = Mock()
+        overlay.broadcast_roll_timer.interval.return_value = 3000
+        overlay.broadcast_roll_timer.isActive.return_value = True
+        overlay._estimate_visible_row_capacity = Mock(return_value=20)
+        overlay._calculate_broadcast_roll_window = Mock(return_value={'total_pages': 1})
+        overlay.display_race_data = Mock()
+
+        LeagueOverlay._update_broadcast_roll_mode(overlay)
+
+        overlay.broadcast_roll_timer.stop.assert_called_once()
+        assert overlay.broadcast_roll_page_index == 0
+        overlay.display_race_data.assert_called_once()

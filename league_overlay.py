@@ -896,6 +896,9 @@ class LeagueOverlay(QMainWindow):
         if hasattr(self, 'header_layout'):
             self.adjust_header_margins()
 
+        # Re-evaluate broadcast rolling state on resize (visible row capacity changes).
+        self._update_broadcast_roll_mode()
+
     def load_settings(self):
         """Load user preferences from disk."""
         self.settings = self.settings_manager.load()
@@ -1701,6 +1704,8 @@ class LeagueOverlay(QMainWindow):
         if not hasattr(self, 'scroll_area'):
             return
 
+        rerender_needed = False
+
         if self._is_broadcast_roll_active():
             self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             interval_ms = int(TIMING.BROADCAST_ROLL_INTERVAL_SECONDS * 1000)
@@ -1721,12 +1726,19 @@ class LeagueOverlay(QMainWindow):
                 if not self.broadcast_roll_timer.isActive():
                     self.broadcast_roll_timer.start()
             else:
+                was_rolling = self.broadcast_roll_timer.isActive() or self.broadcast_roll_page_index != 0
                 self.broadcast_roll_timer.stop()
                 self.broadcast_roll_page_index = 0
+                rerender_needed = was_rolling
         else:
+            was_rolling = self.broadcast_roll_timer.isActive() or self.broadcast_roll_page_index != 0
             self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
             self.broadcast_roll_timer.stop()
             self.broadcast_roll_page_index = 0
+            rerender_needed = was_rolling
+
+        if rerender_needed and self.displayed_data:
+            self.display_race_data(self.displayed_data.copy())
 
     def advance_broadcast_roll_window(self) -> None:
         if not self._is_broadcast_roll_active() or not self.displayed_data:
