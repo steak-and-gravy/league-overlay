@@ -809,6 +809,11 @@ class SettingsDialog(QDialog):
                 background-color: #4CAF50;
                 border: 1px solid #4CAF50;
             }
+            QToolTip {
+                color: white;
+                background-color: #000000;
+                border: 1px solid #666666;
+            }
         """)
         
     def choose_color(self, division):
