@@ -73,7 +73,9 @@ class DriverRowRenderer:
         rating_col = None
         car_num_col = None
         gap_col = None
+        div_gap_col = None
         interval_col = None
+        div_interval_col = None
         best_lap_col = None
         last_lap_col = None
         delta_col = None
@@ -106,16 +108,28 @@ class DriverRowRenderer:
         car_num_col = current_col
         current_col += 1
 
-        # Optional: Gap to leader
+        # Optional: Gap to overall leader
         if self.parent.settings.show_gap:
             stretches.append(COLUMN_LAYOUT.GAP)
             gap_col = current_col
             current_col += 1
 
-        # Optional: Interval to car ahead
+        # Optional: Gap to division leader (D-Gap)
+        if self.parent.settings.show_division_gap:
+            stretches.append(COLUMN_LAYOUT.DIV_GAP)
+            div_gap_col = current_col
+            current_col += 1
+
+        # Optional: Interval to car ahead (overall)
         if self.parent.settings.show_interval:
             stretches.append(COLUMN_LAYOUT.INTERVAL)
             interval_col = current_col
+            current_col += 1
+
+        # Optional: Interval to car ahead in division (D-Int)
+        if self.parent.settings.show_division_interval:
+            stretches.append(COLUMN_LAYOUT.DIV_INTERVAL)
+            div_interval_col = current_col
             current_col += 1
 
         # Optional: Best Lap
@@ -169,13 +183,21 @@ class DriverRowRenderer:
         # Always show: Car Number (moved to after Rating)
         self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_num_col)
 
-        # Gap to leader
+        # Gap to overall leader
         if gap_col is not None:
             self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, gap_col)
 
-        # Interval to car ahead
+        # Gap to division leader (D-Gap)
+        if div_gap_col is not None:
+            self._create_division_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, div_gap_col)
+
+        # Interval to car ahead (overall)
         if interval_col is not None:
             self._create_interval_label(layout, driver, gap_color, label_bg, label_border, font_weight, interval_col)
+
+        # Interval to car ahead in division (D-Int)
+        if div_interval_col is not None:
+            self._create_division_interval_label(layout, driver, gap_color, label_bg, label_border, font_weight, div_interval_col)
 
         # Optional: Best Lap
         if best_lap_col is not None:
@@ -310,7 +332,7 @@ class DriverRowRenderer:
 
     def _create_gap_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                          label_bg: str, label_border: str, font_weight: str, column: int = 4) -> None:
-        """Create gap to leader label."""
+        """Create gap to overall leader label."""
         gap_label = QLabel(driver.gap_to_leader)
         gap_label.setStyleSheet(f"""
             QLabel {{
@@ -329,9 +351,30 @@ class DriverRowRenderer:
         )
         layout.addWidget(gap_label, 0, column)
 
+    def _create_division_gap_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
+                                   label_bg: str, label_border: str, font_weight: str, column: int = 5) -> None:
+        """Create gap to division leader label (D-Gap)."""
+        div_gap_label = QLabel(driver.division_gap_to_leader)
+        div_gap_label.setStyleSheet(f"""
+            QLabel {{
+                color: {gap_color};
+                background-color: {label_bg};
+                font-size: {self.parent.get_font_size('data')};
+                font-weight: {font_weight};
+                {label_border}
+            }}
+        """)
+        div_gap_label.setAlignment(Qt.AlignCenter)
+        div_gap_label.setMinimumWidth(COLUMN_MIN_WIDTHS.DIV_GAP)
+        div_gap_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        div_gap_label.customContextMenuRequested.connect(
+            lambda pos, d=driver: self.parent.show_context_menu(d)
+        )
+        layout.addWidget(div_gap_label, 0, column)
+
     def _create_interval_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                               label_bg: str, label_border: str, font_weight: str, column: int = 5) -> None:
-        """Create interval to car ahead label."""
+        """Create interval to car ahead (overall) label."""
         interval_label = QLabel(driver.interval)
         interval_label.setStyleSheet(f"""
             QLabel {{
@@ -349,6 +392,27 @@ class DriverRowRenderer:
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(interval_label, 0, column)
+
+    def _create_division_interval_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
+                                        label_bg: str, label_border: str, font_weight: str, column: int = 6) -> None:
+        """Create interval to car ahead in division label (D-Int)."""
+        div_interval_label = QLabel(driver.division_interval)
+        div_interval_label.setStyleSheet(f"""
+            QLabel {{
+                color: {gap_color};
+                background-color: {label_bg};
+                font-size: {self.parent.get_font_size('data')};
+                font-weight: {font_weight};
+                {label_border}
+            }}
+        """)
+        div_interval_label.setAlignment(Qt.AlignCenter)
+        div_interval_label.setMinimumWidth(COLUMN_MIN_WIDTHS.DIV_INTERVAL)
+        div_interval_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        div_interval_label.customContextMenuRequested.connect(
+            lambda pos, d=driver: self.parent.show_context_menu(d)
+        )
+        layout.addWidget(div_interval_label, 0, column)
 
     def _create_delta_label(self, layout: QGridLayout, driver: DriverState, delta_faster_color: str,
                            delta_slower_color: str, default_color: str, label_bg: str,

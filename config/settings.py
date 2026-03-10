@@ -32,9 +32,10 @@ class AppSettings:
     hide_headers: bool = False
     center_drivers: bool = False
     bold_drivers: bool = True
-    show_division: bool = True  # Scope for both Gap and Interval (True=division, False=overall)
-    show_gap: bool = False  # Show Gap to leader column
-    show_interval: bool = True  # Show Interval to car ahead column
+    show_gap: bool = False  # Show Gap to overall leader column
+    show_division_gap: bool = False  # Show Gap to division leader column (D-Gap)
+    show_interval: bool = True  # Show Interval to car ahead (overall) column
+    show_division_interval: bool = False  # Show Interval to car ahead in division column (D-Int)
     show_last_lap: bool = False
     show_delta: bool = False
     show_best_lap: bool = False
@@ -97,12 +98,40 @@ class SettingsManager:
 
             logger.info(f"Settings loaded from {self.settings_file}")
 
-            # Auto-migrate legacy show_gap to show_division
-            # Legacy: show_gap meant "show division gap vs overall gap"
-            # New: show_division controls scope for both Gap and Interval
-            if 'show_gap' in data and 'show_division' not in data:
-                data['show_division'] = data.pop('show_gap')
-                logger.info("Auto-migrated legacy 'show_gap' setting to 'show_division'")
+            # Auto-migrate legacy show_division + show_gap/show_interval to split columns
+            # Legacy: show_division controlled scope for both Gap and Interval
+            # New: show_division_gap and show_division_interval are separate column toggles
+            #
+            # Migration preserves visual state:
+            # - show_division=True meant columns were division-scoped → map to D-Gap/D-Int, disable overall
+            # - show_division=False meant columns were overall-scoped → keep Gap/Int, don't enable D-Gap/D-Int
+            if 'show_division' in data:
+                old_show_division = data.pop('show_division')
+                old_show_gap = data.get('show_gap', False)
+                old_show_interval = data.get('show_interval', True)
+
+                if old_show_division:
+                    # Division mode was on: old columns were division-scoped
+                    if 'show_division_gap' not in data:
+                        data['show_division_gap'] = old_show_gap
+                    if 'show_division_interval' not in data:
+                        data['show_division_interval'] = old_show_interval
+                    # Disable overall columns to preserve 2-column visual state
+                    data.setdefault('show_gap', False)
+                    data.setdefault('show_interval', False)
+                    # Override the old values that are already in data
+                    if old_show_gap:
+                        data['show_gap'] = False
+                    if old_show_interval:
+                        data['show_interval'] = False
+                    logger.info(f"Migrated show_division=True: D-Gap={data.get('show_division_gap')}, D-Int={data.get('show_division_interval')}, Gap=False, Int=False")
+                else:
+                    # Division mode was off: old columns were overall-scoped
+                    if 'show_division_gap' not in data:
+                        data['show_division_gap'] = False
+                    if 'show_division_interval' not in data:
+                        data['show_division_interval'] = False
+                    logger.info(f"Migrated show_division=False: Gap={old_show_gap}, Int={old_show_interval}, D-Gap=False, D-Int=False")
 
             # Validate and coerce all fields using validator
             validated_dict = self.validator.validate_and_coerce(data)
@@ -141,9 +170,10 @@ class SettingsManager:
                 'hide_headers': settings.hide_headers,
                 'center_drivers': settings.center_drivers,
                 'bold_drivers': settings.bold_drivers,
-                'show_division': settings.show_division,
                 'show_gap': settings.show_gap,
+                'show_division_gap': settings.show_division_gap,
                 'show_interval': settings.show_interval,
+                'show_division_interval': settings.show_division_interval,
                 'show_last_lap': settings.show_last_lap,
                 'show_delta': settings.show_delta,
                 'show_best_lap': settings.show_best_lap,
@@ -199,9 +229,10 @@ class SettingsManager:
             'hide_headers': settings.hide_headers,
             'center_drivers': settings.center_drivers,
             'bold_drivers': settings.bold_drivers,
-            'show_division': settings.show_division,
             'show_gap': settings.show_gap,
+            'show_division_gap': settings.show_division_gap,
             'show_interval': settings.show_interval,
+            'show_division_interval': settings.show_division_interval,
             'show_last_lap': settings.show_last_lap,
             'show_delta': settings.show_delta,
             'show_best_lap': settings.show_best_lap,

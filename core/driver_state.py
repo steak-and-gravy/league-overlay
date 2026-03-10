@@ -102,10 +102,16 @@ class DriverState:
     # ═══════════════════════════════════════════════════════════════════════════
 
     gap_to_leader: str = ""
-    """Formatted gap string to leader for display (e.g., "2.5s", "1L", "Leader")"""
+    """Formatted gap string to overall leader for display (e.g., "2.5s", "1L", "Leader")"""
+
+    division_gap_to_leader: str = ""
+    """Formatted gap string to division leader for display (e.g., "2.5s", "1L", "Leader")"""
 
     interval: str = ""
-    """Formatted interval string to car ahead for display (e.g., "2.5s", "1L", "Leader")"""
+    """Formatted interval string to car ahead overall for display (e.g., "2.5s", "1L", "Leader")"""
+
+    division_interval: str = ""
+    """Formatted interval string to car ahead in division for display (e.g., "2.5s", "1L", "Leader")"""
 
     delta: str = ""
     """Formatted delta lap time comparison for display (e.g., "+0.5", "-0.3", "--")"""
