@@ -42,6 +42,7 @@ class TestInitialization:
         assert calculator.ir == mock_ir
         assert calculator.player_car_idx is None
         assert calculator.player_car_class_id is None
+        assert calculator.spectated_car_idx is None
 
     def test_reset(self):
         """Test reset clears player identification."""
@@ -49,11 +50,13 @@ class TestInitialization:
         calculator = PositionCalculator(mock_ir)
         calculator.player_car_idx = 5
         calculator.player_car_class_id = 2
+        calculator.spectated_car_idx = 3
 
         calculator.reset()
 
         assert calculator.player_car_idx is None
         assert calculator.player_car_class_id is None
+        assert calculator.spectated_car_idx is None
 
 
 class TestIdentifyPlayer:
@@ -694,3 +697,97 @@ class TestPaceCarAndSpectatorFiltering:
         assert all(d['driver_info']['CarClassID'] == 2 for d in result)
         assert result[0]['car_idx'] == 2
         assert result[1]['car_idx'] == 3
+
+
+class TestUpdateSpectatedCar:
+    """Test cases for spectated car tracking via CamCarIdx."""
+
+    def test_spectated_car_set_from_cam_car_idx(self):
+        """CamCarIdx value is stored as spectated_car_idx."""
+        mock_ir = MagicMock()
+        mock_ir.__getitem__ = Mock(side_effect=lambda key: {
+            'CamCarIdx': 5,
+            'CamCameraState': 0,
+        }[key])
+        calculator = PositionCalculator(mock_ir)
+        calculator.update_spectated_car()
+        assert calculator.spectated_car_idx == 5
+
+    def test_spectated_car_none_when_scenic_camera(self):
+        """Scenic camera (bit 0x0002) should not track a specific car."""
+        mock_ir = MagicMock()
+        mock_ir.__getitem__ = Mock(side_effect=lambda key: {
+            'CamCarIdx': 5,
+            'CamCameraState': 0x0002,
+        }[key])
+        calculator = PositionCalculator(mock_ir)
+        calculator.update_spectated_car()
+        assert calculator.spectated_car_idx is None
+
+    def test_spectated_car_none_when_cam_car_idx_negative(self):
+        """Negative CamCarIdx means no car is being spectated."""
+        mock_ir = MagicMock()
+        mock_ir.__getitem__ = Mock(side_effect=lambda key: {
+            'CamCarIdx': -1,
+            'CamCameraState': 0,
+        }[key])
+        calculator = PositionCalculator(mock_ir)
+        calculator.update_spectated_car()
+        assert calculator.spectated_car_idx is None
+
+    def test_spectated_car_none_when_cam_car_idx_missing(self):
+        """Missing CamCarIdx telemetry field results in None."""
+        mock_ir = MagicMock()
+        mock_ir.__getitem__ = Mock(side_effect=KeyError('CamCarIdx'))
+        calculator = PositionCalculator(mock_ir)
+        calculator.update_spectated_car()
+        assert calculator.spectated_car_idx is None
+
+    def test_spectated_car_updates_each_call(self):
+        """Spectated car changes as spectator switches cameras."""
+        mock_ir = MagicMock()
+        cam_values = [5, 10]
+        call_count = [0]
+
+        def get_item(key):
+            if key == 'CamCarIdx':
+                val = cam_values[call_count[0]]
+                call_count[0] += 1
+                return val
+            if key == 'CamCameraState':
+                return 0
+            raise KeyError(key)
+
+        mock_ir.__getitem__ = Mock(side_effect=get_item)
+        calculator = PositionCalculator(mock_ir)
+
+        calculator.update_spectated_car()
+        assert calculator.spectated_car_idx == 5
+
+        calculator.update_spectated_car()
+        assert calculator.spectated_car_idx == 10
+
+    def test_spectated_car_with_non_scenic_camera_state_bits(self):
+        """Other CamCameraState bits (e.g., 0x0001, 0x0051) don't affect tracking."""
+        mock_ir = MagicMock()
+        mock_ir.__getitem__ = Mock(side_effect=lambda key: {
+            'CamCarIdx': 22,
+            'CamCameraState': 81,  # 0x51 — has bits set but NOT 0x0002
+        }[key])
+        calculator = PositionCalculator(mock_ir)
+        calculator.update_spectated_car()
+        assert calculator.spectated_car_idx == 22
+
+    def test_spectated_car_none_when_cam_camera_state_missing(self):
+        """Missing CamCameraState defaults to 0 (not scenic)."""
+        mock_ir = MagicMock()
+
+        def get_item(key):
+            if key == 'CamCarIdx':
+                return 5
+            raise KeyError(key)
+
+        mock_ir.__getitem__ = Mock(side_effect=get_item)
+        calculator = PositionCalculator(mock_ir)
+        calculator.update_spectated_car()
+        assert calculator.spectated_car_idx == 5

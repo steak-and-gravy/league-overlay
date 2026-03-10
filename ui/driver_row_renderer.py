@@ -161,7 +161,7 @@ class DriverRowRenderer:
             layout.setColumnStretch(col_idx, stretch)
 
         # Determine font weight
-        font_weight = "bold" if driver.is_player or self.parent.settings.bold_drivers else "normal"
+        font_weight = "bold" if driver.is_player or driver.is_spectated or self.parent.settings.bold_drivers else "normal"
 
         # Create labels with dynamic column positions
         self._create_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling)

@@ -724,6 +724,7 @@ class TelemetryProcessor:
         driver_info = driver['driver_info']
         current_color_position = division_positions.get(car_idx, display_position)
         is_player = (car_idx == self.position_calculator.player_car_idx)
+        is_spectated = (car_idx == self.position_calculator.spectated_car_idx)
         is_disconnected = driver.get('disconnected', False)
         is_finished = self.race_state_tracker.is_driver_finished(car_idx)
         is_towing = self.tow_tracking.get(car_idx, False) if not is_finished else False
@@ -786,6 +787,7 @@ class TelemetryProcessor:
             pit_lap=pit_lap_display,
             is_towing=is_towing,
             is_player=is_player,
+            is_spectated=is_spectated,
             is_disconnected=is_disconnected
         )
 
@@ -1694,6 +1696,9 @@ class TelemetryProcessor:
 
             # Identify player
             self.position_calculator.identify_player(drivers)
+
+            # Update spectated car (changes every frame as spectator switches cameras)
+            self.position_calculator.update_spectated_car()
 
             # Share player class ID with race state tracker for multi-class filtering
             self.race_state_tracker.set_player_class_id(self.position_calculator.player_car_class_id)

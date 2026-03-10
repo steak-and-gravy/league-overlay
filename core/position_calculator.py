@@ -28,11 +28,13 @@ class PositionCalculator:
         self.ir = ir
         self.player_car_idx: Optional[int] = None
         self.player_car_class_id: Optional[int] = None
+        self.spectated_car_idx: Optional[int] = None
 
     def reset(self) -> None:
         """Clear player identification."""
         self.player_car_idx = None
         self.player_car_class_id = None
+        self.spectated_car_idx = None
 
     def identify_player(self, drivers: Dict[int, Dict]) -> None:
         """Identify player's car index and class.
@@ -61,6 +63,32 @@ class PositionCalculator:
                         logger.warning(f"Found player car {self.player_car_idx} but CarClassID is None")
             except (KeyError, TypeError) as e:
                 logger.warning(f"Error identifying player class: {e}")
+
+    def update_spectated_car(self) -> None:
+        """Update the spectated car index from CamCarIdx telemetry.
+
+        CamCarIdx changes every frame as the spectator switches cameras.
+        Scenic cameras (CamCameraState bit 0x0002) are excluded — they don't
+        follow a specific car.
+        """
+        try:
+            cam_car_idx = self.ir['CamCarIdx']
+        except (KeyError, TypeError):
+            self.spectated_car_idx = None
+            return
+
+        try:
+            cam_state = self.ir['CamCameraState']
+        except (KeyError, TypeError):
+            cam_state = 0
+
+        # Scenic camera (bit 0x0002) doesn't track a specific car
+        is_scenic = bool(cam_state & 0x0002)
+
+        if cam_car_idx is not None and cam_car_idx >= 0 and not is_scenic:
+            self.spectated_car_idx = cam_car_idx
+        else:
+            self.spectated_car_idx = None
 
     def calculate_real_time_positions(self, drivers: Dict[int, Dict]) -> List[Dict]:
         """Calculate real-time positions based on actual track position.

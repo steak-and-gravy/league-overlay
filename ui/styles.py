@@ -79,7 +79,7 @@ class DarkColorStyle(ColorStyleStrategy):
         delta_faster_color = parent.settings.faster_color
         delta_slower_color = parent.settings.slower_color
 
-        if driver.is_player:
+        if driver.is_player or driver.is_spectated:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
             label_bg = parent.blend_color_with_black(driver.division_color, 0.25)
         else:
@@ -115,8 +115,7 @@ class AlternateColorStyle(ColorStyleStrategy):
         delta_slower_color = parent.settings.slower_color
         label_bg = parent.get_bg_color(base_bg)
 
-        if driver.is_player:
-            # Create container for white border
+        if driver.is_player or driver.is_spectated:
             container_widget = QWidget()
             container_widget.setStyleSheet("background-color: white; padding: 2px;")
             container_layout = QVBoxLayout(container_widget)
@@ -170,7 +169,7 @@ class OutlineColorStyle(ColorStyleStrategy):
         label_bg = "transparent"
         label_border = "border: none;"
 
-        if driver.is_player:
+        if driver.is_player or driver.is_spectated:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
             border_style = ""
         else:
@@ -210,7 +209,7 @@ class DefaultColorStyle(ColorStyleStrategy):
         # Use black text for light division colors, white for dark
         car_number_color = "#000000" if is_light_color(driver.division_color) else "white"
 
-        if driver.is_player:
+        if driver.is_player or driver.is_spectated:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
         else:
             bg_style = f"background-color: {parent.get_bg_color('#000000')};"

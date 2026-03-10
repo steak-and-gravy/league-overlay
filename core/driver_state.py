@@ -87,6 +87,9 @@ class DriverState:
     is_player: bool = False
     """True if this is the player's car"""
 
+    is_spectated: bool = False
+    """True if this car is currently being viewed by the spectator camera"""
+
     # ═══════════════════════════════════════════════════════════════════════════
     # LAP TIMES
     # ═══════════════════════════════════════════════════════════════════════════

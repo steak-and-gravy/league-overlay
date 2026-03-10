@@ -1843,6 +1843,7 @@ class TestFinishingGapCalculation:
         race_state_tracker = RaceStateTracker(mock_ir)
         gap_calculator = GapCalculator()
         position_calculator = MagicMock(spec=PositionCalculator)
+        position_calculator.spectated_car_idx = None
 
         return TelemetryProcessor(
             mock_ir,
@@ -2132,6 +2133,7 @@ class TestFinishingGapCalculation:
         race_state_tracker = RaceStateTracker(mock_ir)
         gap_calculator = GapCalculator()
         position_calculator = MagicMock(spec=PositionCalculator)
+        position_calculator.spectated_car_idx = None
 
         processor = TelemetryProcessor(
             mock_ir,

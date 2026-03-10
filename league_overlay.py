@@ -107,6 +107,7 @@ class LeagueOverlay(QMainWindow):
         self.signals.update_footer.connect(self.update_footer_display)
 
         self.player_car_idx = None  # Player's car (from iRacing API)
+        self.spectated_car_idx = None  # Car currently being viewed by spectator camera
         self.class_leader_lap: Optional[int] = None  # Cached class leader lap for status display
 
         # Auto-centering controller
@@ -1224,6 +1225,7 @@ class LeagueOverlay(QMainWindow):
         # Update race data and player info
         self.race_data = race_data
         self.player_car_idx = self.telemetry_processor.position_calculator.player_car_idx
+        self.spectated_car_idx = self.telemetry_processor.position_calculator.spectated_car_idx
 
         # Immediately emit UI update with new data (event-driven)
         # Only update if data has actually changed to avoid redundant widget rebuilds
@@ -1283,6 +1285,7 @@ class LeagueOverlay(QMainWindow):
                        new_driver.car_number != old_driver.car_number or
                        new_driver.driver_name != old_driver.driver_name or
                        new_driver.is_player != old_driver.is_player or
+                       new_driver.is_spectated != old_driver.is_spectated or
                        new_driver.is_finished != old_driver.is_finished or
                        new_driver.division_name != old_driver.division_name)
 
@@ -1314,8 +1317,8 @@ class LeagueOverlay(QMainWindow):
         if self._is_broadcast_roll_active():
             return
         if self.auto_center.should_auto_center():
-            # Timeout has elapsed, try to center on player
-            if self.player_car_idx is not None and self.displayed_data:
+            # Timeout has elapsed, try to center on player or spectated car
+            if (self.player_car_idx is not None or self.spectated_car_idx is not None) and self.displayed_data:
                 self.center_on_player(self.displayed_data)
             # Stop the timer since auto-center is now re-engaged
             self.auto_center_timer.stop()
@@ -1571,9 +1574,9 @@ class LeagueOverlay(QMainWindow):
                 self._create_empty_row_placeholder()
             )
 
-        # Auto-center on player
+        # Auto-center on player or spectated car
         if (not self._is_broadcast_roll_active()
-                and self.player_car_idx is not None
+                and (self.player_car_idx is not None or self.spectated_car_idx is not None)
                 and self.auto_center.should_auto_center()):
             self.center_on_player(data)
 
@@ -1828,22 +1831,28 @@ class LeagueOverlay(QMainWindow):
         menu.exec(QCursor.pos())
         
     def center_on_player(self, current_data: List[DriverState]):
-        """Auto-center the scroll view on the player's position.
-        This only activates if the user hasn't manually scrolled recently
-        (see manual_scroll_timeout). Helps keep player visible during races
-        without fighting manual scrolling.
+        """Auto-center the scroll view on the target driver's position.
+
+        Centers on the spectated car (CamCarIdx) when spectating, otherwise
+        on the player's own car. Only activates if the user hasn't manually
+        scrolled recently (see manual_scroll_timeout).
         """
-        if not current_data or self.player_car_idx is None:
+        if not current_data:
             return
 
-        # Find the player in the current display data
-        player_index = None
+        # Prefer spectated car, fall back to player car
+        target_car_idx = self.spectated_car_idx if self.spectated_car_idx is not None else self.player_car_idx
+        if target_car_idx is None:
+            return
+
+        # Find the target driver in the current display data
+        target_index = None
         for i, driver in enumerate(current_data):
-            if driver.car_idx == self.player_car_idx:
-                player_index = i
+            if driver.car_idx == target_car_idx:
+                target_index = i
                 break
 
-        if player_index is None:
+        if target_index is None:
             return
 
         # Force update to ensure proper calculation
@@ -1868,10 +1877,9 @@ class LeagueOverlay(QMainWindow):
         # Calculate height per item (including spacing)
         item_height = total_height / total_items
 
-        # Calculate scroll position to center player vertically in viewport
-        # We want player row to be at (viewport_height / 2)
-        player_top_position = player_index * item_height
-        target_scroll = player_top_position - (viewport_height / 2) + (item_height / 2)
+        # Calculate scroll position to center target driver vertically in viewport
+        target_top_position = target_index * item_height
+        target_scroll = target_top_position - (viewport_height / 2) + (item_height / 2)
 
         # Clamp to valid scroll range [0, maximum]
         target_scroll = max(0, min(target_scroll, scrollbar.maximum()))
