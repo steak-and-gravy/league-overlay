@@ -485,6 +485,11 @@ class SettingsDialog(QDialog):
         self.hide_headers_cb.setChecked(self.parent_overlay.settings.hide_headers)
         checkbox_row1.addWidget(self.hide_headers_cb)
 
+        self.show_footer_cb = QCheckBox("Show footer")
+        self.show_footer_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_footer_cb.setChecked(self.parent_overlay.settings.show_footer)
+        checkbox_row1.addWidget(self.show_footer_cb)
+
         window_layout.addLayout(checkbox_row1)
 
         # Row 4: Text display
@@ -532,7 +537,7 @@ class SettingsDialog(QDialog):
         self.show_gap_cb.setToolTip("Gap to overall leader")
         checkbox_row5.addWidget(self.show_gap_cb)
 
-        self.show_division_gap_cb = QCheckBox("Show D-gap")
+        self.show_division_gap_cb = QCheckBox("Show Div gap")
         self.show_division_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_division_gap_cb.setChecked(self.parent_overlay.settings.show_division_gap)
         self.show_division_gap_cb.setToolTip("Gap to division leader")
@@ -550,7 +555,7 @@ class SettingsDialog(QDialog):
         self.show_interval_cb.setToolTip("Interval to car ahead in overall standings")
         checkbox_row6.addWidget(self.show_interval_cb)
 
-        self.show_division_interval_cb = QCheckBox("Show D-interval")
+        self.show_division_interval_cb = QCheckBox("Show Div interval")
         self.show_division_interval_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_division_interval_cb.setChecked(self.parent_overlay.settings.show_division_interval)
         self.show_division_interval_cb.setToolTip("Interval to car ahead in your division")
@@ -589,17 +594,6 @@ class SettingsDialog(QDialog):
         checkbox_row8.addWidget(self.show_pit_lap_cb)
 
         window_layout.addLayout(checkbox_row8)
-
-        # Row 10: Footer visibility (always last)
-        checkbox_row9 = QHBoxLayout()
-        checkbox_row9.setSpacing(10)
-
-        self.show_footer_cb = QCheckBox("Show footer")
-        self.show_footer_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_footer_cb.setChecked(self.parent_overlay.settings.show_footer)
-        checkbox_row9.addWidget(self.show_footer_cb)
-
-        window_layout.addLayout(checkbox_row9)
 
         # Spacer after last checkbox row
         window_layout.addSpacing(10)
