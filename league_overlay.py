@@ -1638,6 +1638,38 @@ class LeagueOverlay(QMainWindow):
             'total_pages': total_pages,
         }
 
+    @staticmethod
+    def _calculate_broadcast_focus_window(total_drivers: int, visible_rows: int,
+                                          roll_rows: int, target_index: int) -> Dict[str, int]:
+        """Calculate a temporary rolling window centered on a selected off-screen driver."""
+        base_window = LeagueOverlay._calculate_broadcast_roll_window(
+            total_drivers=total_drivers,
+            visible_rows=visible_rows,
+            roll_rows=roll_rows,
+            page_index=0
+        )
+
+        if total_drivers <= 0 or visible_rows <= 0 or not (0 <= target_index < total_drivers):
+            return base_window
+
+        locked_count = base_window['locked_count']
+        rolling_capacity = visible_rows if locked_count == 0 else roll_rows
+        rolling_capacity = max(1, rolling_capacity)
+        min_roll_start = locked_count
+        max_roll_start = max(min_roll_start, total_drivers - rolling_capacity)
+        centered_start = target_index - (rolling_capacity // 2)
+        roll_start = max(min_roll_start, min(centered_start, max_roll_start))
+        roll_end = min(total_drivers, roll_start + rolling_capacity)
+        blank_rows = max(0, rolling_capacity - (roll_end - roll_start))
+
+        return {
+            'locked_count': locked_count,
+            'roll_start': roll_start,
+            'roll_end': roll_end,
+            'blank_rows': blank_rows,
+            'total_pages': base_window['total_pages'],
+        }
+
     def _is_broadcast_roll_active(self) -> bool:
         show_broadcast_header = (getattr(self.settings, 'show_broadcast_header', False) is True)
         broadcast_roll_enabled = (getattr(self.settings, 'broadcast_roll_enabled', False) is True)
@@ -1698,15 +1730,60 @@ class LeagueOverlay(QMainWindow):
             value = TIMING.BROADCAST_ROLL_INTERVAL_SECONDS
         return max(1, min(60, value))
 
-    def _get_broadcast_roll_render_data(self, data: List[DriverState]) -> tuple[List[DriverState], int, Optional[int]]:
+    def _get_broadcast_roll_locked_window(self, data: List[DriverState]) -> Optional[Dict[str, int]]:
+        """Return a focused rolling window when the selected driver is off-screen."""
+        if not data:
+            return None
+
+        selected_car_idx = self.spectated_car_idx
+        if selected_car_idx is None:
+            return None
+
         visible_rows = self._estimate_visible_row_capacity()
         roll_rows = self._get_broadcast_roll_rows()
-        window = self._calculate_broadcast_roll_window(
+        current_window = self._calculate_broadcast_roll_window(
             total_drivers=len(data),
             visible_rows=visible_rows,
             roll_rows=roll_rows,
             page_index=self.broadcast_roll_page_index
         )
+
+        if current_window['total_pages'] <= 1:
+            return None
+
+        target_index = next(
+            (index for index, driver in enumerate(data) if driver.car_idx == selected_car_idx),
+            None
+        )
+        if target_index is None:
+            return None
+
+        if target_index < current_window['locked_count']:
+            return None
+
+        if current_window['roll_start'] <= target_index < current_window['roll_end']:
+            return None
+
+        return self._calculate_broadcast_focus_window(
+            total_drivers=len(data),
+            visible_rows=visible_rows,
+            roll_rows=roll_rows,
+            target_index=target_index
+        )
+
+    def _get_broadcast_roll_render_data(self, data: List[DriverState]) -> tuple[List[DriverState], int, Optional[int]]:
+        locked_window = self._get_broadcast_roll_locked_window(data)
+        if locked_window is not None:
+            window = locked_window
+        else:
+            visible_rows = self._estimate_visible_row_capacity()
+            roll_rows = self._get_broadcast_roll_rows()
+            window = self._calculate_broadcast_roll_window(
+                total_drivers=len(data),
+                visible_rows=visible_rows,
+                roll_rows=roll_rows,
+                page_index=self.broadcast_roll_page_index
+            )
         self.broadcast_roll_page_index %= window['total_pages']
         locked = data[:window['locked_count']]
         rolling = data[window['roll_start']:window['roll_end']]
@@ -1740,7 +1817,9 @@ class LeagueOverlay(QMainWindow):
                 self.broadcast_roll_timer.setInterval(interval_ms)
 
             should_roll = False
+            locked_window = None
             if self.displayed_data:
+                locked_window = self._get_broadcast_roll_locked_window(self.displayed_data)
                 roll_rows = self._get_broadcast_roll_rows()
                 window = self._calculate_broadcast_roll_window(
                     total_drivers=len(self.displayed_data),
@@ -1748,15 +1827,19 @@ class LeagueOverlay(QMainWindow):
                     roll_rows=roll_rows,
                     page_index=self.broadcast_roll_page_index
                 )
-                should_roll = window['total_pages'] > 1
+                should_roll = window['total_pages'] > 1 and locked_window is None
 
             if should_roll:
                 if not self.broadcast_roll_timer.isActive():
                     self.broadcast_roll_timer.start()
             else:
-                was_rolling = self.broadcast_roll_timer.isActive() or self.broadcast_roll_page_index != 0
+                preserve_page_index = locked_window is not None
+                was_rolling = self.broadcast_roll_timer.isActive() or (
+                    self.broadcast_roll_page_index != 0 and not preserve_page_index
+                )
                 self.broadcast_roll_timer.stop()
-                self.broadcast_roll_page_index = 0
+                if not preserve_page_index:
+                    self.broadcast_roll_page_index = 0
                 rerender_needed = was_rolling
         else:
             was_rolling = self.broadcast_roll_timer.isActive() or self.broadcast_roll_page_index != 0
@@ -1771,6 +1854,11 @@ class LeagueOverlay(QMainWindow):
     def advance_broadcast_roll_window(self) -> None:
         if not self._is_broadcast_roll_active() or not self.displayed_data:
             self.broadcast_roll_timer.stop()
+            return
+
+        if self._get_broadcast_roll_locked_window(self.displayed_data) is not None:
+            self.broadcast_roll_timer.stop()
+            self.display_race_data(self.displayed_data.copy())
             return
 
         roll_rows = self._get_broadcast_roll_rows()

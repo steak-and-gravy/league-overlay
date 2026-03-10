@@ -98,6 +98,7 @@ class TestBroadcastRollingWindow:
         overlay._estimate_visible_row_capacity = Mock(return_value=20)
         overlay._get_broadcast_roll_interval_seconds = Mock(return_value=3)
         overlay._get_broadcast_roll_rows = Mock(return_value=5)
+        overlay._get_broadcast_roll_locked_window = Mock(return_value=None)
         overlay._calculate_broadcast_roll_window = Mock(return_value={'total_pages': 1})
         overlay.display_race_data = Mock()
 
@@ -106,3 +107,98 @@ class TestBroadcastRollingWindow:
         overlay.broadcast_roll_timer.stop.assert_called_once()
         assert overlay.broadcast_roll_page_index == 0
         overlay.display_race_data.assert_called_once()
+
+    def test_focus_window_centers_selected_driver_in_rolling_rows(self):
+        """A selected off-screen driver should be centered within the rolling rows."""
+        window = LeagueOverlay._calculate_broadcast_focus_window(
+            total_drivers=53,
+            visible_rows=20,
+            roll_rows=5,
+            target_index=27
+        )
+
+        assert window['locked_count'] == 15
+        assert window['roll_start'] == 25
+        assert window['roll_end'] == 30
+        assert window['blank_rows'] == 0
+
+    def test_focus_window_centers_selected_driver_when_all_rows_roll(self):
+        """Small viewports should center the selected driver in the full rolling page."""
+        window = LeagueOverlay._calculate_broadcast_focus_window(
+            total_drivers=12,
+            visible_rows=5,
+            roll_rows=5,
+            target_index=8
+        )
+
+        assert window['locked_count'] == 0
+        assert window['roll_start'] == 6
+        assert window['roll_end'] == 11
+        assert window['blank_rows'] == 0
+
+    def test_get_render_data_locks_to_selected_offscreen_driver(self):
+        """Off-screen selected drivers should override the normal rolling page."""
+        overlay = Mock()
+        overlay.broadcast_roll_page_index = 0
+        overlay.spectated_car_idx = 27
+        overlay._estimate_visible_row_capacity = Mock(return_value=20)
+        overlay._get_broadcast_roll_rows = Mock(return_value=5)
+        overlay._calculate_broadcast_roll_window = LeagueOverlay._calculate_broadcast_roll_window
+        overlay._calculate_broadcast_focus_window = LeagueOverlay._calculate_broadcast_focus_window
+        overlay._get_broadcast_roll_locked_window = lambda data: LeagueOverlay._get_broadcast_roll_locked_window(overlay, data)
+
+        data = [Mock(car_idx=index) for index in range(53)]
+
+        render_data, blank_rows, separator_index = LeagueOverlay._get_broadcast_roll_render_data(overlay, data)
+
+        assert [driver.car_idx for driver in render_data[:15]] == list(range(15))
+        assert [driver.car_idx for driver in render_data[15:]] == [25, 26, 27, 28, 29]
+        assert blank_rows == 0
+        assert separator_index == 15
+
+    def test_update_mode_stops_timer_when_selected_driver_locks_page(self):
+        """Rolling pauses while an off-screen selected driver is forcing the window."""
+        overlay = Mock()
+        overlay.scroll_area = Mock()
+        overlay.settings = Mock(show_broadcast_header=True, broadcast_roll_enabled=True)
+        overlay._is_broadcast_roll_active = Mock(return_value=True)
+        overlay.displayed_data = [Mock(car_idx=index) for index in range(53)]
+        overlay.broadcast_roll_page_index = 3
+        overlay.spectated_car_idx = 27
+        overlay.broadcast_roll_timer = Mock()
+        overlay.broadcast_roll_timer.interval.return_value = 3000
+        overlay.broadcast_roll_timer.isActive.return_value = True
+        overlay._estimate_visible_row_capacity = Mock(return_value=20)
+        overlay._get_broadcast_roll_interval_seconds = Mock(return_value=3)
+        overlay._get_broadcast_roll_rows = Mock(return_value=5)
+        overlay._get_broadcast_roll_locked_window = lambda data: LeagueOverlay._get_broadcast_roll_locked_window(overlay, data)
+        overlay._calculate_broadcast_roll_window = LeagueOverlay._calculate_broadcast_roll_window
+        overlay.display_race_data = Mock()
+
+        LeagueOverlay._update_broadcast_roll_mode(overlay)
+
+        overlay.broadcast_roll_timer.stop.assert_called_once()
+        assert overlay.broadcast_roll_page_index == 3
+
+    def test_update_mode_resumes_timer_when_selected_driver_is_already_visible(self):
+        """Rolling continues when the selected driver is already on the current page."""
+        overlay = Mock()
+        overlay.scroll_area = Mock()
+        overlay.settings = Mock(show_broadcast_header=True, broadcast_roll_enabled=True)
+        overlay._is_broadcast_roll_active = Mock(return_value=True)
+        overlay.displayed_data = [Mock(car_idx=index) for index in range(53)]
+        overlay.broadcast_roll_page_index = 0
+        overlay.spectated_car_idx = 17
+        overlay.broadcast_roll_timer = Mock()
+        overlay.broadcast_roll_timer.interval.return_value = 3000
+        overlay.broadcast_roll_timer.isActive.return_value = False
+        overlay._estimate_visible_row_capacity = Mock(return_value=20)
+        overlay._get_broadcast_roll_interval_seconds = Mock(return_value=3)
+        overlay._get_broadcast_roll_rows = Mock(return_value=5)
+        overlay._get_broadcast_roll_locked_window = lambda data: LeagueOverlay._get_broadcast_roll_locked_window(overlay, data)
+        overlay._calculate_broadcast_roll_window = LeagueOverlay._calculate_broadcast_roll_window
+        overlay.display_race_data = Mock()
+
+        LeagueOverlay._update_broadcast_roll_mode(overlay)
+
+        overlay.broadcast_roll_timer.start.assert_called_once()
