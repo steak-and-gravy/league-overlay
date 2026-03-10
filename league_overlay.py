@@ -1672,12 +1672,27 @@ class LeagueOverlay(QMainWindow):
 
         return max(1, available_height // per_row)
 
+    def _get_broadcast_roll_rows(self) -> int:
+        try:
+            value = int(getattr(self.settings, 'broadcast_roll_rows', TIMING.BROADCAST_ROLL_ROWS))
+        except (TypeError, ValueError):
+            value = TIMING.BROADCAST_ROLL_ROWS
+        return max(1, min(20, value))
+
+    def _get_broadcast_roll_interval_seconds(self) -> int:
+        try:
+            value = int(getattr(self.settings, 'broadcast_roll_interval_seconds', TIMING.BROADCAST_ROLL_INTERVAL_SECONDS))
+        except (TypeError, ValueError):
+            value = TIMING.BROADCAST_ROLL_INTERVAL_SECONDS
+        return max(1, min(60, value))
+
     def _get_broadcast_roll_render_data(self, data: List[DriverState]) -> tuple[List[DriverState], int, Optional[int]]:
         visible_rows = self._estimate_visible_row_capacity()
+        roll_rows = self._get_broadcast_roll_rows()
         window = self._calculate_broadcast_roll_window(
             total_drivers=len(data),
             visible_rows=visible_rows,
-            roll_rows=5,
+            roll_rows=roll_rows,
             page_index=self.broadcast_roll_page_index
         )
         self.broadcast_roll_page_index %= window['total_pages']
@@ -1708,16 +1723,17 @@ class LeagueOverlay(QMainWindow):
 
         if self._is_broadcast_roll_active():
             self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            interval_ms = int(TIMING.BROADCAST_ROLL_INTERVAL_SECONDS * 1000)
+            interval_ms = int(self._get_broadcast_roll_interval_seconds() * 1000)
             if self.broadcast_roll_timer.interval() != interval_ms:
                 self.broadcast_roll_timer.setInterval(interval_ms)
 
             should_roll = False
             if self.displayed_data:
+                roll_rows = self._get_broadcast_roll_rows()
                 window = self._calculate_broadcast_roll_window(
                     total_drivers=len(self.displayed_data),
                     visible_rows=self._estimate_visible_row_capacity(),
-                    roll_rows=5,
+                    roll_rows=roll_rows,
                     page_index=self.broadcast_roll_page_index
                 )
                 should_roll = window['total_pages'] > 1
@@ -1745,10 +1761,11 @@ class LeagueOverlay(QMainWindow):
             self.broadcast_roll_timer.stop()
             return
 
+        roll_rows = self._get_broadcast_roll_rows()
         window = self._calculate_broadcast_roll_window(
             total_drivers=len(self.displayed_data),
             visible_rows=self._estimate_visible_row_capacity(),
-            roll_rows=5,
+            roll_rows=roll_rows,
             page_index=self.broadcast_roll_page_index
         )
         if window['total_pages'] <= 1:

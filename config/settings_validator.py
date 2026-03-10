@@ -199,6 +199,20 @@ class SettingsValidator:
             default=self.defaults['broadcast_roll_enabled'],
             field_name='broadcast_roll_enabled'
         )
+        validated['broadcast_roll_rows'] = self.coerce_int(
+            data.get('broadcast_roll_rows'),
+            default=self.defaults['broadcast_roll_rows'],
+            min_val=1,
+            max_val=20,
+            field_name='broadcast_roll_rows'
+        )
+        validated['broadcast_roll_interval_seconds'] = self.coerce_int(
+            data.get('broadcast_roll_interval_seconds'),
+            default=self.defaults['broadcast_roll_interval_seconds'],
+            min_val=1,
+            max_val=60,
+            field_name='broadcast_roll_interval_seconds'
+        )
 
         # Enum fields (limited valid values)
         validated['font_size'] = self.coerce_enum(

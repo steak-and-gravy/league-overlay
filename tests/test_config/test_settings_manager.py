@@ -43,6 +43,8 @@ class TestAppSettingsDefaults:
         assert settings.hide_headers is False
         assert settings.center_drivers is False
         assert settings.bold_drivers is True
+        assert settings.broadcast_roll_rows == 5
+        assert settings.broadcast_roll_interval_seconds == 5
 
     def test_default_config_files(self):
         """Test default config file paths."""
@@ -194,7 +196,9 @@ class TestSaveSettings:
         settings = AppSettings(
             x=300,
             y=400,
-            opacity=0.75
+            opacity=0.75,
+            broadcast_roll_rows=7,
+            broadcast_roll_interval_seconds=9
         )
 
         manager.save(settings)
@@ -206,6 +210,8 @@ class TestSaveSettings:
             assert data['x'] == 300
             assert data['y'] == 400
             assert data['opacity'] == 0.75
+            assert data['broadcast_roll_rows'] == 7
+            assert data['broadcast_roll_interval_seconds'] == 9
 
     def test_save_all_fields(self, tmp_path):
         """Test saving all settings fields."""

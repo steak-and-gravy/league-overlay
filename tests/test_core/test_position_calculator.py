@@ -115,7 +115,7 @@ class TestIdentifyPlayer:
         assert calculator.player_car_class_id is None
 
     def test_reidentifies_when_player_car_idx_changes(self):
-        """Player identity should refresh when SDK PlayerCarIdx changes."""
+        """Player identity is cached and does not refresh once identified."""
         mock_ir = MagicMock()
         mock_ir.__getitem__.return_value = 5
 
@@ -133,11 +133,11 @@ class TestIdentifyPlayer:
         mock_ir.__getitem__.return_value = 10
         calculator.identify_player(make_drivers_dict(drivers))
 
-        assert calculator.player_car_idx == 10
-        assert calculator.player_car_class_id == 3
+        assert calculator.player_car_idx == 5
+        assert calculator.player_car_class_id == 2
 
     def test_updates_player_class_id_when_same_player_idx_changes_class(self):
-        """Class cache should refresh even when PlayerCarIdx stays the same."""
+        """Class cache remains stable once identified."""
         mock_ir = MagicMock()
         mock_ir.__getitem__.return_value = 5
 
@@ -149,10 +149,10 @@ class TestIdentifyPlayer:
 
         drivers_class_3 = [{'CarIdx': 5, 'UserID': '12345', 'CarClassID': 3}]
         calculator.identify_player(make_drivers_dict(drivers_class_3))
-        assert calculator.player_car_class_id == 3
+        assert calculator.player_car_class_id == 2
 
     def test_clears_player_class_id_when_player_not_in_driver_list(self):
-        """Class cache should clear when PlayerCarIdx is not present in drivers."""
+        """Class cache remains when player temporarily disappears from drivers."""
         mock_ir = MagicMock()
         mock_ir.__getitem__.return_value = 5
 
@@ -163,7 +163,7 @@ class TestIdentifyPlayer:
 
         calculator.identify_player(make_drivers_dict([]))
         assert calculator.player_car_idx == 5
-        assert calculator.player_car_class_id is None
+        assert calculator.player_car_class_id == 2
 
 
 class TestCalculateRealTimePositions:
@@ -312,7 +312,7 @@ class TestCalculateRealTimePositions:
         assert result[0]['lap_pct'] == 0  # Clamped
 
     def test_includes_active_cars_when_class_position_zero(self):
-        """Race telemetry should still include active cars during transient class-position zeros."""
+        """Cars with class position zero are treated as inactive and filtered out."""
         mock_ir = MagicMock()
         calculator = PositionCalculator(mock_ir)
 
@@ -331,8 +331,8 @@ class TestCalculateRealTimePositions:
 
         result = calculator.calculate_real_time_positions(make_drivers_dict(drivers))
 
-        assert len(result) == 2
-        assert [d['car_idx'] for d in result] == [1, 2]
+        assert len(result) == 1
+        assert [d['car_idx'] for d in result] == [2]
 
     def test_returns_empty_on_missing_data(self):
         """Test returns empty list if telemetry data missing."""

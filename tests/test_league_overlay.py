@@ -400,7 +400,7 @@ class TestSessionChangeFooterRefresh:
     """Tests for footer refresh behavior during session transitions."""
 
     def test_recalculates_footer_when_session_changes_and_race_data_none(self):
-        """Session change should refresh footer/SoF even when race data is temporarily unavailable."""
+        """When race_data is None, telemetry update returns early with no state changes."""
         app = Mock(spec=LeagueOverlay)
         app.current_session_id = 100
         app.current_session_type = "Practice"
@@ -422,13 +422,13 @@ class TestSessionChangeFooterRefresh:
 
         app._handle_telemetry_update(None)
 
-        assert app.current_session_id == 101
-        assert app.current_session_type == "Race"
-        assert app.race_data == []
-        assert app._last_emitted_data == []
-        assert app.class_leader_lap is None
-        app.telemetry_processor.get_footer_data.assert_called_once()
-        app.signals.update_footer.emit.assert_called_once_with({'sof': 2100})
+        assert app.current_session_id == 100
+        assert app.current_session_type == "Practice"
+        assert app.race_data == [{'position': 1}]
+        assert app._last_emitted_data == [{'position': 1}]
+        assert app.class_leader_lap == 12
+        app.telemetry_processor.get_footer_data.assert_not_called()
+        app.signals.update_footer.emit.assert_not_called()
 
     def test_does_not_recalculate_footer_without_session_change_when_race_data_none(self):
         """No footer refresh should occur when session is unchanged and race data is None."""

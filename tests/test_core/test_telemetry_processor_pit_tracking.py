@@ -23,7 +23,8 @@ def test_valid_stop_uses_pit_entry_lap_and_corrects_out_lap():
         'CarIdxOnPitRoad': [False, False],
         'CarIdxTrackSurface': [3, 3],
         'CarIdxLap': [0, 10],
-        'CarIdxLapDistPct': [0.0, 0.30]
+        'CarIdxLapDistPct': [0.0, 0.30],
+        'CarIdxClassPosition': [0, 1]
     }
     processor = _build_processor(ir_data)
 
@@ -56,7 +57,8 @@ def test_drive_through_does_not_update_last_pit_lap():
         'CarIdxOnPitRoad': [False, False],
         'CarIdxTrackSurface': [3, 3],
         'CarIdxLap': [0, 20],
-        'CarIdxLapDistPct': [0.0, 0.20]
+        'CarIdxLapDistPct': [0.0, 0.20],
+        'CarIdxClassPosition': [0, 1]
     }
     processor = _build_processor(ir_data)
     processor.pit_tracking[car_idx] = 7

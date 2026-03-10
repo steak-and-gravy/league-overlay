@@ -96,6 +96,8 @@ class TestBroadcastRollingWindow:
         overlay.broadcast_roll_timer.interval.return_value = 3000
         overlay.broadcast_roll_timer.isActive.return_value = True
         overlay._estimate_visible_row_capacity = Mock(return_value=20)
+        overlay._get_broadcast_roll_interval_seconds = Mock(return_value=3)
+        overlay._get_broadcast_roll_rows = Mock(return_value=5)
         overlay._calculate_broadcast_roll_window = Mock(return_value={'total_pages': 1})
         overlay.display_race_data = Mock()
 

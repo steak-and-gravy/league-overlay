@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 
 # Application version
-VERSION = "0.9.9.5"
+VERSION = "0.9.9.6"
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,7 @@ class UIDimensions:
     SIZE_GRIP_SIZE: int = 20
     CLOSE_BUTTON_WIDTH: int = 25
     SETTINGS_DIALOG_WIDTH: int = 630
-    SETTINGS_DIALOG_HEIGHT: int = 520
+    SETTINGS_DIALOG_HEIGHT: int = 650
     BROADCAST_HEADER_MIN_HEIGHT: int = 60
 
 
@@ -89,7 +89,8 @@ class Timing:
     UPDATE_CHECK_DELAY: float = 1.0  # seconds
     CONNECTION_MESSAGE_DURATION: float = 3.0  # seconds - how long to show "Connected" message
     DEFAULT_LAP_TIME_FALLBACK: float = 90.0  # seconds - fallback lap time when no data available
-    BROADCAST_ROLL_INTERVAL_SECONDS: int = 3  # seconds
+    BROADCAST_ROLL_ROWS: int = 5
+    BROADCAST_ROLL_INTERVAL_SECONDS: int = 5  # seconds
 
 
 @dataclass(frozen=True)
@@ -115,8 +116,8 @@ class UIConfig:
                     "header": "8pt",
                     "data": "8pt",
                     "broadcast_title": "10pt",
-                    "broadcast_session": "7.5pt",
-                    "broadcast_track": "7pt",
+                    "broadcast_session": "8pt",
+                    "broadcast_track": "7.5pt",
                     "spacing": 2
                 },
                 "Medium": {
@@ -126,8 +127,8 @@ class UIConfig:
                     "header": "9pt",
                     "data": "9pt",
                     "broadcast_title": "11pt",
-                    "broadcast_session": "8.5pt",
-                    "broadcast_track": "8pt",
+                    "broadcast_session": "9t",
+                    "broadcast_track": "8.5pt",
                     "spacing": 3
                 },
                 "Large": {
@@ -137,8 +138,8 @@ class UIConfig:
                     "header": "10pt",
                     "data": "10pt",
                     "broadcast_title": "12pt",
-                    "broadcast_session": "9.5pt",
-                    "broadcast_track": "9pt",
+                    "broadcast_session": "10pt",
+                    "broadcast_track": "9.5pt",
                     "spacing": 4
                 },
                 "Extra Large": {
@@ -148,8 +149,8 @@ class UIConfig:
                     "header": "11pt",
                     "data": "11pt",
                     "broadcast_title": "13pt",
-                    "broadcast_session": "10.5pt",
-                    "broadcast_track": "10pt",
+                    "broadcast_session": "11pt",
+                    "broadcast_track": "10.5pt",
                     "spacing": 5
                 }
             })

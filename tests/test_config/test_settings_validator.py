@@ -1062,3 +1062,22 @@ class TestNewDriverInfoColumns:
         # Missing settings should default to False
         assert result['show_pit_lap'] is False
         assert result['show_pit_lap'] is False
+
+
+class TestBroadcastRollingSettings:
+    """Tests for broadcast rolling settings coercion and defaults."""
+
+    def test_broadcast_roll_settings_default_when_missing(self):
+        validator = SettingsValidator()
+        result = validator.validate_and_coerce({})
+        assert result['broadcast_roll_rows'] == 5
+        assert result['broadcast_roll_interval_seconds'] == 5
+
+    def test_broadcast_roll_settings_clamped_to_range(self):
+        validator = SettingsValidator()
+        result = validator.validate_and_coerce({
+            'broadcast_roll_rows': 0,
+            'broadcast_roll_interval_seconds': 99,
+        })
+        assert result['broadcast_roll_rows'] == 1
+        assert result['broadcast_roll_interval_seconds'] == 60

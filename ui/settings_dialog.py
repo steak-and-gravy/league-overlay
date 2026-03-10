@@ -7,7 +7,7 @@ import re
 from typing import TYPE_CHECKING
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog, QComboBox
+    QFrame, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog, QComboBox, QSpinBox, QGridLayout
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -475,46 +475,24 @@ class SettingsDialog(QDialog):
         window_layout.addLayout(log_level_row)
 
         # Checkboxes in 2-column grid
-        # Row 1: Broadcast/header visibility
+        # Row 1: General visibility
         checkbox_row1 = QHBoxLayout()
         checkbox_row1.setSpacing(10)
-
-        self.broadcast_header_cb = QCheckBox("Broadcast header")
-        self.broadcast_header_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.broadcast_header_cb.setChecked(self.parent_overlay.settings.show_broadcast_header)
-        checkbox_row1.addWidget(self.broadcast_header_cb)
 
         self.hide_headers_cb = QCheckBox("Auto-hide title bar")
         self.hide_headers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.hide_headers_cb.setChecked(self.parent_overlay.settings.hide_headers)
         checkbox_row1.addWidget(self.hide_headers_cb)
 
-        window_layout.addLayout(checkbox_row1)
-
-        # Row 2: Broadcast rolling + division gap scope
-        checkbox_row2 = QHBoxLayout()
-        checkbox_row2.setSpacing(10)
-
-        self.broadcast_roll_enabled_cb = QCheckBox("Rolling standings")
-        self.broadcast_roll_enabled_cb.setStyleSheet("""
-            QCheckBox { border: none; color: white; font-size: 9pt; }
-            QCheckBox:disabled { color: #777777; }
-        """)
-        self.broadcast_roll_enabled_cb.setChecked(self.parent_overlay.settings.broadcast_roll_enabled)
-        self.broadcast_roll_enabled_cb.setToolTip("When enabled, top rows stay fixed while lower rows rotate")
-        checkbox_row2.addWidget(self.broadcast_roll_enabled_cb)
-
         self.show_division_cb = QCheckBox("Show division gaps")
         self.show_division_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_division_cb.setChecked(self.parent_overlay.settings.show_division)
         self.show_division_cb.setToolTip("When enabled, Gap and Interval are scoped to your division only")
-        checkbox_row2.addWidget(self.show_division_cb)
+        checkbox_row1.addWidget(self.show_division_cb)
 
-        window_layout.addLayout(checkbox_row2)
-        self.broadcast_header_cb.toggled.connect(self._sync_broadcast_roll_control_state)
-        self._sync_broadcast_roll_control_state()
+        window_layout.addLayout(checkbox_row1)
 
-        # Row 3: Text display
+        # Row 4: Text display
         checkbox_row3 = QHBoxLayout()
         checkbox_row3.setSpacing(10)
 
@@ -530,7 +508,7 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row3)
 
-        # Row 4: Column visibility - Gap and Interval
+        # Row 5: Column visibility - Gap and Interval
         checkbox_row4 = QHBoxLayout()
         checkbox_row4.setSpacing(10)
 
@@ -548,7 +526,7 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row4)
 
-        # Row 5: Column visibility - Position and Delta
+        # Row 6: Column visibility - Position and Delta
         checkbox_row5 = QHBoxLayout()
         checkbox_row5.setSpacing(10)
 
@@ -564,7 +542,7 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row5)
 
-        # Row 6: Column visibility - Lap times
+        # Row 7: Column visibility - Lap times
         checkbox_row6 = QHBoxLayout()
         checkbox_row6.setSpacing(10)
 
@@ -580,7 +558,7 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row6)
 
-        # Row 7: Column visibility - Driver info and pit strategy
+        # Row 8: Column visibility - Driver info and pit strategy
         checkbox_row7 = QHBoxLayout()
         checkbox_row7.setSpacing(10)
 
@@ -596,7 +574,7 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row7)
 
-        # Row 8: Footer visibility
+        # Row 9: Footer visibility
         checkbox_row8 = QHBoxLayout()
         checkbox_row8.setSpacing(10)
 
@@ -610,7 +588,108 @@ class SettingsDialog(QDialog):
         # Spacer after last checkbox row
         window_layout.addSpacing(10)
 
+        window_group.setMinimumHeight(window_group.sizeHint().height())
+
         right_column.addWidget(window_group)
+
+        # Broadcast settings section
+        broadcast_group = QFrame()
+        broadcast_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
+        broadcast_group.setMinimumWidth(300)
+        broadcast_group.setMaximumWidth(300)
+        broadcast_layout = QVBoxLayout(broadcast_group)
+        broadcast_layout.setSpacing(8)
+
+        broadcast_title = QLabel("Broadcast Settings")
+        broadcast_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
+        broadcast_layout.addWidget(broadcast_title)
+
+        broadcast_grid = QGridLayout()
+        broadcast_grid.setHorizontalSpacing(10)
+        broadcast_grid.setVerticalSpacing(8)
+
+        self.broadcast_header_cb = QCheckBox("Broadcast header")
+        self.broadcast_header_cb.setStyleSheet("""
+            QCheckBox { border: none; color: white; font-size: 9pt; }
+            QCheckBox:disabled { color: #777777; }
+        """)
+        self.broadcast_header_cb.setChecked(self.parent_overlay.settings.show_broadcast_header)
+        broadcast_grid.addWidget(self.broadcast_header_cb, 0, 0)
+
+        self.broadcast_roll_enabled_cb = QCheckBox("Rolling standings")
+        self.broadcast_roll_enabled_cb.setStyleSheet("""
+            QCheckBox { border: none; color: white; font-size: 9pt; }
+            QCheckBox:disabled { color: #777777; }
+        """)
+        self.broadcast_roll_enabled_cb.setChecked(self.parent_overlay.settings.broadcast_roll_enabled)
+        self.broadcast_roll_enabled_cb.setToolTip("When enabled, top rows stay fixed while lower rows rotate")
+        broadcast_grid.addWidget(self.broadcast_roll_enabled_cb, 0, 1)
+
+        self.roll_rows_label = QLabel("Rolling rows:")
+        self.roll_rows_label.setStyleSheet("""
+            QLabel { border: none; color: white; font-size: 9pt; }
+            QLabel:disabled { color: #777777; }
+        """)
+        self.roll_rows_label.setMinimumWidth(100)
+        broadcast_grid.addWidget(self.roll_rows_label, 1, 0)
+
+        self.broadcast_roll_rows_spin = QSpinBox()
+        self.broadcast_roll_rows_spin.setRange(1, 20)
+        self.broadcast_roll_rows_spin.setValue(self.parent_overlay.settings.broadcast_roll_rows)
+        self.broadcast_roll_rows_spin.setFixedWidth(70)
+        self.broadcast_roll_rows_spin.setToolTip("Number of standings rows to rotate in broadcast mode")
+        self.broadcast_roll_rows_spin.setStyleSheet("""
+            QSpinBox {
+                background-color: #404040;
+                color: white;
+                border: 1px solid #555555;
+                padding: 2px 6px;
+                font-size: 9pt;
+            }
+            QSpinBox:disabled {
+                background-color: #2a2a2a;
+                color: #777777;
+            }
+        """)
+        broadcast_grid.addWidget(self.broadcast_roll_rows_spin, 1, 1)
+
+        self.roll_interval_label = QLabel("Rotate every (sec):")
+        self.roll_interval_label.setStyleSheet("""
+            QLabel { border: none; color: white; font-size: 9pt; }
+            QLabel:disabled { color: #777777; }
+        """)
+        self.roll_interval_label.setMinimumWidth(100)
+        broadcast_grid.addWidget(self.roll_interval_label, 2, 0)
+
+        self.broadcast_roll_interval_spin = QSpinBox()
+        self.broadcast_roll_interval_spin.setRange(1, 60)
+        self.broadcast_roll_interval_spin.setValue(self.parent_overlay.settings.broadcast_roll_interval_seconds)
+        self.broadcast_roll_interval_spin.setFixedWidth(70)
+        self.broadcast_roll_interval_spin.setToolTip("Seconds between broadcast standings page changes")
+        self.broadcast_roll_interval_spin.setStyleSheet("""
+            QSpinBox {
+                background-color: #404040;
+                color: white;
+                border: 1px solid #555555;
+                padding: 2px 6px;
+                font-size: 9pt;
+            }
+            QSpinBox:disabled {
+                background-color: #2a2a2a;
+                color: #777777;
+            }
+        """)
+        broadcast_grid.addWidget(self.broadcast_roll_interval_spin, 2, 1)
+
+        broadcast_grid.setColumnStretch(0, 1)
+        broadcast_grid.setColumnStretch(1, 1)
+        broadcast_layout.addLayout(broadcast_grid)
+
+        self.broadcast_header_cb.toggled.connect(self._sync_broadcast_roll_control_state)
+        self.broadcast_roll_enabled_cb.toggled.connect(self._sync_broadcast_roll_control_state)
+        self._sync_broadcast_roll_control_state()
+
+        right_column.addWidget(broadcast_group)
 
         # Add columns to main layout with equal stretch factors (1:1 ratio)
         columns_layout.addLayout(left_column, 1)
@@ -1106,6 +1185,8 @@ class SettingsDialog(QDialog):
             self.show_footer_cb.setChecked(defaults.show_footer)
             self.broadcast_header_cb.setChecked(defaults.show_broadcast_header)
             self.broadcast_roll_enabled_cb.setChecked(defaults.broadcast_roll_enabled)
+            self.broadcast_roll_rows_spin.setValue(defaults.broadcast_roll_rows)
+            self.broadcast_roll_interval_spin.setValue(defaults.broadcast_roll_interval_seconds)
             self._sync_broadcast_roll_control_state()
             self.font_size_combo.setCurrentText(defaults.font_size)
             self.color_style_combo.setCurrentText(defaults.row_color_style)
@@ -1174,6 +1255,8 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()
             self.parent_overlay.settings.show_broadcast_header = self.broadcast_header_cb.isChecked()
             self.parent_overlay.settings.broadcast_roll_enabled = self.broadcast_roll_enabled_cb.isChecked()
+            self.parent_overlay.settings.broadcast_roll_rows = self.broadcast_roll_rows_spin.value()
+            self.parent_overlay.settings.broadcast_roll_interval_seconds = self.broadcast_roll_interval_spin.value()
             self.parent_overlay.settings.font_size = self.font_size_combo.currentText()
             self.parent_overlay.settings.row_color_style = self.color_style_combo.currentText()
             self.parent_overlay.apply_official_league_broadcast_metadata()
@@ -1196,8 +1279,17 @@ class SettingsDialog(QDialog):
 
     def _sync_broadcast_roll_control_state(self):
         """Enable rolling standings only when broadcast header is enabled."""
-        is_enabled = self.broadcast_header_cb.isChecked()
-        self.broadcast_roll_enabled_cb.setEnabled(is_enabled)
+        header_enabled = self.broadcast_header_cb.isChecked()
+        self.broadcast_roll_enabled_cb.setEnabled(header_enabled)
+        roll_settings_enabled = header_enabled and self.broadcast_roll_enabled_cb.isChecked()
+        if hasattr(self, 'roll_rows_label'):
+            self.roll_rows_label.setEnabled(roll_settings_enabled)
+        if hasattr(self, 'roll_interval_label'):
+            self.roll_interval_label.setEnabled(roll_settings_enabled)
+        if hasattr(self, 'broadcast_roll_rows_spin'):
+            self.broadcast_roll_rows_spin.setEnabled(roll_settings_enabled)
+        if hasattr(self, 'broadcast_roll_interval_spin'):
+            self.broadcast_roll_interval_spin.setEnabled(roll_settings_enabled)
             
     def on_cancel(self):
         """Cancel settings"""

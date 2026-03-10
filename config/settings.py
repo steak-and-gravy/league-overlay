@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List
 
-from .constants import UI_CONFIG, FILE_CONFIG, TELEMETRY_CONFIG
+from .constants import UI_CONFIG, FILE_CONFIG, TELEMETRY_CONFIG, TIMING
 from .logging_config import get_logger
 from .settings_validator import SettingsValidator
 
@@ -45,6 +45,8 @@ class AppSettings:
     log_level: str = "INFO"
     show_broadcast_header: bool = False  # Show broadcast-style header with logo/session info
     broadcast_roll_enabled: bool = False  # Lock top rows and roll lower standings in broadcast mode
+    broadcast_roll_rows: int = TIMING.BROADCAST_ROLL_ROWS  # Number of rows in the rotating standings window
+    broadcast_roll_interval_seconds: int = TIMING.BROADCAST_ROLL_INTERVAL_SECONDS  # Seconds between rolling page advances
 
     # Performance indicator colors
     faster_color: str = "#00FF00"  # Green - for faster lap times and positions gained
@@ -151,6 +153,8 @@ class SettingsManager:
                 'show_footer': settings.show_footer,
                 'show_broadcast_header': settings.show_broadcast_header,
                 'broadcast_roll_enabled': settings.broadcast_roll_enabled,
+                'broadcast_roll_rows': settings.broadcast_roll_rows,
+                'broadcast_roll_interval_seconds': settings.broadcast_roll_interval_seconds,
                 'font_size': settings.font_size,
                 'row_color_style': settings.row_color_style,
                 'log_level': settings.log_level,
@@ -207,6 +211,8 @@ class SettingsManager:
             'show_footer': settings.show_footer,
             'show_broadcast_header': settings.show_broadcast_header,
             'broadcast_roll_enabled': settings.broadcast_roll_enabled,
+            'broadcast_roll_rows': settings.broadcast_roll_rows,
+            'broadcast_roll_interval_seconds': settings.broadcast_roll_interval_seconds,
             'font_size': settings.font_size,
             'row_color_style': settings.row_color_style,
             'log_level': settings.log_level,
