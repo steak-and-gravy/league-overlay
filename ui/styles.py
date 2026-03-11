@@ -81,7 +81,7 @@ class DarkColorStyle(ColorStyleStrategy):
 
         if driver.is_player or driver.is_spectated:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
-            label_bg = parent.blend_color_with_black(driver.division_color, 0.25)
+            label_bg = parent.blend_color_with_black(driver.division_color, parent.settings.highlight)
         else:
             bg_style = f"background-color: {parent.get_bg_color('#000000')};"
             label_bg = parent.get_bg_color('#000000')
@@ -211,7 +211,7 @@ class DefaultColorStyle(ColorStyleStrategy):
 
         if driver.is_player or driver.is_spectated:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
-            label_bg = parent.blend_color_with_black(driver.division_color, 0.25)
+            label_bg = parent.blend_color_with_black(driver.division_color, parent.settings.highlight)
         else:
             bg_style = f"background-color: {parent.get_bg_color('#000000')};"
 

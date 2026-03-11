@@ -122,6 +122,13 @@ class SettingsValidator:
             max_val=TELEMETRY_CONFIG.MAX_REFRESH_RATE,
             field_name='refresh_rate'
         )
+        validated['highlight'] = self.coerce_float(
+            data.get('highlight'),
+            default=self.defaults['highlight'],
+            min_val=0.0,
+            max_val=1.0,
+            field_name='highlight'
+        )
 
         # Boolean fields
         validated['hide_headers'] = self.coerce_bool(

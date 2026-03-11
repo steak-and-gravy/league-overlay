@@ -26,6 +26,7 @@ class AppSettings:
     opacity: float = 0.5
     font_size: str = "Medium"
     row_color_style: str = "Default"
+    highlight: float = 0.25
 
     # Behavior
     refresh_rate: float = 1.0
@@ -167,6 +168,7 @@ class SettingsManager:
                 'height': settings.height,
                 'opacity': settings.opacity,
                 'refresh_rate': settings.refresh_rate,
+                'highlight': settings.highlight,
                 'hide_headers': settings.hide_headers,
                 'center_drivers': settings.center_drivers,
                 'bold_drivers': settings.bold_drivers,
@@ -226,6 +228,7 @@ class SettingsManager:
             'height': settings.height,
             'opacity': settings.opacity,
             'refresh_rate': settings.refresh_rate,
+            'highlight': settings.highlight,
             'hide_headers': settings.hide_headers,
             'center_drivers': settings.center_drivers,
             'bold_drivers': settings.bold_drivers,
