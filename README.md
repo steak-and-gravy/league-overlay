@@ -24,9 +24,10 @@ BB’s League Overlay displays live standings and gaps with a focus on divisions
 - **Division Filtering** — Toggle between viewing all divisions, your division only, or specific divisions (if spectating).
 - **Multi-Class Support** — Automatically filters to your car class in multi-class races.
 - **Auto-Centering** — Keeps you in view with intelligent timeout after manual scrolling.
+- **Spectator Camera Highlight** — When spectating, the driver currently being viewed by the spectator camera is highlighted in the standings just like the active player's row. If the spectator is not using the Broadcast Header + Broadcast Rolling Standings, the overlay will also auto-center on the spectated driver.
 - **Customizable Appearance** — Configure font sizes, row colors (Default/Dark/Alternate/Outline), opacity, and performance indicator colors.
 - **Broadcast Header** — Optional professional-quality header displaying league logo, league name, session info, and track name—ideal for spectator streams and broadcast use. Supports custom logo images and accent colors with flag-aware styling (gold during caution, orange when disconnected).
-- **Broadcast Rolling Standings** — Optional broadcast mode that locks the top standings rows and rolls the remaining drivers in the bottom 5 rows on a configurable timer (default 5 seconds), with automatic wrap-around and blank-row padding on the last page.
+- **Broadcast Rolling Standings** — Optional broadcast mode that locks the top standings rows and rolls the remaining drivers in the bottom 5 rows on a configurable timer (default 5 seconds), with automatic wrap-around and blank-row padding on the last page. When a specific driver is selected (or the spectator camera is viewing a driver) and that driver is not visible on the current broadcast rolling page, the rolling window will lock and center that driver. Automatic page advances are paused while the page is locked; they resume when the driver becomes visible or the selection changes. If the selection moves to another off-screen driver, the lock moves to that driver.
 - **Right-Click Assignments** — Quickly assign drivers to divisions via context menu during a session.
 - **Update Notifications** — Automatic checks for new versions from GitHub.
 
@@ -66,10 +67,10 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - **Filter divisions**: Click the division filter button to cycle through views
 - **Assign on-the-fly**: Right-click any driver to change their division
 - **Auto-centering**: The overlay keeps you in view; scroll manually to disable temporarily
-- **Broadcast rolling mode**: When enabled (with Broadcast Header), the scrollbar is hidden and auto-centering is disabled while the bottom 5 rows rotate through the remaining standings
+- **Broadcast rolling mode**: When enabled (with Broadcast Header), the scrollbar is hidden and auto-centering is disabled while the bottom 5 rows (configurable) rotate through the remaining standings. When a driver is selected or the spectator camera is following a driver who is not visible on the current broadcast rolling page, the rolling page will lock and center that driver and pause automatic page advances until the selection changes or the driver becomes visible.
 - **Positions Gained column**: Shows positions gained/lost from starting grid with color coding (green for gained, red for lost)
 - **Best Lap column**: Shows each driver's best lap time this session
-- **Delta column**: When driving, compares lap times to your last lap. When spectating, compares to division leader's last lap
+- **Delta column**: When driving, compares lap times to your last lap. When spectating, compares to overall leader's last lap
 - **Last Lap column**: Shows formatted lap times (e.g., "1:24.56" or "58.34" for times under 60 seconds)
 - **Rating column**: Shows combined iRating + Safety Rating (e.g., "A 2.5  6.0k") with license class background colors (R=dark red, D=orange, C=gold, B=green, A=blue, P=indigo)
 - **Pit Lap column**: Shows last pit lap (e.g., "L12") or "OUT" in orange during out lap

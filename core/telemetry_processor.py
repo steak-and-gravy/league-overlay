@@ -856,7 +856,7 @@ class TelemetryProcessor:
         """Calculate delta lap time comparison.
 
         When driving: Compare to player's last lap time
-        When spectating: Compare to division leader's last lap time
+        When spectating: Compare to overall leader's last lap time
 
         Args:
             driver_lap_time: Current driver's last lap time
@@ -882,14 +882,13 @@ class TelemetryProcessor:
             if reference_lap_time <= 0 or reference_lap_time >= 999:
                 return "--"
         else:
-            # SPECTATING MODE: Compare to division leader's last lap
-            # Find division leader (position 1 in this division)
-            division_drivers = [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
-            if division_drivers:
-                division_drivers.sort(key=lambda x: x['position'])
-                division_leader_idx = division_drivers[0]['car_idx']
-                reference_lap_time = car_idx_last_lap[division_leader_idx]
-                reference_car_idx = division_leader_idx
+            # SPECTATING MODE: Compare to overall leader's last lap
+            leaders = [d for d in all_drivers_with_colors if d.get('position', 0) > 0]
+            if leaders:
+                leaders.sort(key=lambda x: x.get('position', 0))
+                overall_leader_idx = leaders[0]['car_idx']
+                reference_lap_time = car_idx_last_lap[overall_leader_idx]
+                reference_car_idx = overall_leader_idx
 
         # If this is the reference driver, show "--" instead of "+0.0"
         if car_idx == reference_car_idx:
