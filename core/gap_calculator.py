@@ -172,7 +172,7 @@ class GapCalculator:
         """Format safety rating for display.
 
         Args:
-            lic_level: License level (1-24 where R=1-4, D=5-8, C=9-12, B=13-16, A=17-20, P=21-24)
+            lic_level: License level (1-24 where R=1-4, D=5-8, C=9-12, B=13-16, A=17-20, P=21-24, WC=25+)
             lic_sublevel: License sublevel (0-399 representing x.xx, e.g., 247 = 2.47)
 
         Returns:
@@ -195,6 +195,8 @@ class GapCalculator:
             letter = "A"
         elif 21 <= lic_level <= 24:
             letter = "P"
+        elif 25 <= lic_level:
+            letter = "WC"
         else:
             return "—"  # Invalid level
 
@@ -215,7 +217,7 @@ class GapCalculator:
 
         Args:
             irating: Driver's iRating (e.g., 6010)
-            lic_level: License level (1-24 where R=1-4, D=5-8, C=9-12, B=13-16, A=17-20, P=21-24)
+            lic_level: License level (1-24 where R=1-4, D=5-8, C=9-12, B=13-16, A=17-20, P=21-24, WC=25+)
             lic_sublevel: License sublevel (0-399 representing x.xx, e.g., 247 = 2.47)
 
         Returns:
@@ -299,5 +301,7 @@ class GapCalculator:
             return LICENSE_COLORS.A_CLASS
         elif 21 <= lic_level <= 24:
             return LICENSE_COLORS.PRO
+        elif lic_level <= 25:
+            return LICENSE_COLORS.WC
         else:
             return '#000000'  # Black for invalid/unknown

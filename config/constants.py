@@ -31,6 +31,7 @@ class LicenseColors:
     B_CLASS: str = '#006400'     # Dark Green (B 13-16)
     A_CLASS: str = '#00008B'     # Dark Blue (A 17-20)
     PRO: str = '#4B0082'         # Indigo (P 21-24)
+    WC: str = '#800080'          # Purple (World Championship 25+)
 
 
 @dataclass(frozen=True)
