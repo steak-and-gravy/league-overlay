@@ -434,6 +434,16 @@ class TelemetryProcessor:
                         f"surface={current_surface}"
                     )
                 self.tow_tracking[car_idx] = True
+                if car_idx not in self.tow_frozen_track_position:
+                    frozen_position = self.tow_last_live_track_position.get(car_idx)
+                    if frozen_position is None:
+                        if prev_track_position is not None and prev_track_position >= 0:
+                            frozen_position = prev_track_position
+                        elif prev_valid_track_position is not None and prev_valid_track_position >= 0:
+                            frozen_position = prev_valid_track_position
+                        else:
+                            frozen_position = current_track_position
+                    self.tow_frozen_track_position[car_idx] = frozen_position
                 self.tow_end_time[car_idx] = now + player_tow_time
 
             # Clear tow state when tow timer expires or car leaves pit road/stall.
@@ -471,6 +481,8 @@ class TelemetryProcessor:
                     )
                     self.tow_tracking[car_idx] = False
                     self.tow_end_time[car_idx] = 0.0
+                    if car_idx in self.tow_frozen_track_position:
+                        del self.tow_frozen_track_position[car_idx]
 
             # Detect tow-like teleport into pit stall.
             entered_stall = (prev_surface is not None
@@ -517,6 +529,16 @@ class TelemetryProcessor:
 
                 if teleporting_to_pit:
                     self.tow_tracking[car_idx] = True
+                    if car_idx not in self.tow_frozen_track_position:
+                        frozen_position = self.tow_last_live_track_position.get(car_idx)
+                        if frozen_position is None:
+                            if prev_track_position is not None and prev_track_position >= 0:
+                                frozen_position = prev_track_position
+                            elif prev_valid_track_position is not None and prev_valid_track_position >= 0:
+                                frozen_position = prev_valid_track_position
+                            else:
+                                frozen_position = current_track_position
+                        self.tow_frozen_track_position[car_idx] = frozen_position
                     # Estimate non-player tow duration using bo2-style tow model:
                     # tow_time = tow_length / tow_speed + fixed_offset.
                     estimated_tow_seconds = None
@@ -545,6 +567,9 @@ class TelemetryProcessor:
                         f"estimated_tow_seconds={estimated_tow_seconds} "
                         f"end_time_set={self.tow_end_time.get(car_idx, 0.0) > 0}"
                     )
+
+            if not self.tow_tracking.get(car_idx, False) and not current_invalid:
+                self.tow_last_live_track_position[car_idx] = current_track_position
 
             # Update last-known values
             self.tow_last_surface[car_idx] = current_surface
@@ -593,6 +618,49 @@ class TelemetryProcessor:
             )
 
         return driver.get('total_track_position', -1)
+
+    def get_tow_aware_overall_leader_idx(self) -> Optional[int]:
+        """Find overall race leader using tow-frozen positions when towing.
+
+        This prevents tow teleports (for example, pit stalls past start/finish)
+        from becoming the temporary overall leader during finish tracking.
+        """
+        try:
+            car_idx_lap = self.ir['CarIdxLap']
+            car_idx_lap_dist_pct = self.ir['CarIdxLapDistPct']
+        except (KeyError, TypeError):
+            return None
+
+        if not car_idx_lap or not car_idx_lap_dist_pct:
+            return None
+
+        overall_leader_idx = None
+        max_track_position = -1.0
+        max_len = min(len(car_idx_lap), len(car_idx_lap_dist_pct))
+
+        for car_idx in range(max_len):
+            if car_idx_lap[car_idx] < 0:
+                continue
+
+            lap_pct = car_idx_lap_dist_pct[car_idx]
+            if lap_pct < 0 or lap_pct > 1:
+                lap_pct = 0
+
+            total_track_position = car_idx_lap[car_idx] + lap_pct
+            if self.tow_tracking.get(car_idx, False):
+                total_track_position = self.tow_frozen_track_position.get(
+                    car_idx,
+                    self.tow_last_live_track_position.get(
+                        car_idx,
+                        total_track_position
+                    )
+                )
+
+            if total_track_position > max_track_position:
+                max_track_position = total_track_position
+                overall_leader_idx = car_idx
+
+        return overall_leader_idx
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SESSION RESULTS AND LAP TIMES
@@ -1707,7 +1775,7 @@ class TelemetryProcessor:
 
             # Process positions (different logic for race vs practice/qualifying)
             if is_race:
-                self.race_state_tracker.update_finish_status(self.position_calculator.get_overall_race_leader_idx)
+                self.race_state_tracker.update_finish_status(self.get_tow_aware_overall_leader_idx)
 
                 active_drivers = self.position_calculator.calculate_real_time_positions(drivers)
 

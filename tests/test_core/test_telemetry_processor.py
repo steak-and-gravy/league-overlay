@@ -507,6 +507,134 @@ class TestMultiClassFinishTracking:
         assert race_state_tracker.is_driver_finished(10), "GT4 P3 should be marked finished"
 
 
+class TestTowAwareFinishLeaderSelection:
+    """Regression tests for tow-distorted leader selection during finish tracking."""
+
+    def test_get_tow_aware_overall_leader_idx_uses_last_live_position_without_frozen_cache(self):
+        """A towing car should not become leader when only the pre-tow live position is cached."""
+        ir = MagicMock()
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=MagicMock(spec=DivisionManager),
+            race_state_tracker=MagicMock(spec=RaceStateTracker),
+            gap_calculator=MagicMock(spec=GapCalculator),
+            position_calculator=MagicMock(spec=PositionCalculator)
+        )
+
+        live_data = {
+            'CarIdxLap': [0, 10, 10],
+            'CarIdxLapDistPct': [0.0, 0.30, 0.98],
+        }
+        ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        processor.tow_tracking[2] = True
+        processor.tow_last_live_track_position[2] = 9.20
+
+        assert processor.get_tow_aware_overall_leader_idx() == 1
+
+    def test_update_tow_tracking_freezes_teleported_car_before_finish_tracking(self):
+        """Tow detection should cache the pre-teleport position before leader selection runs."""
+        ir = MagicMock()
+        race_state_tracker = MagicMock(spec=RaceStateTracker)
+        position_calculator = MagicMock(spec=PositionCalculator)
+        position_calculator.player_car_idx = 1
+
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=MagicMock(spec=DivisionManager),
+            race_state_tracker=race_state_tracker,
+            gap_calculator=MagicMock(spec=GapCalculator),
+            position_calculator=position_calculator
+        )
+
+        live_data = {
+            'CarIdxTrackSurface': [3, 3, 3],
+            'CarIdxOnPitRoad': [False, False, False],
+            'CarIdxLap': [0, 10, 10],
+            'CarIdxLapDistPct': [0.0, 0.50, 0.30],
+            'DriverInfo': {
+                'Drivers': [
+                    {'CarNumber': '0'},
+                    {'CarNumber': '1'},
+                    {'CarNumber': '2'},
+                ]
+            },
+            'PlayerCarTowTime': 0.0,
+            'WeekendInfo': {'TrackLength': '5 km'},
+            'SessionTime': 100.0,
+        }
+        ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        processor._update_tow_tracking()
+
+        live_data['CarIdxTrackSurface'][2] = 1
+        live_data['CarIdxOnPitRoad'][2] = True
+        live_data['CarIdxLapDistPct'][2] = 0.98
+        live_data['SessionTime'] = 101.0
+
+        processor._update_tow_tracking()
+
+        assert processor.tow_tracking[2] is True
+        assert processor.tow_frozen_track_position[2] == pytest.approx(10.30)
+        assert processor.get_tow_aware_overall_leader_idx() == 1
+
+    def test_process_telemetry_uses_tow_aware_leader_for_finish_tracking(self):
+        """process_telemetry should pass the tow-aware leader function into finish tracking."""
+        ir = MagicMock()
+        division_manager = MagicMock(spec=DivisionManager)
+        race_state_tracker = MagicMock(spec=RaceStateTracker)
+        gap_calculator = MagicMock(spec=GapCalculator)
+        position_calculator = MagicMock(spec=PositionCalculator)
+
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=division_manager,
+            race_state_tracker=race_state_tracker,
+            gap_calculator=gap_calculator,
+            position_calculator=position_calculator
+        )
+
+        drivers = {
+            7: {
+                'CarIdx': 7,
+                'UserName': 'Driver Seven',
+                'CarNumber': '7',
+                'CarClassID': 4091,
+            }
+        }
+        session_data = {
+            'session_id': 123,
+            'subsession_id': 456,
+            'session_type': 'Race',
+            'current_session': {'SessionType': 'Race'},
+            'results_lookup': {7: {'CarIdx': 7, 'ClassPosition': 0}},
+            'fastest_lap_time': 90.0,
+        }
+
+        processor._get_session_info = Mock(return_value=(drivers, session_data, True))
+        processor._detect_session_change = Mock(return_value=False)
+        processor._populate_lap_time_cache_from_results = Mock()
+        processor._update_pit_tracking = Mock()
+        processor._update_tow_tracking = Mock()
+        processor.get_tow_aware_overall_leader_idx = Mock(return_value=7)
+
+        position_calculator.identify_player = Mock()
+        position_calculator.update_spectated_car = Mock()
+        position_calculator.player_car_class_id = None
+        position_calculator.calculate_real_time_positions = Mock(return_value=[])
+        position_calculator.get_official_positions = Mock(return_value=[])
+        position_calculator.get_overall_race_leader_idx = Mock(return_value=99)
+
+        captured = []
+        race_state_tracker.update_finish_status = Mock(side_effect=lambda leader_fn: captured.append(leader_fn()))
+
+        result = processor.process_telemetry(get_driver_color_fn=lambda _driver_info: '#FFFFFF')
+
+        assert result is None
+        assert captured == [7]
+        position_calculator.get_overall_race_leader_idx.assert_not_called()
+
+
 class TestSessionTracking:
     """Unit tests for session change tracking using SessionID + session_type."""
 
