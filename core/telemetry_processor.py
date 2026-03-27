@@ -763,6 +763,41 @@ class TelemetryProcessor:
 
         return division_positions, all_drivers_with_colors
 
+    def _get_live_pit_display(self, car_idx: int, current_lap: int) -> str:
+        """Return the authoritative live pit/tow display for a driver."""
+        if self.tow_tracking.get(car_idx, False):
+            return "TOW"
+
+        last_pit_lap_num = self.pit_tracking.get(car_idx, 0)
+        is_on_pit_road = self.pit_on_road.get(car_idx, False)
+        exit_out_lap = self.pit_exit_out_lap.get(car_idx, -1)
+        is_on_out_lap = (not is_on_pit_road) and exit_out_lap >= current_lap and exit_out_lap >= 0
+        return GapCalculator.format_pit_lap(
+            current_lap,
+            last_pit_lap_num,
+            is_on_pit_road=is_on_pit_road,
+            is_out_lap=is_on_out_lap
+        )
+
+    def _get_snapshot_track_components(self, driver: Dict) -> Tuple[int, float]:
+        """Return track-position components for snapshot storage.
+
+        While towing, snapshots must preserve the tow-frozen sort position so a
+        later disconnect restore does not reintroduce the pit-stall teleport.
+        """
+        snapshot_track_position = self._get_tow_aware_sort_track_position(driver)
+        if snapshot_track_position < 0:
+            current_lap = driver.get('current_lap', 0)
+            lap_pct = driver.get('lap_pct', 0.0)
+            return current_lap, lap_pct
+
+        current_lap = int(snapshot_track_position)
+        lap_pct = snapshot_track_position - current_lap
+        if lap_pct < 0 or lap_pct > 1:
+            lap_pct = 0.0
+
+        return current_lap, lap_pct
+
     # ═══════════════════════════════════════════════════════════════════════════
     # RACE DATA BUILDING
     # ═══════════════════════════════════════════════════════════════════════════
@@ -795,7 +830,11 @@ class TelemetryProcessor:
         is_spectated = (car_idx == self.position_calculator.spectated_car_idx)
         is_disconnected = driver.get('disconnected', False)
         is_finished = self.race_state_tracker.is_driver_finished(car_idx)
-        is_towing = self.tow_tracking.get(car_idx, False) if not is_finished else False
+        snapshot = self.race_state_tracker.get_snapshot(car_idx) if (is_disconnected and not is_finished) else None
+        snapshot_is_towing = bool(snapshot.is_towing) if snapshot else False
+        is_towing = (
+            self.tow_tracking.get(car_idx, False) or snapshot_is_towing
+        ) if not is_finished else False
 
         # Format last lap time for display
         last_lap_display = GapCalculator.format_lap_time(last_lap_time)
@@ -812,20 +851,10 @@ class TelemetryProcessor:
         combined_rating_display = GapCalculator.format_combined_rating(irating, lic_level, lic_sublevel)
 
         # Calculate last pit lap and out lap indicator
-        last_pit_lap_num = self.pit_tracking.get(car_idx, 0)
         current_lap = driver.get('current_lap', 0)
-        is_on_pit_road = self.pit_on_road.get(car_idx, False)
-        exit_out_lap = self.pit_exit_out_lap.get(car_idx, -1)
-        is_on_out_lap = (not is_on_pit_road) and exit_out_lap >= current_lap and exit_out_lap >= 0
-        pit_lap_display = "TOW" if is_towing else GapCalculator.format_pit_lap(
-            current_lap,
-            last_pit_lap_num,
-            is_on_pit_road=is_on_pit_road,
-            is_out_lap=is_on_out_lap
-        )
+        pit_lap_display = self._get_live_pit_display(car_idx, current_lap)
         if is_disconnected and not is_finished:
             # Preserve last known pit/status text while disconnected (team swaps, reconnects).
-            snapshot = self.race_state_tracker.get_snapshot(car_idx)
             if snapshot and snapshot.pit_lap:
                 pit_lap_display = snapshot.pit_lap
 
@@ -867,7 +896,8 @@ class TelemetryProcessor:
         """Update snapshots for all actively racing cars.
 
         Creates or updates DriverState objects for each active driver.
-        Preserves gap data from previous snapshots.
+        Preserves gap data from previous snapshots and stores the authoritative
+        pit/tow display plus tow-aware sort position for disconnect restoration.
 
         Args:
             active_drivers: List of driver data dicts from telemetry (legacy format)
@@ -877,15 +907,24 @@ class TelemetryProcessor:
             if self.race_state_tracker.is_driver_finished(car_idx):
                 continue  # Don't update finished drivers
 
+            snapshot_current_lap, snapshot_lap_pct = self._get_snapshot_track_components(driver_data)
+            snapshot_pit_lap = self._get_live_pit_display(
+                car_idx,
+                driver_data.get('current_lap', 0)
+            )
+            snapshot_is_towing = self.tow_tracking.get(car_idx, False)
+
             # Get existing state or create new one
             driver_state = self.race_state_tracker.get_snapshot(car_idx)
 
             if driver_state:
                 # Update existing state - preserve gap
-                driver_state.current_lap = driver_data.get('current_lap', 0)
-                driver_state.lap_pct = driver_data.get('lap_pct', 0.0)
+                driver_state.current_lap = snapshot_current_lap
+                driver_state.lap_pct = snapshot_lap_pct
                 driver_state.position = driver_data.get('position', 0)
                 driver_state.is_disconnected = False
+                driver_state.pit_lap = snapshot_pit_lap
+                driver_state.is_towing = snapshot_is_towing
                 # gap is preserved (not overwritten)
             else:
                 # Create new state
@@ -898,10 +937,12 @@ class TelemetryProcessor:
                     driver_info=driver_info,
                     division_name=division_name,
                     division_color=division_color,
-                    current_lap=driver_data.get('current_lap', 0),
-                    lap_pct=driver_data.get('lap_pct', 0.0),
+                    current_lap=snapshot_current_lap,
+                    lap_pct=snapshot_lap_pct,
                     position=driver_data.get('position', 0),
                     is_disconnected=False,
+                    pit_lap=snapshot_pit_lap,
+                    is_towing=snapshot_is_towing,
                 )
 
                 self.race_state_tracker.update_snapshot(car_idx, driver_state)

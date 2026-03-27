@@ -2448,6 +2448,102 @@ class TestFinishingGapCalculation:
         assert driver_state.gap_to_leader == "(DC)"
         assert driver_state.pit_lap == "OUT"
 
+    def test_mid_tow_disconnect_preserves_tow_label_and_sort_position(self, processor, mock_ir):
+        """A driver disconnecting mid-tow should keep TOW and their frozen on-track order."""
+        processor.position_calculator.player_car_idx = 99  # Not this driver
+        processor.division_manager.get_driver_division.return_value = None
+        processor.division_manager.get_division_color.return_value = "#FFFFFF"
+
+        car_idx = 2
+        driver_info = {
+            'UserID': 102,
+            'UserName': 'Driver C',
+            'CarIdx': car_idx,
+            'CarNumber': '2',
+        }
+
+        towing_driver = {
+            'car_idx': car_idx,
+            'driver_info': driver_info,
+            'current_lap': 10,
+            'lap_pct': 0.98,
+            'total_track_position': 10.98,
+            'position': 2,
+        }
+
+        processor.tow_tracking[car_idx] = True
+        processor.tow_frozen_track_position[car_idx] = 10.30
+        processor.pit_tracking[car_idx] = 10
+        processor.pit_on_road[car_idx] = True
+
+        processor._update_race_snapshots([towing_driver])
+
+        snapshot = processor.race_state_tracker.get_snapshot(car_idx)
+        assert snapshot is not None
+        assert snapshot.is_towing is True
+        assert snapshot.pit_lap == "TOW"
+        assert snapshot.total_track_position == pytest.approx(10.30)
+
+        # Simulate the driver dropping from live telemetry after tow state was captured.
+        processor.tow_tracking.pop(car_idx, None)
+        processor.tow_frozen_track_position.pop(car_idx, None)
+
+        ir_data = {
+            'SessionState': 4,
+            'RaceLaps': 0,
+        }
+        mock_ir.__getitem__.side_effect = lambda key: ir_data[key]
+
+        active_drivers = [{
+            'car_idx': 1,
+            'driver_info': {
+                'UserID': 101,
+                'UserName': 'Leader',
+                'CarIdx': 1,
+                'CarNumber': '1',
+            },
+            'current_lap': 10,
+            'lap_pct': 0.50,
+            'total_track_position': 10.50,
+            'position': 1,
+        }]
+
+        processor.race_state_tracker.handle_disconnected_drivers(
+            active_drivers,
+            {'results_lookup': {}, 'current_session': {}},
+            lambda _session_data, _car_idx: -1
+        )
+
+        restored_driver = next(driver for driver in active_drivers if driver['car_idx'] == car_idx)
+        sorted_drivers = sorted(
+            active_drivers,
+            key=processor._get_tow_aware_sort_track_position,
+            reverse=True
+        )
+
+        assert restored_driver['total_track_position'] == pytest.approx(10.30)
+        assert sorted_drivers[0]['car_idx'] == 1
+
+        driver_state = processor._build_race_data_entry(
+            driver=restored_driver,
+            division_positions={1: 1, car_idx: 2},
+            interval="",
+            gap_to_leader="5.2",
+            division_interval="",
+            division_gap_to_leader="5.2",
+            display_position=2,
+            division_color="#FFFFFF",
+            division_name="Pro",
+            delta="--",
+            last_lap_time=0.0,
+            best_lap_time=0.0,
+            starting_position=2
+        )
+
+        assert driver_state.gap_to_leader == "(DC)"
+        assert driver_state.is_towing is True
+        assert driver_state.pit_lap == "TOW"
+
     def test_stale_results_positions_returns_empty(self, mock_ir):
         """Test that stale ResultsPositions data (lap count behind live) returns empty string."""
         # Create a real dict-based mock for this test
