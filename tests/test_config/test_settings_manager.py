@@ -32,7 +32,7 @@ class TestAppSettingsDefaults:
     def test_default_appearance(self):
         """Test default appearance settings."""
         settings = AppSettings()
-        assert settings.opacity == 0.5
+        assert settings.opacity == 0.8
         assert settings.font_size == "Medium"
         assert settings.row_color_style == "Default"
 
@@ -70,7 +70,7 @@ class TestLoadSettings:
         settings = manager.load()
 
         assert isinstance(settings, AppSettings)
-        assert settings.opacity == 0.5  # Default value
+        assert settings.opacity == 0.8  # Default value
 
     def test_load_valid_settings(self, tmp_path):
         """Test loading valid settings file."""
@@ -146,7 +146,7 @@ class TestLoadSettings:
 
         # Should return defaults
         assert isinstance(settings, AppSettings)
-        assert settings.opacity == 0.5
+        assert settings.opacity == 0.8
 
     def test_load_unknown_fields_ignored(self, tmp_path):
         """Test loading settings with unknown fields ignores them."""

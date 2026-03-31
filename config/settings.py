@@ -23,10 +23,10 @@ class AppSettings:
     height: int = 350
 
     # Appearance
-    opacity: float = 0.5
+    opacity: float = 0.8
     font_size: str = "Medium"
     row_color_style: str = "Default"
-    highlight: float = 0.45
+    highlight: float = 0.35
 
     # Behavior
     refresh_rate: float = 1.0

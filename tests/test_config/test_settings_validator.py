@@ -441,7 +441,7 @@ class TestValidateAndCoerce:
         result = validator.validate_and_coerce(data)
         assert result['x'] == 100  # Default
         assert result['width'] == 320  # Default
-        assert result['opacity'] == 0.5  # Default
+        assert result['opacity'] == 0.8  # Default
         assert result['font_size'] == 'Medium'  # Default
         assert result['hide_headers'] is False  # Default
 
@@ -454,7 +454,7 @@ class TestValidateAndCoerce:
         assert result['y'] == 100
         assert result['width'] == 320
         assert result['height'] == 350
-        assert result['opacity'] == 0.5
+        assert result['opacity'] == 0.8
         assert result['refresh_rate'] == 1.0  # Default from AppSettings
 
     def test_type_coercion_integrated(self):

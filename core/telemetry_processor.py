@@ -106,9 +106,6 @@ class TelemetryProcessor:
         # Clear player identification in position calculator
         self.position_calculator.reset()
 
-        # Clear session type history on full reset
-        self.previous_session_type = None
-
         # Clear lap time cache on session change
         self.lap_time_cache.clear()
 
