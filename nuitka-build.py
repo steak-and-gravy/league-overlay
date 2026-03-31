@@ -112,6 +112,7 @@ nuitka_args = [
     # If you have specific config files:
     # "--include-data-files=league_divisions.json=.",
     # "--include-data-files=broken_wing_gt3.json=.",
+    "--include-data-dir=assets=assets",
 
     # ===================================================================
     # EXCLUSIONS (reduce size)

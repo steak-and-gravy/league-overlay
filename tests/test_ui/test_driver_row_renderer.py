@@ -1,0 +1,105 @@
+"""Tests for manufacturer logo rendering in driver rows."""
+
+from types import SimpleNamespace
+
+from core.driver_state import DriverState
+from ui.driver_row_renderer import DriverRowRenderer
+
+
+def _make_parent():
+    settings = SimpleNamespace(
+        row_color_style="Default",
+        highlight=0.25,
+        faster_color="#00FF00",
+        slower_color="#FF0000",
+        show_positions_gained=False,
+        show_car_manufacturer=True,
+        show_rating=False,
+        show_gap=False,
+        show_division_gap=False,
+        show_interval=False,
+        show_division_interval=False,
+        show_best_lap=False,
+        show_last_lap=False,
+        show_delta=False,
+        show_pit_lap=False,
+        bold_drivers=False,
+        center_drivers=False,
+    )
+
+    return SimpleNamespace(
+        settings=settings,
+        get_bg_color=lambda color: color,
+        blend_color_with_black=lambda color, amount: "#112233",
+        create_gradient_background=lambda color: f"gradient({color})",
+        get_font_size=lambda element_type: "9pt" if element_type != "spacing" else 3,
+        show_context_menu=lambda driver: None,
+    )
+
+
+def _make_driver(car_path: str, manufacturer: str = "MFR") -> DriverState:
+    return DriverState(
+        car_idx=5,
+        driver_info={
+            "UserName": "Logo Driver",
+            "CarNumber": "42",
+            "CarClassID": 100,
+            "CarPath": car_path,
+        },
+        division_color="#00AAFF",
+        car_manufacturer=manufacturer,
+    )
+
+
+def test_get_manufacturer_logo_path_matches_known_asset():
+    driver = _make_driver("ferrari 296 gt3")
+
+    logo_path = DriverRowRenderer._get_manufacturer_logo_path(driver)
+
+    assert logo_path is not None
+    assert logo_path.name == "ferrari.png"
+
+
+def test_get_manufacturer_logo_path_uses_display_code_aliases():
+    driver = _make_driver("", manufacturer="CHE")
+
+    logo_path = DriverRowRenderer._get_manufacturer_logo_path(driver)
+
+    assert logo_path is not None
+    assert logo_path.name == "chevrolet.png"
+
+
+def test_get_manufacturer_logo_path_prefers_display_code_when_car_path_differs():
+    driver = _make_driver("unknown prototype", manufacturer="POR")
+
+    logo_path = DriverRowRenderer._get_manufacturer_logo_path(driver)
+
+    assert logo_path is not None
+    assert logo_path.name == "porsche.png"
+
+
+def test_create_row_uses_logo_when_asset_exists(qapp):
+    renderer = DriverRowRenderer(_make_parent())
+    driver = _make_driver("porsche 911 gt3 r", manufacturer="POR")
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    manufacturer_label = layout.itemAtPosition(0, 1).widget()
+
+    assert manufacturer_label.pixmap() is not None
+    assert manufacturer_label.text() == ""
+    row.deleteLater()
+
+
+def test_create_row_falls_back_to_text_when_logo_missing(qapp):
+    renderer = DriverRowRenderer(_make_parent())
+    driver = _make_driver("hyundai elantra n", manufacturer="HYU")
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    manufacturer_label = layout.itemAtPosition(0, 1).widget()
+
+    pixmap = manufacturer_label.pixmap()
+    assert pixmap is None or pixmap.isNull()
+    assert manufacturer_label.text() == "HYU"
+    row.deleteLater()

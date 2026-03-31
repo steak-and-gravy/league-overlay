@@ -1,6 +1,8 @@
 """Driver row rendering with pluggable style strategies."""
 
-from typing import TYPE_CHECKING, Dict
+from pathlib import Path
+from typing import TYPE_CHECKING, Dict, Optional
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QWidget, QLabel, QGridLayout, QSizePolicy
 from PySide6.QtCore import Qt
 
@@ -14,6 +16,35 @@ if TYPE_CHECKING:
 
 class DriverRowRenderer:
     """Handles driver row creation with pluggable color styles."""
+
+    LOGO_DIRECTORY = Path(__file__).resolve().parent.parent / "assets" / "manufacturer_logos"
+    MANUFACTURER_LOGO_FILES = {
+        "ACU": "acura.png",
+        "ALP": "alpine.png",
+        "AMR": "aston.png",
+        "AMV": "aston.png",
+        "AUD": "audi.png",
+        "BMW": "bmw.png",
+        "CAD": "cadillac.png",
+        "CHE": "chevrolet.png",
+        "CHV": "chevrolet.png",
+        "DAL": "dallara.png",
+        "FER": "ferrari.png",
+        "FOR": "ford.png",
+        "FRD": "ford.png",
+        "HND": "honda.png",
+        "HON": "honda.png",
+        "LAM": "lamborghini.png",
+        "LIG": "ligier.png",
+        "MAZ": "mazda.png",
+        "MCL": "mclaren.png",
+        "MER": "mercedes.png",
+        "NIS": "nissan.png",
+        "POR": "porsche.png",
+        "RAD": "radical.png",
+        "TOY": "toyota.png",
+    }
+    _logo_cache: Dict[str, Optional[QPixmap]] = {}
 
     STYLES = {
         "Default": DefaultColorStyle(),
@@ -29,6 +60,39 @@ class DriverRowRenderer:
             parent: LeagueOverlay instance
         """
         self.parent = parent
+
+    @classmethod
+    def _get_manufacturer_logo_path(cls, driver: DriverState) -> Optional[Path]:
+        """Return the configured logo path for the driver's car manufacturer."""
+        manufacturer_code = (driver.car_manufacturer or "").upper()
+        logo_file = cls.MANUFACTURER_LOGO_FILES.get(manufacturer_code)
+        if logo_file:
+            logo_path = cls.LOGO_DIRECTORY / logo_file
+            if logo_path.exists():
+                return logo_path
+
+        car_path = driver.driver_info.get("CarPath", "")
+        manufacturer_key = car_path.split()[0].lower() if car_path.split() else ""
+        if manufacturer_key:
+            logo_path = cls.LOGO_DIRECTORY / f"{manufacturer_key}.png"
+            if logo_path.exists():
+                return logo_path
+
+        return None
+
+    @classmethod
+    def _get_manufacturer_logo_pixmap(cls, driver: DriverState) -> Optional[QPixmap]:
+        """Load and cache the manufacturer's logo pixmap."""
+        logo_path = cls._get_manufacturer_logo_path(driver)
+        if logo_path is None:
+            return None
+
+        cache_key = str(logo_path)
+        if cache_key not in cls._logo_cache:
+            pixmap = QPixmap(str(logo_path))
+            cls._logo_cache[cache_key] = pixmap if not pixmap.isNull() else None
+
+        return cls._logo_cache[cache_key]
 
     def create_row(self, driver: DriverState) -> QWidget:
         """Create a driver row widget using the configured color style.
@@ -571,9 +635,10 @@ class DriverRowRenderer:
 
     def _create_manufacturer_label(self, layout: QGridLayout, driver: DriverState,
                                    label_bg: str, label_border: str, font_weight: str, column: int) -> None:
-        """Create manufacturer abbreviation badge label."""
+        """Create manufacturer logo label with text fallback."""
         mfr_label = QLabel(driver.car_manufacturer)
         mfr_color = driver.car_manufacturer_color
+        logo_pixmap = self._get_manufacturer_logo_pixmap(driver)
 
         mfr_label.setStyleSheet(f"""
             QLabel {{
@@ -586,6 +651,15 @@ class DriverRowRenderer:
         """)
         mfr_label.setAlignment(Qt.AlignCenter)
         mfr_label.setMinimumWidth(COLUMN_MIN_WIDTHS.CAR_MANUFACTURER)
+        if logo_pixmap is not None:
+            scaled_logo = logo_pixmap.scaled(
+                COLUMN_MIN_WIDTHS.CAR_MANUFACTURER - 4,
+                18,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+            mfr_label.setPixmap(scaled_logo)
+            mfr_label.setText("")
         mfr_label.setContextMenuPolicy(Qt.CustomContextMenu)
         mfr_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
