@@ -1206,9 +1206,6 @@ class LeagueOverlay(QMainWindow):
         Args:
             race_data: Processed race data from TelemetryProcessor, or None if unavailable
         """
-        if race_data is None:
-            return
-
         # Detect session change by comparing with processor's session info
         session_changed = (
             self.current_session_id != self.telemetry_processor.current_session_id or
@@ -1237,7 +1234,12 @@ class LeagueOverlay(QMainWindow):
             if not is_qual_to_race:
                 self.race_data = []
                 self._last_emitted_data = []  # Reset change tracking on session change
+                self.class_leader_lap = None
+                self.signals.update_data.emit([])
             # Note: Division filter state is intentionally preserved across session changes
+
+        if race_data is None:
+            return
 
         # Update race data and player info
         self.race_data = race_data
@@ -1558,9 +1560,6 @@ class LeagueOverlay(QMainWindow):
             
     def display_race_data(self, data: List[DriverState]):
         """Display race data (thread-safe slot)"""
-        if not data:
-            return
-
         render_data = data
         blank_rows = 0
         separator_index = None
