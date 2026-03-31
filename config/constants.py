@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 
 # Application version
-VERSION = "0.9.9.7"
+VERSION = "0.9.9.8"
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,7 @@ class UIDimensions:
     SIZE_GRIP_SIZE: int = 20
     CLOSE_BUTTON_WIDTH: int = 25
     SETTINGS_DIALOG_WIDTH: int = 630
-    SETTINGS_DIALOG_HEIGHT: int = 650
+    SETTINGS_DIALOG_HEIGHT: int = 680
     BROADCAST_HEADER_MIN_HEIGHT: int = 60
 
 
@@ -165,7 +165,7 @@ class UIConfig:
         if self.DEFAULT_COLORS is None:
             object.__setattr__(self, 'DEFAULT_COLORS', {
                 "Pro": "#FF8C00",
-                "ProAm": "#9370DB",
+                "ProAm": "#fe00ff",
                 "Am": "#45B3E0",
                 "Rookie": "#FF2000",
                 "Default": "#FFFFFF"
