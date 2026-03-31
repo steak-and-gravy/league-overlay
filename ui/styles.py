@@ -215,8 +215,11 @@ class DefaultColorStyle(ColorStyleStrategy):
         else:
             bg_style = f"background-color: {parent.get_bg_color('#000000')};"
 
+        border_style = "border: 1px solid yellow;" if driver.is_spectated else ""
+
         row_widget = QWidget()
-        row_widget.setStyleSheet(bg_style)
+        row_widget.setObjectName("driverRow")
+        row_widget.setStyleSheet(f"#driverRow {{ {bg_style} {border_style} }}")
 
         return {
             'row_widget': row_widget,
