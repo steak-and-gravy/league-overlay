@@ -1221,17 +1221,16 @@ class LeagueOverlay(QMainWindow):
 
         # Clear old data on session change (only if we have a valid session)
         if session_changed and self.current_session_id is not None:
-            # Don't clear standings when transitioning from qualifying to race
-            # so that starting position data displays correctly
             prev_type = self.telemetry_processor.previous_session_type
             curr_type = self.telemetry_processor.current_session_type
-            is_qual_to_race = (
-                prev_type is not None
-                and prev_type.lower() == 'qualifying'
-                and curr_type is not None
-                and curr_type.lower() == 'race'
+            prev_type_normalized = prev_type.lower() if prev_type is not None else None
+            curr_type_normalized = curr_type.lower() if curr_type is not None else None
+            should_clear_standings = (
+                prev_type_normalized == 'practice'
+                and curr_type_normalized is not None
+                and 'qual' in curr_type_normalized
             )
-            if not is_qual_to_race:
+            if should_clear_standings:
                 self.race_data = []
                 self._last_emitted_data = []  # Reset change tracking on session change
                 self.class_leader_lap = None

@@ -38,7 +38,7 @@ def _make_driver(**overrides):
 
 
 def test_default_style_adds_yellow_outline_for_spectated_driver(qapp):
-    """Spectated drivers in Default style keep their highlight and gain a yellow outline."""
+    """Spectated drivers in Default style use only the yellow outline."""
     style = DefaultColorStyle()
     parent = _make_parent()
     driver = _make_driver(is_spectated=True)
@@ -46,7 +46,8 @@ def test_default_style_adds_yellow_outline_for_spectated_driver(qapp):
     styling = style.get_styling(driver, parent)
 
     style_sheet = styling["row_widget"].styleSheet()
-    assert "background: gradient(#00AAFF);" in style_sheet
+    assert "background-color: #000000;" in style_sheet
+    assert "background: gradient(#00AAFF);" not in style_sheet
     assert "border: 1px solid yellow;" in style_sheet
 
 

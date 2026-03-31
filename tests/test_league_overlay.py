@@ -483,6 +483,138 @@ class TestSessionChangeFooterRefresh:
         app.telemetry_processor.get_footer_data.assert_not_called()
         app.signals.update_footer.emit.assert_not_called()
 
+    def test_race_to_practice_does_not_clear_when_race_data_none(self):
+        """Only practice to qualifying should clear standings."""
+        app = Mock(spec=LeagueOverlay)
+        app.current_session_id = 100
+        app.current_session_type = "Race"
+        app.race_data = [{'position': 1}]
+        app._last_emitted_data = [{'position': 1}]
+        app.class_leader_lap = 12
+
+        app.telemetry_processor = Mock()
+        app.telemetry_processor.current_session_id = 101
+        app.telemetry_processor.current_session_type = "Practice"
+        app.telemetry_processor.previous_session_type = "Race"
+        app.telemetry_processor.position_calculator = Mock()
+        app.telemetry_processor.position_calculator.player_car_idx = 5
+        app.telemetry_processor.position_calculator.spectated_car_idx = None
+        app.race_state_tracker = Mock()
+        app.race_state_tracker.consume_starting_positions_update = Mock(return_value=False)
+        app.division_filter = Mock()
+        app.division_manager = Mock()
+        app.telemetry_processor.get_footer_data = Mock(return_value={'sof': 2100})
+
+        app.settings = Mock(show_footer=True, show_broadcast_header=False)
+        app.signals = Mock()
+        app.signals.update_footer = Mock()
+        app.signals.update_footer.emit = Mock()
+        app.signals.update_data = Mock()
+        app.signals.update_data.emit = Mock()
+
+        app._handle_telemetry_update = LeagueOverlay._handle_telemetry_update.__get__(app)
+
+        app._handle_telemetry_update(None)
+
+        assert app.current_session_id == 101
+        assert app.current_session_type == "Practice"
+        assert app.race_data == [{'position': 1}]
+        assert app._last_emitted_data == [{'position': 1}]
+        assert app.class_leader_lap == 12
+        app.signals.update_data.emit.assert_not_called()
+        app.telemetry_processor.get_footer_data.assert_not_called()
+        app.signals.update_footer.emit.assert_not_called()
+
+    def test_practice_to_open_qualify_clears_when_race_data_none(self):
+        """Qualifying variants like Open Qualify should also clear standings."""
+        app = Mock(spec=LeagueOverlay)
+        app.current_session_id = 100
+        app.current_session_type = "Practice"
+        app.race_data = [{'position': 1}]
+        app._last_emitted_data = [{'position': 1}]
+        app.class_leader_lap = 12
+
+        app.telemetry_processor = Mock()
+        app.telemetry_processor.current_session_id = 101
+        app.telemetry_processor.current_session_type = "Open Qualify"
+        app.telemetry_processor.previous_session_type = "Practice"
+        app.telemetry_processor.position_calculator = Mock()
+        app.telemetry_processor.position_calculator.player_car_idx = 5
+        app.telemetry_processor.position_calculator.spectated_car_idx = None
+        app.race_state_tracker = Mock()
+        app.race_state_tracker.consume_starting_positions_update = Mock(return_value=False)
+        app.division_filter = Mock()
+        app.division_manager = Mock()
+        app.telemetry_processor.get_footer_data = Mock(return_value={'sof': 2100})
+
+        app.settings = Mock(show_footer=True, show_broadcast_header=False)
+        app.signals = Mock()
+        app.signals.update_footer = Mock()
+        app.signals.update_footer.emit = Mock()
+        app.signals.update_data = Mock()
+        app.signals.update_data.emit = Mock()
+
+        app._handle_telemetry_update = LeagueOverlay._handle_telemetry_update.__get__(app)
+
+        app._handle_telemetry_update(None)
+
+        assert app.current_session_id == 101
+        assert app.current_session_type == "Open Qualify"
+        assert app.race_data == []
+        assert app._last_emitted_data == []
+        assert app.class_leader_lap is None
+        app.signals.update_data.emit.assert_called_once_with([])
+
+    def test_practice_to_qualifying_with_race_data_clears_then_renders_new_data(self):
+        """Practice to qualifying should emit an empty clear before new standings."""
+        app = Mock(spec=LeagueOverlay)
+        app.current_session_id = 100
+        app.current_session_type = "Practice"
+        app.race_data = [{'position': 1}]
+        app._last_emitted_data = [{'position': 1}]
+        app.class_leader_lap = 12
+        app.player_car_idx = None
+        app.spectated_car_idx = None
+
+        app.telemetry_processor = Mock()
+        app.telemetry_processor.current_session_id = 101
+        app.telemetry_processor.current_session_type = "Qualifying"
+        app.telemetry_processor.previous_session_type = "Practice"
+        app.telemetry_processor.position_calculator = Mock()
+        app.telemetry_processor.position_calculator.player_car_idx = 5
+        app.telemetry_processor.position_calculator.spectated_car_idx = None
+        app.telemetry_processor.get_footer_data = Mock(return_value={'sof': 2100})
+
+        app.race_state_tracker = Mock()
+        app.race_state_tracker.consume_starting_positions_update = Mock(return_value=False)
+        app.division_filter = Mock()
+        current_data = [Mock(current_lap=0)]
+        app.division_filter.apply_filter = Mock(return_value=current_data)
+        app.division_manager = Mock()
+        app.division_manager.get_driver_color = Mock()
+        app._has_data_changed = Mock(return_value=True)
+
+        app.settings = Mock(show_footer=False, show_broadcast_header=False)
+        app.signals = Mock()
+        app.signals.update_footer = Mock()
+        app.signals.update_footer.emit = Mock()
+        app.signals.update_data = Mock()
+        app.signals.update_data.emit = Mock()
+
+        app._handle_telemetry_update = LeagueOverlay._handle_telemetry_update.__get__(app)
+
+        race_data = [Mock(position=1)]
+        app._handle_telemetry_update(race_data)
+
+        assert app.current_session_id == 101
+        assert app.current_session_type == "Qualifying"
+        assert app.race_data == race_data
+        assert app.player_car_idx == 5
+        assert app.class_leader_lap == 0
+        assert app._last_emitted_data == current_data
+        assert app.signals.update_data.emit.call_args_list[0].args == ([],)
+        assert app.signals.update_data.emit.call_args_list[1].args == (current_data,)
+
     def test_does_not_recalculate_footer_without_session_change_when_race_data_none(self):
         """No footer refresh should occur when session is unchanged and race data is None."""
         app = Mock(spec=LeagueOverlay)

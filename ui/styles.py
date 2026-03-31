@@ -209,7 +209,7 @@ class DefaultColorStyle(ColorStyleStrategy):
         # Use black text for light division colors, white for dark
         car_number_color = "#000000" if is_light_color(driver.division_color) else "white"
 
-        if driver.is_player or driver.is_spectated:
+        if driver.is_player:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
             label_bg = parent.blend_color_with_black(driver.division_color, parent.settings.highlight)
         else:
