@@ -186,6 +186,11 @@ class SettingsValidator:
             default=self.defaults['show_positions_gained'],
             field_name='show_positions_gained'
         )
+        validated['show_car_manufacturer'] = self.coerce_bool(
+            data.get('show_car_manufacturer'),
+            default=self.defaults['show_car_manufacturer'],
+            field_name='show_car_manufacturer'
+        )
         validated['show_rating'] = self.coerce_bool(
             data.get('show_rating'),
             default=self.defaults['show_rating'],

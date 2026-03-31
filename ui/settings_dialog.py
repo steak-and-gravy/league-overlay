@@ -520,6 +520,11 @@ class SettingsDialog(QDialog):
         self.show_positions_gained_cb.setChecked(self.parent_overlay.settings.show_positions_gained)
         checkbox_row4.addWidget(self.show_positions_gained_cb)
 
+        self.show_car_manufacturer_cb = QCheckBox("Show manufacturer")
+        self.show_car_manufacturer_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_car_manufacturer_cb.setChecked(self.parent_overlay.settings.show_car_manufacturer)
+        checkbox_row4.addWidget(self.show_car_manufacturer_cb)
+
         self.show_rating_cb = QCheckBox("Show rating")
         self.show_rating_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_rating_cb.setChecked(self.parent_overlay.settings.show_rating)
@@ -1196,6 +1201,7 @@ class SettingsDialog(QDialog):
             self.show_last_lap_cb.setChecked(defaults.show_last_lap)
             self.show_delta_cb.setChecked(defaults.show_delta)
             self.show_positions_gained_cb.setChecked(defaults.show_positions_gained)
+            self.show_car_manufacturer_cb.setChecked(defaults.show_car_manufacturer)
             self.show_rating_cb.setChecked(defaults.show_rating)
             self.show_pit_lap_cb.setChecked(defaults.show_pit_lap)
             self.show_footer_cb.setChecked(defaults.show_footer)
@@ -1267,6 +1273,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_delta = self.show_delta_cb.isChecked()
             self.parent_overlay.settings.show_best_lap = self.show_best_lap_cb.isChecked()
             self.parent_overlay.settings.show_positions_gained = self.show_positions_gained_cb.isChecked()
+            self.parent_overlay.settings.show_car_manufacturer = self.show_car_manufacturer_cb.isChecked()
             self.parent_overlay.settings.show_rating = self.show_rating_cb.isChecked()
             self.parent_overlay.settings.show_pit_lap = self.show_pit_lap_cb.isChecked()
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()

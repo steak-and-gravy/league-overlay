@@ -29,7 +29,7 @@ from typing import Dict, List, Optional, Tuple, Any, Callable
 import time
 import irsdk
 
-from config.constants import TELEMETRY_CONFIG, TIMING
+from config.constants import TELEMETRY_CONFIG, TIMING, MANUFACTURER_MAP
 from config.logging_config import get_logger
 from core.gap_calculator import GapCalculator
 from core.division_manager import DivisionManager
@@ -70,6 +70,7 @@ class TelemetryProcessor:
         self.current_session_id: Optional[int] = None
         self.current_subsession_id: Optional[int] = None
         self.current_session_type: Optional[str] = None
+        self.previous_session_type: Optional[str] = None
 
         # Lap time cache - preserves lap times even when drivers go inactive
         # Maps car_idx -> (best_lap, last_lap)
@@ -104,6 +105,9 @@ class TelemetryProcessor:
 
         # Clear player identification in position calculator
         self.position_calculator.reset()
+
+        # Clear session type history on full reset
+        self.previous_session_type = None
 
         # Clear lap time cache on session change
         self.lap_time_cache.clear()
@@ -232,6 +236,7 @@ class TelemetryProcessor:
                 f"Session changed: {session_type} "
                 f"(SessionID: {session_id}, SubSessionID: {subsession_id})"
             )
+            self.previous_session_type = self.current_session_type
             self.current_session_id = session_id
             if subsession_id is not None:
                 self.current_subsession_id = subsession_id
@@ -802,6 +807,28 @@ class TelemetryProcessor:
     # RACE DATA BUILDING
     # ═══════════════════════════════════════════════════════════════════════════
 
+    def _extract_manufacturer(self, driver_info: dict) -> tuple:
+        """Extract manufacturer abbreviation and color from driver's CarPath.
+
+        Args:
+            driver_info: Driver info dict from iRacing SDK
+
+        Returns:
+            Tuple of (abbreviation, color_hex)
+        """
+        car_path = driver_info.get('CarPath', '')
+        if not car_path:
+            return ('', '#FFFFFF')
+
+        first_word = car_path.split()[0].lower() if car_path.split() else ''
+
+        if first_word in MANUFACTURER_MAP:
+            return MANUFACTURER_MAP[first_word]
+
+        # Fallback: use first 3 chars uppercase
+        abbrev = first_word[:3].upper() if first_word else ''
+        return (abbrev, '#FFFFFF')
+
     def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], interval: str, gap_to_leader: str, division_interval: str, division_gap_to_leader: str, display_position: int, division_color: str, division_name: Optional[str], delta: str = "--", last_lap_time: float = 0.0, best_lap_time: float = 0.0, starting_position: int = 0, irating: int = 0, lic_level: int = 0, lic_sublevel: int = 0) -> DriverState:
         """Build a single race data entry for display.
 
@@ -858,6 +885,9 @@ class TelemetryProcessor:
             if snapshot and snapshot.pit_lap:
                 pit_lap_display = snapshot.pit_lap
 
+        # Extract manufacturer info
+        mfr_abbrev, mfr_color = self._extract_manufacturer(driver_info)
+
         return DriverState(
             car_idx=car_idx,
             driver_info=driver_info,
@@ -877,6 +907,8 @@ class TelemetryProcessor:
             best_lap_time=best_lap_time,
             starting_position=starting_position,
             positions_gained=positions_gained_display,
+            car_manufacturer=mfr_abbrev,
+            car_manufacturer_color=mfr_color,
             irating=irating_display,
             safety_rating=safety_rating_display,
             combined_rating=combined_rating_display,
@@ -932,6 +964,8 @@ class TelemetryProcessor:
                 division_name = self.division_manager.get_driver_division(driver_info)
                 division_color = self.division_manager.get_division_color(division_name) if division_name else "#FFFFFF"
 
+                mfr_abbrev, mfr_color = self._extract_manufacturer(driver_info)
+
                 driver_state = DriverState(
                     car_idx=car_idx,
                     driver_info=driver_info,
@@ -943,6 +977,8 @@ class TelemetryProcessor:
                     is_disconnected=False,
                     pit_lap=snapshot_pit_lap,
                     is_towing=snapshot_is_towing,
+                    car_manufacturer=mfr_abbrev,
+                    car_manufacturer_color=mfr_color,
                 )
 
                 self.race_state_tracker.update_snapshot(car_idx, driver_state)

@@ -52,6 +52,7 @@ class ColumnLayout:
     """Column stretch factors for driver list."""
     POS: int = 6
     POSITIONS_GAINED: int = 6
+    CAR_MANUFACTURER: int = 5  # Small column for manufacturer badge
     DIV_POS: int = 6
     CAR_NUM: int = 6
     DRIVER_NAME: int = 25
@@ -71,6 +72,7 @@ class ColumnMinWidths:
     """Minimum pixel widths for columns to prevent misalignment at small window sizes."""
     POS: int = 25
     POSITIONS_GAINED: int = 30
+    CAR_MANUFACTURER: int = 30
     DIV_POS: int = 35
     CAR_NUM: int = 35
     DRIVER_NAME: int = 60
@@ -207,6 +209,37 @@ class TelemetryConfig:
     FLAG_RANDOM_WAVING: int = 0x00002000
     FLAG_CAUTION: int = 0x00004000           # Full Course Yellow
     FLAG_CAUTION_WAVING: int = 0x00008000    # FCY being established
+
+
+MANUFACTURER_MAP = {
+    'ferrari': ('FER', '#DC0000'),
+    'porsche': ('POR', '#C0C0C0'),
+    'bmw': ('BMW', '#1C69D4'),
+    'mercedes': ('MER', '#00D2BE'),
+    'lamborghini': ('LAM', '#DAA520'),
+    'audi': ('AUD', '#BB0A30'),
+    'mclaren': ('MCL', '#FF8700'),
+    'aston': ('AMR', '#006F62'),
+    'ford': ('FRD', '#003399'),
+    'chevrolet': ('CHV', '#D4AF37'),
+    'toyota': ('TOY', '#EB0A1E'),
+    'honda': ('HND', '#CC0000'),
+    'nissan': ('NIS', '#C3002F'),
+    'hyundai': ('HYU', '#002C5F'),
+    'cadillac': ('CAD', '#A69461'),
+    'acura': ('ACU', '#1B1B1B'),
+    'mazda': ('MAZ', '#910000'),
+    'lotus': ('LOT', '#FFB800'),
+    'dallara': ('DAL', '#1E3A5F'),
+    'ligier': ('LIG', '#003DA5'),
+    'riley': ('RIL', '#2E4057'),
+    'radical': ('RAD', '#FF4500'),
+    'skip': ('SKP', '#4169E1'),
+    'spec': ('SPC', '#228B22'),
+    'street': ('STK', '#696969'),
+    'supercars': ('V8S', '#FFD700'),
+    'global': ('GMZ', '#FF6347'),
+}
 
 
 # Global configuration instances

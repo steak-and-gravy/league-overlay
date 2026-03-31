@@ -26,7 +26,7 @@ class AppSettings:
     opacity: float = 0.5
     font_size: str = "Medium"
     row_color_style: str = "Default"
-    highlight: float = 0.25
+    highlight: float = 0.45
 
     # Behavior
     refresh_rate: float = 1.0
@@ -41,6 +41,7 @@ class AppSettings:
     show_delta: bool = False
     show_best_lap: bool = False
     show_positions_gained: bool = False
+    show_car_manufacturer: bool = False  # Show car manufacturer badge column
     show_rating: bool = False  # Combined iRating + Safety Rating column
     show_pit_lap: bool = False  # Combined Last Pit + Out Lap column
     show_footer: bool = False  # Show footer with track temp, incidents, and SoF
@@ -180,6 +181,7 @@ class SettingsManager:
                 'show_delta': settings.show_delta,
                 'show_best_lap': settings.show_best_lap,
                 'show_positions_gained': settings.show_positions_gained,
+                'show_car_manufacturer': settings.show_car_manufacturer,
                 'show_rating': settings.show_rating,
                 'show_pit_lap': settings.show_pit_lap,
                 'show_footer': settings.show_footer,
@@ -240,6 +242,7 @@ class SettingsManager:
             'show_delta': settings.show_delta,
             'show_best_lap': settings.show_best_lap,
             'show_positions_gained': settings.show_positions_gained,
+            'show_car_manufacturer': settings.show_car_manufacturer,
             'show_rating': settings.show_rating,
             'show_pit_lap': settings.show_pit_lap,
             'show_footer': settings.show_footer,

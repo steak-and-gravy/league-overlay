@@ -128,6 +128,12 @@ class DriverState:
     positions_gained: str = ""
     """Formatted positions gained/lost for display (e.g., "↑5", "↓3", "—")"""
 
+    car_manufacturer: str = ""
+    """Manufacturer abbreviation for display (e.g., 'FER', 'POR', 'BMW')"""
+
+    car_manufacturer_color: str = "#FFFFFF"
+    """Color for the manufacturer badge"""
+
     irating: str = ""
     """Formatted iRating for display (e.g., "6.0k", "1.5k", "0.8k")"""
 

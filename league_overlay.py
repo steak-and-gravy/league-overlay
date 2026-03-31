@@ -261,7 +261,7 @@ class LeagueOverlay(QMainWindow):
 
     def create_gradient_background(self, color_hex):
         """Create a horizontal gradient that creates a subtle "glow" effect for player row."""
-        tinted = self.blend_color_with_black(color_hex, 0.25)
+        tinted = self.blend_color_with_black(color_hex, self.settings.highlight)
         return f"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {tinted}, stop:0.5 #1a1a1a, stop:1 {tinted})"
     
     def update_all_backgrounds(self):
@@ -683,7 +683,7 @@ class LeagueOverlay(QMainWindow):
             self.header_layout.setColumnStretch(col_idx, 0)
 
         # Build column configuration based on settings
-        # Column order: Pos | [+/-] | D-Pos | Driver | [Rating] | Car# | [Gap] | [D-Gap] | [Int] | [D-Int] | [Best] | [Last] | [Delta] | [Pit]
+        # Column order: Pos | [+/-] | [Mfr] | D-Pos | Driver | [Rating] | Car# | [Gap] | [D-Gap] | [Int] | [D-Int] | [Best] | [Last] | [Delta] | [Pit]
         # Columns in brackets are optional
 
         headers = ["Pos"]
@@ -693,6 +693,11 @@ class LeagueOverlay(QMainWindow):
         if self.settings.show_positions_gained:
             headers.append("+/-")
             stretches.append(COLUMN_LAYOUT.POSITIONS_GAINED)
+
+        # Optional: Car Manufacturer
+        if self.settings.show_car_manufacturer:
+            headers.append("Mfr")
+            stretches.append(COLUMN_LAYOUT.CAR_MANUFACTURER)
 
         # D-Pos (always shown)
         headers.append("D-Pos")
@@ -759,6 +764,7 @@ class LeagueOverlay(QMainWindow):
         min_width_map = {
             "Pos": COLUMN_MIN_WIDTHS.POS,
             "+/-": COLUMN_MIN_WIDTHS.POSITIONS_GAINED,
+            "Mfr": COLUMN_MIN_WIDTHS.CAR_MANUFACTURER,
             "D-Pos": COLUMN_MIN_WIDTHS.DIV_POS,
             "Driver": COLUMN_MIN_WIDTHS.DRIVER_NAME,
             "Rating": COLUMN_MIN_WIDTHS.RATING,
@@ -1218,8 +1224,19 @@ class LeagueOverlay(QMainWindow):
 
         # Clear old data on session change (only if we have a valid session)
         if session_changed and self.current_session_id is not None:
-            self.race_data = []
-            self._last_emitted_data = []  # Reset change tracking on session change
+            # Don't clear standings when transitioning from qualifying to race
+            # so that starting position data displays correctly
+            prev_type = self.telemetry_processor.previous_session_type
+            curr_type = self.telemetry_processor.current_session_type
+            is_qual_to_race = (
+                prev_type is not None
+                and prev_type.lower() == 'qualifying'
+                and curr_type is not None
+                and curr_type.lower() == 'race'
+            )
+            if not is_qual_to_race:
+                self.race_data = []
+                self._last_emitted_data = []  # Reset change tracking on session change
             # Note: Division filter state is intentionally preserved across session changes
 
         # Update race data and player info

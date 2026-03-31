@@ -59,7 +59,7 @@ class DriverRowRenderer:
         layout.setSpacing(styling['layout_spacing'])
 
         # Build column configuration based on settings
-        # Column order: Pos | [+/-] | D-Pos | Driver | [Rating] | Car# | Gap | Int | [Best] | [Last] | [Delta] | [Pit]
+        # Column order: Pos | [+/-] | [Mfr] | D-Pos | Driver | [Rating] | Car# | Gap | Int | [Best] | [Last] | [Delta] | [Pit]
         # Columns in brackets are optional
 
         # Start with base columns
@@ -68,6 +68,7 @@ class DriverRowRenderer:
 
         # Track column indices for optional columns
         positions_gained_col = None
+        manufacturer_col = None
         div_pos_col = None
         name_col = None
         rating_col = None
@@ -85,6 +86,12 @@ class DriverRowRenderer:
         if self.parent.settings.show_positions_gained:
             stretches.append(COLUMN_LAYOUT.POSITIONS_GAINED)
             positions_gained_col = current_col
+            current_col += 1
+
+        # Optional: Car Manufacturer
+        if self.parent.settings.show_car_manufacturer:
+            stretches.append(COLUMN_LAYOUT.CAR_MANUFACTURER)
+            manufacturer_col = current_col
             current_col += 1
 
         # D-Pos (always shown)
@@ -169,6 +176,10 @@ class DriverRowRenderer:
         # Optional: Positions Gained
         if positions_gained_col is not None:
             self._create_positions_gained_label(layout, driver, gap_color, label_bg, label_border, font_weight, positions_gained_col)
+
+        # Optional: Car Manufacturer
+        if manufacturer_col is not None:
+            self._create_manufacturer_label(layout, driver, label_bg, label_border, font_weight, manufacturer_col)
 
         # Always show: Division Position
         self._create_division_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, div_pos_col)
@@ -557,6 +568,29 @@ class DriverRowRenderer:
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(positions_gained_label, 0, column)
+
+    def _create_manufacturer_label(self, layout: QGridLayout, driver: DriverState,
+                                   label_bg: str, label_border: str, font_weight: str, column: int) -> None:
+        """Create manufacturer abbreviation badge label."""
+        mfr_label = QLabel(driver.car_manufacturer)
+        mfr_color = driver.car_manufacturer_color
+
+        mfr_label.setStyleSheet(f"""
+            QLabel {{
+                color: {mfr_color};
+                background-color: {label_bg};
+                font-size: {self.parent.get_font_size('data')};
+                font-weight: bold;
+                {label_border}
+            }}
+        """)
+        mfr_label.setAlignment(Qt.AlignCenter)
+        mfr_label.setMinimumWidth(COLUMN_MIN_WIDTHS.CAR_MANUFACTURER)
+        mfr_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        mfr_label.customContextMenuRequested.connect(
+            lambda pos, d=driver: self.parent.show_context_menu(d)
+        )
+        layout.addWidget(mfr_label, 0, column)
 
     def _create_combined_rating_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                        label_bg: str, label_border: str, font_weight: str, column: int) -> None:
