@@ -57,9 +57,9 @@ class ColumnLayout:
     CAR_NUM: int = 6
     DRIVER_NAME: int = 25
     GAP: int = 9  # Gap to overall leader
-    DIV_GAP: int = 9  # Gap to division leader (D-Gap)
+    DIV_GAP: int = 9  # Gap to division leader (C-Gap)
     INTERVAL: int = 9  # Interval to car ahead (overall)
-    DIV_INTERVAL: int = 9  # Interval to car ahead in division (D-Int)
+    DIV_INTERVAL: int = 9  # Interval to car ahead in division (C-Int)
     BEST_LAP: int = 9
     DELTA: int = 6
     LAST_LAP: int = 9
@@ -77,9 +77,9 @@ class ColumnMinWidths:
     CAR_NUM: int = 35
     DRIVER_NAME: int = 60
     GAP: int = 50  # Gap to overall leader
-    DIV_GAP: int = 50  # Gap to division leader (D-Gap)
+    DIV_GAP: int = 50  # Gap to division leader (C-Gap)
     INTERVAL: int = 50  # Interval to car ahead (overall)
-    DIV_INTERVAL: int = 50  # Interval to car ahead in division (D-Int)
+    DIV_INTERVAL: int = 50  # Interval to car ahead in division (C-Int)
     BEST_LAP: int = 55
     DELTA: int = 35
     LAST_LAP: int = 55
@@ -165,7 +165,7 @@ class UIConfig:
         if self.DEFAULT_COLORS is None:
             object.__setattr__(self, 'DEFAULT_COLORS', {
                 "Pro": "#FF8C00",
-                "ProAm": "#fe00ff",
+                "ProAm": "#FE00FF",
                 "Am": "#45B3E0",
                 "Rookie": "#FF2000",
                 "Default": "#FFFFFF"

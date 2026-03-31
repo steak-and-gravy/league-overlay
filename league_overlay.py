@@ -683,7 +683,7 @@ class LeagueOverlay(QMainWindow):
             self.header_layout.setColumnStretch(col_idx, 0)
 
         # Build column configuration based on settings
-        # Column order: Pos | [+/-] | [Mfr] | D-Pos | Driver | [Rating] | Car# | [Gap] | [D-Gap] | [Int] | [D-Int] | [Best] | [Last] | [Delta] | [Pit]
+        # Column order: Pos | [+/-] | [Mfr] | C-Pos | Driver | [Rating] | Car# | [Gap] | [C-Gap] | [Int] | [C-Int] | [Best] | [Last] | [Delta] | [Pit]
         # Columns in brackets are optional
 
         headers = ["Pos"]
@@ -699,8 +699,8 @@ class LeagueOverlay(QMainWindow):
             headers.append("Mfr")
             stretches.append(COLUMN_LAYOUT.CAR_MANUFACTURER)
 
-        # D-Pos (always shown)
-        headers.append("D-Pos")
+        # C-Pos (always shown)
+        headers.append("C-Pos")
         stretches.append(COLUMN_LAYOUT.DIV_POS)
 
         # Driver (always shown)
@@ -723,7 +723,7 @@ class LeagueOverlay(QMainWindow):
 
         # Gap to division leader (optional)
         if self.settings.show_division_gap:
-            headers.append("D-Gap")
+            headers.append("C-Gap")
             stretches.append(COLUMN_LAYOUT.DIV_GAP)
 
         # Interval to car ahead overall (optional)
@@ -733,7 +733,7 @@ class LeagueOverlay(QMainWindow):
 
         # Interval to car ahead in division (optional)
         if self.settings.show_division_interval:
-            headers.append("D-Int")
+            headers.append("C-Int")
             stretches.append(COLUMN_LAYOUT.DIV_INTERVAL)
 
         # Optional: Best Lap
@@ -765,14 +765,14 @@ class LeagueOverlay(QMainWindow):
             "Pos": COLUMN_MIN_WIDTHS.POS,
             "+/-": COLUMN_MIN_WIDTHS.POSITIONS_GAINED,
             "Mfr": COLUMN_MIN_WIDTHS.CAR_MANUFACTURER,
-            "D-Pos": COLUMN_MIN_WIDTHS.DIV_POS,
+            "C-Pos": COLUMN_MIN_WIDTHS.DIV_POS,
             "Driver": COLUMN_MIN_WIDTHS.DRIVER_NAME,
             "Rating": COLUMN_MIN_WIDTHS.RATING,
             "Car#": COLUMN_MIN_WIDTHS.CAR_NUM,
             "Gap": COLUMN_MIN_WIDTHS.GAP,
-            "D-Gap": COLUMN_MIN_WIDTHS.DIV_GAP,
+            "C-Gap": COLUMN_MIN_WIDTHS.DIV_GAP,
             "Int": COLUMN_MIN_WIDTHS.INTERVAL,
-            "D-Int": COLUMN_MIN_WIDTHS.DIV_INTERVAL,
+            "C-Int": COLUMN_MIN_WIDTHS.DIV_INTERVAL,
             "Best Lap": COLUMN_MIN_WIDTHS.BEST_LAP,
             "Last Lap": COLUMN_MIN_WIDTHS.LAST_LAP,
             "Delta": COLUMN_MIN_WIDTHS.DELTA,
@@ -798,11 +798,11 @@ class LeagueOverlay(QMainWindow):
             # Add tooltips for gap and interval headers
             if header == "Gap":
                 label.setToolTip("Gap to overall leader")
-            elif header == "D-Gap":
+            elif header == "C-Gap":
                 label.setToolTip("Gap to division leader")
             elif header == "Int":
                 label.setToolTip("Interval to car ahead in overall standings")
-            elif header == "D-Int":
+            elif header == "C-Int":
                 label.setToolTip("Interval to car ahead in your division")
 
             # Set same minimum widths as detail rows for consistent column sizing

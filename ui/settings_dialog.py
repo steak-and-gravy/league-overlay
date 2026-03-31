@@ -159,7 +159,7 @@ class SettingsDialog(QDialog):
         colors_layout = QVBoxLayout(colors_group)
         colors_layout.setSpacing(8)
 
-        colors_title = QLabel("Division Colors")
+        colors_title = QLabel("Class Colors")
         colors_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
         colors_layout.addWidget(colors_title)
 
@@ -509,7 +509,7 @@ class SettingsDialog(QDialog):
         window_layout.addLayout(checkbox_row3)
 
         # Column visibility checkboxes - ordered to match overlay column order:
-        # Pos | [+/-] | D-Pos | Driver | [Rating] | Car# | [Gap] | [D-Gap] | [Int] | [D-Int] | [Best] | [Last] | [Delta] | [Pit]
+        # Pos | [+/-] | C-Pos | Driver | [Rating] | Car# | [Gap] | [C-Gap] | [Int] | [C-Int] | [Best] | [Last] | [Delta] | [Pit]
 
         # Row 5: Positions gained and Manufacturer
         checkbox_row4 = QHBoxLayout()
@@ -548,10 +548,10 @@ class SettingsDialog(QDialog):
         checkbox_row6 = QHBoxLayout()
         checkbox_row6.setSpacing(10)
 
-        self.show_division_gap_cb = QCheckBox("Show Div gap")
+        self.show_division_gap_cb = QCheckBox("Show Class gap")
         self.show_division_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_division_gap_cb.setChecked(self.parent_overlay.settings.show_division_gap)
-        self.show_division_gap_cb.setToolTip("Gap to division leader")
+        self.show_division_gap_cb.setToolTip("Gap to class leader")
         checkbox_row6.addWidget(self.show_division_gap_cb)
 
         self.show_interval_cb = QCheckBox("Show interval")
@@ -566,10 +566,10 @@ class SettingsDialog(QDialog):
         checkbox_row7 = QHBoxLayout()
         checkbox_row7.setSpacing(10)
 
-        self.show_division_interval_cb = QCheckBox("Show Div interval")
+        self.show_division_interval_cb = QCheckBox("Show Class interval")
         self.show_division_interval_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_division_interval_cb.setChecked(self.parent_overlay.settings.show_division_interval)
-        self.show_division_interval_cb.setToolTip("Interval to car ahead in your division")
+        self.show_division_interval_cb.setToolTip("Interval to car ahead in your class")
         checkbox_row7.addWidget(self.show_division_interval_cb)
 
         self.show_best_lap_cb = QCheckBox("Show best lap")

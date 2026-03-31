@@ -59,7 +59,7 @@ class DriverRowRenderer:
         layout.setSpacing(styling['layout_spacing'])
 
         # Build column configuration based on settings
-        # Column order: Pos | [+/-] | [Mfr] | D-Pos | Driver | [Rating] | Car# | Gap | Int | [Best] | [Last] | [Delta] | [Pit]
+        # Column order: Pos | [+/-] | [Mfr] | C-Pos | Driver | [Rating] | Car# | Gap | Int | [Best] | [Last] | [Delta] | [Pit]
         # Columns in brackets are optional
 
         # Start with base columns
@@ -94,7 +94,7 @@ class DriverRowRenderer:
             manufacturer_col = current_col
             current_col += 1
 
-        # D-Pos (always shown)
+        # C-Pos (always shown)
         stretches.append(COLUMN_LAYOUT.DIV_POS)
         div_pos_col = current_col
         current_col += 1
@@ -121,7 +121,7 @@ class DriverRowRenderer:
             gap_col = current_col
             current_col += 1
 
-        # Optional: Gap to division leader (D-Gap)
+        # Optional: Gap to division leader (C-Gap)
         if self.parent.settings.show_division_gap:
             stretches.append(COLUMN_LAYOUT.DIV_GAP)
             div_gap_col = current_col
@@ -133,7 +133,7 @@ class DriverRowRenderer:
             interval_col = current_col
             current_col += 1
 
-        # Optional: Interval to car ahead in division (D-Int)
+        # Optional: Interval to car ahead in division (C-Int)
         if self.parent.settings.show_division_interval:
             stretches.append(COLUMN_LAYOUT.DIV_INTERVAL)
             div_interval_col = current_col
@@ -198,7 +198,7 @@ class DriverRowRenderer:
         if gap_col is not None:
             self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, gap_col)
 
-        # Gap to division leader (D-Gap)
+        # Gap to division leader (C-Gap)
         if div_gap_col is not None:
             self._create_division_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, div_gap_col)
 
@@ -206,7 +206,7 @@ class DriverRowRenderer:
         if interval_col is not None:
             self._create_interval_label(layout, driver, gap_color, label_bg, label_border, font_weight, interval_col)
 
-        # Interval to car ahead in division (D-Int)
+        # Interval to car ahead in division (C-Int)
         if div_interval_col is not None:
             self._create_division_interval_label(layout, driver, gap_color, label_bg, label_border, font_weight, div_interval_col)
 
@@ -364,7 +364,7 @@ class DriverRowRenderer:
 
     def _create_division_gap_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                                    label_bg: str, label_border: str, font_weight: str, column: int = 5) -> None:
-        """Create gap to division leader label (D-Gap)."""
+        """Create gap to division leader label (C-Gap)."""
         div_gap_label = QLabel(driver.division_gap_to_leader)
         div_gap_label.setStyleSheet(f"""
             QLabel {{
@@ -406,7 +406,7 @@ class DriverRowRenderer:
 
     def _create_division_interval_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                                         label_bg: str, label_border: str, font_weight: str, column: int = 6) -> None:
-        """Create interval to car ahead in division label (D-Int)."""
+        """Create interval to car ahead in division label (C-Int)."""
         div_interval_label = QLabel(driver.division_interval)
         div_interval_label.setStyleSheet(f"""
             QLabel {{

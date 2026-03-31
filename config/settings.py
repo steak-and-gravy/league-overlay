@@ -26,7 +26,7 @@ class AppSettings:
     opacity: float = 0.8
     font_size: str = "Medium"
     row_color_style: str = "Default"
-    highlight: float = 0.35
+    highlight: float = 0.25
 
     # Behavior
     refresh_rate: float = 1.0
@@ -34,9 +34,9 @@ class AppSettings:
     center_drivers: bool = False
     bold_drivers: bool = True
     show_gap: bool = False  # Show Gap to overall leader column
-    show_division_gap: bool = False  # Show Gap to division leader column (D-Gap)
+    show_division_gap: bool = False  # Show Gap to division leader column (C-Gap)
     show_interval: bool = True  # Show Interval to car ahead (overall) column
-    show_division_interval: bool = False  # Show Interval to car ahead in division column (D-Int)
+    show_division_interval: bool = False  # Show Interval to car ahead in division column (C-Int)
     show_last_lap: bool = False
     show_delta: bool = False
     show_best_lap: bool = False
@@ -105,8 +105,8 @@ class SettingsManager:
             # New: show_division_gap and show_division_interval are separate column toggles
             #
             # Migration preserves visual state:
-            # - show_division=True meant columns were division-scoped → map to D-Gap/D-Int, disable overall
-            # - show_division=False meant columns were overall-scoped → keep Gap/Int, don't enable D-Gap/D-Int
+            # - show_division=True meant columns were division-scoped → map to C-Gap/C-Int, disable overall
+            # - show_division=False meant columns were overall-scoped → keep Gap/Int, don't enable C-Gap/C-Int
             if 'show_division' in data:
                 old_show_division = data.pop('show_division')
                 old_show_gap = data.get('show_gap', False)
@@ -126,14 +126,14 @@ class SettingsManager:
                         data['show_gap'] = False
                     if old_show_interval:
                         data['show_interval'] = False
-                    logger.info(f"Migrated show_division=True: D-Gap={data.get('show_division_gap')}, D-Int={data.get('show_division_interval')}, Gap=False, Int=False")
+                    logger.info(f"Migrated show_division=True: C-Gap={data.get('show_division_gap')}, C-Int={data.get('show_division_interval')}, Gap=False, Int=False")
                 else:
                     # Division mode was off: old columns were overall-scoped
                     if 'show_division_gap' not in data:
                         data['show_division_gap'] = False
                     if 'show_division_interval' not in data:
                         data['show_division_interval'] = False
-                    logger.info(f"Migrated show_division=False: Gap={old_show_gap}, Int={old_show_interval}, D-Gap=False, D-Int=False")
+                    logger.info(f"Migrated show_division=False: Gap={old_show_gap}, Int={old_show_interval}, C-Gap=False, C-Int=False")
 
             # Validate and coerce all fields using validator
             validated_dict = self.validator.validate_and_coerce(data)
