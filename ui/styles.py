@@ -203,8 +203,8 @@ class DefaultColorStyle(ColorStyleStrategy):
         delta_slower_color = parent.settings.slower_color
         label_bg = parent.get_bg_color('#000000')
         label_border = ''
-        position_bg = parent.get_bg_color('#FF0000')
-        position_color = "white"
+        position_bg = parent.get_bg_color('#FFFFFF')
+        position_color = "#000000"
         division_position_bg = parent.get_bg_color(driver.division_color)
         division_position_color = "white"
         division_position_border = f"border: 2px solid {driver.division_color};"

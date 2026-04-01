@@ -38,8 +38,8 @@ def _make_parent():
     )
 
 
-def _make_driver(car_path: str, manufacturer: str = "MFR", positions_gained: str = "") -> DriverState:
-    return DriverState(
+def _make_driver(car_path: str, manufacturer: str = "MFR", positions_gained: str = "", **overrides) -> DriverState:
+    driver = DriverState(
         car_idx=5,
         driver_info={
             "UserName": "Logo Driver",
@@ -51,6 +51,9 @@ def _make_driver(car_path: str, manufacturer: str = "MFR", positions_gained: str
         car_manufacturer=manufacturer,
         positions_gained=positions_gained,
     )
+    for key, value in overrides.items():
+        setattr(driver, key, value)
+    return driver
 
 
 def test_get_manufacturer_logo_path_matches_known_asset():
@@ -119,4 +122,86 @@ def test_create_row_uses_triangle_symbol_for_positions_gained(qapp):
 
     assert positions_label.text() == "▲ 3"
     assert "font-size: calc(9pt + 2pt);" in positions_label.styleSheet()
+    row.deleteLater()
+
+
+def test_create_row_shows_pit_status_in_gap_and_interval_columns(qapp):
+    parent = _make_parent()
+    parent.settings.show_gap = True
+    parent.settings.show_division_gap = True
+    parent.settings.show_interval = True
+    parent.settings.show_division_interval = True
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver(
+        "porsche 911 gt3 r",
+        manufacturer="POR",
+        pit_lap="TOW",
+        gap_to_leader="5.4",
+        division_gap_to_leader="1.2",
+        interval="0.8",
+        division_interval="0.4",
+    )
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+
+    assert layout.itemAtPosition(0, 5).widget().text() == "TOW"
+    assert layout.itemAtPosition(0, 6).widget().text() == "TOW"
+    assert layout.itemAtPosition(0, 7).widget().text() == "TOW"
+    assert layout.itemAtPosition(0, 8).widget().text() == "TOW"
+    assert "#FF3B30" in layout.itemAtPosition(0, 5).widget().styleSheet()
+    row.deleteLater()
+
+
+def test_create_row_shows_pit_status_in_gap_and_interval_columns_for_pit(qapp):
+    parent = _make_parent()
+    parent.settings.show_gap = True
+    parent.settings.show_division_gap = True
+    parent.settings.show_interval = True
+    parent.settings.show_division_interval = True
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver(
+        "porsche 911 gt3 r",
+        manufacturer="POR",
+        pit_lap="PIT",
+        gap_to_leader="5.4",
+        division_gap_to_leader="1.2",
+        interval="0.8",
+        division_interval="0.4",
+    )
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+
+    assert layout.itemAtPosition(0, 5).widget().text() == "PIT"
+    assert layout.itemAtPosition(0, 6).widget().text() == "PIT"
+    assert layout.itemAtPosition(0, 7).widget().text() == "PIT"
+    assert layout.itemAtPosition(0, 8).widget().text() == "PIT"
+    row.deleteLater()
+
+
+def test_create_row_restores_gap_and_interval_values_when_not_in_pit(qapp):
+    parent = _make_parent()
+    parent.settings.show_gap = True
+    parent.settings.show_division_gap = True
+    parent.settings.show_interval = True
+    parent.settings.show_division_interval = True
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver(
+        "porsche 911 gt3 r",
+        manufacturer="POR",
+        pit_lap="OUT",
+        gap_to_leader="5.4",
+        division_gap_to_leader="1.2",
+        interval="0.8",
+        division_interval="0.4",
+    )
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+
+    assert layout.itemAtPosition(0, 5).widget().text() == "5.4"
+    assert layout.itemAtPosition(0, 6).widget().text() == "1.2"
+    assert layout.itemAtPosition(0, 7).widget().text() == "0.8"
+    assert layout.itemAtPosition(0, 8).widget().text() == "0.4"
     row.deleteLater()

@@ -89,6 +89,8 @@ def test_default_style_uses_black_car_number_background_with_division_outline():
     assert styling["car_number_border"] == "border: 2px solid #00AAFF;"
     assert styling["car_number_color"] == "white"
     assert styling["division_position_bg"] == "#00AAFF"
+    assert styling["position_bg"] == "#FFFFFF"
+    assert styling["position_color"] == "#000000"
 
 
 def test_default_style_uses_black_division_position_with_division_outline():

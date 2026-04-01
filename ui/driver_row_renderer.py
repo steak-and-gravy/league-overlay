@@ -411,10 +411,11 @@ class DriverRowRenderer:
     def _create_gap_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                          label_bg: str, label_border: str, font_weight: str, column: int = 4) -> None:
         """Create gap to overall leader label."""
-        gap_label = QLabel(driver.gap_to_leader)
+        gap_text, gap_display_color = self._get_gap_display(driver, driver.gap_to_leader, gap_color)
+        gap_label = QLabel(gap_text)
         gap_label.setStyleSheet(f"""
             QLabel {{
-                color: {gap_color};
+                color: {gap_display_color};
                 background-color: {label_bg};
                 font-size: {self.parent.get_font_size('data')};
                 font-weight: {font_weight};
@@ -432,10 +433,15 @@ class DriverRowRenderer:
     def _create_division_gap_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                                    label_bg: str, label_border: str, font_weight: str, column: int = 5) -> None:
         """Create gap to division leader label (C-Gap)."""
-        div_gap_label = QLabel(driver.division_gap_to_leader)
+        div_gap_text, div_gap_display_color = self._get_gap_display(
+            driver,
+            driver.division_gap_to_leader,
+            gap_color
+        )
+        div_gap_label = QLabel(div_gap_text)
         div_gap_label.setStyleSheet(f"""
             QLabel {{
-                color: {gap_color};
+                color: {div_gap_display_color};
                 background-color: {label_bg};
                 font-size: {self.parent.get_font_size('data')};
                 font-weight: {font_weight};
@@ -453,10 +459,11 @@ class DriverRowRenderer:
     def _create_interval_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                               label_bg: str, label_border: str, font_weight: str, column: int = 5) -> None:
         """Create interval to car ahead (overall) label."""
-        interval_label = QLabel(driver.interval)
+        interval_text, interval_display_color = self._get_gap_display(driver, driver.interval, gap_color)
+        interval_label = QLabel(interval_text)
         interval_label.setStyleSheet(f"""
             QLabel {{
-                color: {gap_color};
+                color: {interval_display_color};
                 background-color: {label_bg};
                 font-size: {self.parent.get_font_size('data')};
                 font-weight: {font_weight};
@@ -474,10 +481,15 @@ class DriverRowRenderer:
     def _create_division_interval_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                                         label_bg: str, label_border: str, font_weight: str, column: int = 6) -> None:
         """Create interval to car ahead in division label (C-Int)."""
-        div_interval_label = QLabel(driver.division_interval)
+        div_interval_text, div_interval_display_color = self._get_gap_display(
+            driver,
+            driver.division_interval,
+            gap_color
+        )
+        div_interval_label = QLabel(div_interval_text)
         div_interval_label.setStyleSheet(f"""
             QLabel {{
-                color: {gap_color};
+                color: {div_interval_display_color};
                 background-color: {label_bg};
                 font-size: {self.parent.get_font_size('data')};
                 font-weight: {font_weight};
@@ -532,6 +544,15 @@ class DriverRowRenderer:
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
         layout.addWidget(delta_label, 0, column)
+
+    @staticmethod
+    def _get_gap_display(driver: DriverState, default_text: str, default_color: str) -> tuple[str, str]:
+        """Return display text/color for gap-style columns, including pit/tow overrides."""
+        if driver.pit_lap == "TOW":
+            return "TOW", "#FF3B30"
+        if driver.pit_lap == "PIT":
+            return "PIT", default_color
+        return default_text, default_color
 
     def _create_last_lap_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                label_bg: str, label_border: str, font_weight: str, column: int = 5) -> None:
