@@ -1,7 +1,7 @@
 """Configuration constants for the League Overlay application."""
 
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, List, NamedTuple
 
 
 # Application version
@@ -42,8 +42,8 @@ class UIDimensions:
     TITLE_BAR_HEIGHT: int = 30
     SIZE_GRIP_SIZE: int = 20
     CLOSE_BUTTON_WIDTH: int = 25
-    SETTINGS_DIALOG_WIDTH: int = 630
-    SETTINGS_DIALOG_HEIGHT: int = 680
+    SETTINGS_DIALOG_WIDTH: int = 660
+    SETTINGS_DIALOG_HEIGHT: int = 740
     BROADCAST_HEADER_MIN_HEIGHT: int = 60
 
 
@@ -85,6 +85,47 @@ class ColumnMinWidths:
     LAST_LAP: int = 55
     RATING: int = 55  # Combined iRating + Safety Rating column
     PIT_LAP: int = 35  # Combined Last Pit + Out Lap column
+
+
+class ColumnDef(NamedTuple):
+    """Definition of a single overlay column."""
+    id: str                 # Unique identifier (matches settings key without 'show_' prefix)
+    header: str             # Display text in header row
+    stretch: int            # Stretch factor for layout
+    min_width: int          # Minimum pixel width
+    settings_key: str       # AppSettings bool field name ('' = always visible)
+    tooltip: str            # Tooltip text ('' = none)
+    render_method: str      # Method name on DriverRowRenderer (without '_create_' prefix and '_label' suffix)
+
+
+# Authoritative column definitions — order here is the DEFAULT display order.
+# Both create_headers() and create_row() iterate this registry.
+COLUMN_DEFS: List[ColumnDef] = [
+    ColumnDef('pos',              'Overall',  7,  42, '',                       '',                                              'position'),
+    ColumnDef('positions_gained', '+/-',      5,  30, 'show_positions_gained',  '',                                              'positions_gained'),
+    ColumnDef('car_manufacturer', 'Mfr',      4,  30, 'show_car_manufacturer',  '',                                              'manufacturer'),
+    ColumnDef('div_pos',          'Class',    6,  35, '',                       '',                                              'division_position'),
+    ColumnDef('driver_name',      'Driver',  25,  60, '',                       '',                                              'driver_name'),
+    ColumnDef('rating',           'Rating',  14,  55, 'show_rating',            '',                                              'combined_rating'),
+    ColumnDef('car_number',       'Car#',     6,  35, 'show_car_number',        '',                                              'car_number'),
+    ColumnDef('gap',              'Gap',      8,  50, 'show_gap',               'Gap to overall leader',                         'gap'),
+    ColumnDef('div_gap',          'C-Gap',    8,  50, 'show_division_gap',      'Gap to division leader',                        'division_gap'),
+    ColumnDef('interval',         'Int',      8,  50, 'show_interval',          'Interval to car ahead in overall standings',    'interval'),
+    ColumnDef('div_interval',     'C-Int',    8,  50, 'show_division_interval', 'Interval to car ahead in your division',        'division_interval'),
+    ColumnDef('best_lap',         'Best Lap', 9,  55, 'show_best_lap',          '',                                              'best_lap'),
+    ColumnDef('last_lap',         'Last Lap', 9,  55, 'show_last_lap',          '',                                              'last_lap'),
+    ColumnDef('delta',            'Delta',    6,  35, 'show_delta',             '',                                              'delta'),
+    ColumnDef('pit_lap',          'Pit',      5,  35, 'show_pit_lap',           '',                                              'pit_lap'),
+]
+
+# Column ID → ColumnDef lookup
+COLUMN_REGISTRY: Dict[str, ColumnDef] = {c.id: c for c in COLUMN_DEFS}
+
+# Default column order (list of column IDs)
+DEFAULT_COLUMN_ORDER: List[str] = [c.id for c in COLUMN_DEFS]
+
+# Set of all valid column IDs
+VALID_COLUMN_IDS: frozenset = frozenset(DEFAULT_COLUMN_ORDER)
 
 
 @dataclass(frozen=True)

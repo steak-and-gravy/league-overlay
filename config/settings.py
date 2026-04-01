@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List
 
-from .constants import UI_CONFIG, FILE_CONFIG, TELEMETRY_CONFIG, TIMING
+from .constants import UI_CONFIG, FILE_CONFIG, TELEMETRY_CONFIG, TIMING, DEFAULT_COLUMN_ORDER
 from .logging_config import get_logger
 from .settings_validator import SettingsValidator
 
@@ -59,6 +59,9 @@ class AppSettings:
     # Configuration files
     league_config: Optional[str] = None
     recent_local_configs: List[str] = field(default_factory=list)
+
+    # Column display order (list of column IDs)
+    column_order: List[str] = field(default_factory=lambda: list(DEFAULT_COLUMN_ORDER))
 
     # Division colors (loaded from config)
     division_colors: Optional[Dict[str, str]] = None
@@ -195,7 +198,8 @@ class SettingsManager:
                 'row_color_style': settings.row_color_style,
                 'log_level': settings.log_level,
                 'faster_color': settings.faster_color,
-                'slower_color': settings.slower_color
+                'slower_color': settings.slower_color,
+                'column_order': settings.column_order
             }
 
             with open(self.settings_file, 'w') as f:
@@ -257,10 +261,9 @@ class SettingsManager:
             'row_color_style': settings.row_color_style,
             'log_level': settings.log_level,
             'faster_color': settings.faster_color,
-            'slower_color': settings.slower_color
+            'slower_color': settings.slower_color,
+            'column_order': settings.column_order
         }
-
-        # Validate using validator
         validated_dict = self.validator.validate_and_coerce(settings_dict)
 
         # Return new AppSettings with validated values

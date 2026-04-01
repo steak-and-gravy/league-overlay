@@ -7,6 +7,7 @@ from ui.driver_row_renderer import DriverRowRenderer
 
 
 def _make_parent():
+    from config.constants import DEFAULT_COLUMN_ORDER
     settings = SimpleNamespace(
         row_color_style="Default",
         highlight=0.25,
@@ -26,6 +27,7 @@ def _make_parent():
         show_pit_lap=False,
         bold_drivers=False,
         center_drivers=False,
+        column_order=list(DEFAULT_COLUMN_ORDER),
     )
 
     return SimpleNamespace(

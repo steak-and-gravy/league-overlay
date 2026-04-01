@@ -6,9 +6,12 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QWidget, QLabel, QGridLayout, QSizePolicy
 from PySide6.QtCore import Qt
 
-from config.constants import COLUMN_LAYOUT, COLUMN_MIN_WIDTHS
+from config.constants import COLUMN_MIN_WIDTHS, COLUMN_REGISTRY
+from config.logging_config import get_logger
 from core.driver_state import DriverState
 from .styles import DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, DarkColorStyle
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from league_overlay import LeagueOverlay
@@ -97,6 +100,9 @@ class DriverRowRenderer:
     def create_row(self, driver: DriverState) -> QWidget:
         """Create a driver row widget using the configured color style.
 
+        Columns are rendered in the order specified by settings.column_order,
+        with optional columns skipped if their visibility setting is off.
+
         Args:
             driver: DriverState object containing driver information
 
@@ -122,175 +128,61 @@ class DriverRowRenderer:
         layout.setContentsMargins(*styling['layout_margins'])
         layout.setSpacing(styling['layout_spacing'])
 
-        # Build column configuration based on settings
-        # Column order: Pos | [+/-] | [Mfr] | C-Pos | Driver | [Rating] | Car# | Gap | Int | [Best] | [Last] | [Delta] | [Pit]
-        # Columns in brackets are optional
-
-        # Start with base columns
-        stretches = [COLUMN_LAYOUT.POS]
-        current_col = 1
-
-        # Track column indices for optional columns
-        positions_gained_col = None
-        manufacturer_col = None
-        div_pos_col = None
-        name_col = None
-        rating_col = None
-        car_num_col = None
-        gap_col = None
-        div_gap_col = None
-        interval_col = None
-        div_interval_col = None
-        best_lap_col = None
-        last_lap_col = None
-        delta_col = None
-        pit_lap_col = None
-
-        # Optional: Positions Gained
-        if self.parent.settings.show_positions_gained:
-            stretches.append(COLUMN_LAYOUT.POSITIONS_GAINED)
-            positions_gained_col = current_col
-            current_col += 1
-
-        # Optional: Car Manufacturer
-        if self.parent.settings.show_car_manufacturer:
-            stretches.append(COLUMN_LAYOUT.CAR_MANUFACTURER)
-            manufacturer_col = current_col
-            current_col += 1
-
-        # C-Pos (always shown)
-        stretches.append(COLUMN_LAYOUT.DIV_POS)
-        div_pos_col = current_col
-        current_col += 1
-
-        # Driver (always shown)
-        stretches.append(COLUMN_LAYOUT.DRIVER_NAME)
-        name_col = current_col
-        current_col += 1
-
-        # Optional: Combined Rating (iRating + Safety Rating)
-        if self.parent.settings.show_rating:
-            stretches.append(COLUMN_LAYOUT.RATING)
-            rating_col = current_col
-            current_col += 1
-
-        # Optional: Car# (moved to after Rating)
-        if self.parent.settings.show_car_number:
-            stretches.append(COLUMN_LAYOUT.CAR_NUM)
-            car_num_col = current_col
-            current_col += 1
-
-        # Optional: Gap to overall leader
-        if self.parent.settings.show_gap:
-            stretches.append(COLUMN_LAYOUT.GAP)
-            gap_col = current_col
-            current_col += 1
-
-        # Optional: Gap to division leader (C-Gap)
-        if self.parent.settings.show_division_gap:
-            stretches.append(COLUMN_LAYOUT.DIV_GAP)
-            div_gap_col = current_col
-            current_col += 1
-
-        # Optional: Interval to car ahead (overall)
-        if self.parent.settings.show_interval:
-            stretches.append(COLUMN_LAYOUT.INTERVAL)
-            interval_col = current_col
-            current_col += 1
-
-        # Optional: Interval to car ahead in division (C-Int)
-        if self.parent.settings.show_division_interval:
-            stretches.append(COLUMN_LAYOUT.DIV_INTERVAL)
-            div_interval_col = current_col
-            current_col += 1
-
-        # Optional: Best Lap
-        if self.parent.settings.show_best_lap:
-            stretches.append(COLUMN_LAYOUT.BEST_LAP)
-            best_lap_col = current_col
-            current_col += 1
-
-        # Optional: Last Lap
-        if self.parent.settings.show_last_lap:
-            stretches.append(COLUMN_LAYOUT.LAST_LAP)
-            last_lap_col = current_col
-            current_col += 1
-
-        # Optional: Delta
-        if self.parent.settings.show_delta:
-            stretches.append(COLUMN_LAYOUT.DELTA)
-            delta_col = current_col
-            current_col += 1
-
-        # Optional: Pit Lap (combined Last Pit + Out Lap)
-        if self.parent.settings.show_pit_lap:
-            stretches.append(COLUMN_LAYOUT.PIT_LAP)
-            pit_lap_col = current_col
-            current_col += 1
-
-        # Apply column stretches
-        for col_idx, stretch in enumerate(stretches):
-            layout.setColumnStretch(col_idx, stretch)
-
         # Determine font weight
         font_weight = "bold" if driver.is_player or driver.is_spectated or self.parent.settings.bold_drivers else "normal"
 
-        # Create labels with dynamic column positions
-        self._create_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling)
+        # Build visible columns in user-configured order
+        current_col = 0
+        for col_id in self.parent.settings.column_order:
+            col_def = COLUMN_REGISTRY.get(col_id)
+            if col_def is None:
+                continue
 
-        # Optional: Positions Gained
-        if positions_gained_col is not None:
-            self._create_positions_gained_label(layout, driver, gap_color, label_bg, label_border, font_weight, positions_gained_col)
+            # Skip optional columns that are toggled off
+            if col_def.settings_key and not getattr(self.parent.settings, col_def.settings_key, False):
+                continue
 
-        # Optional: Car Manufacturer
-        if manufacturer_col is not None:
-            self._create_manufacturer_label(layout, driver, label_bg, label_border, font_weight, manufacturer_col)
+            layout.setColumnStretch(current_col, col_def.stretch)
 
-        # Always show: Division Position
-        self._create_division_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, div_pos_col)
+            # Dispatch to the appropriate render method
+            render_method = col_def.render_method
+            if render_method == 'position':
+                self._create_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, current_col)
+            elif render_method == 'positions_gained':
+                self._create_positions_gained_label(layout, driver, gap_color, label_bg, label_border, font_weight, current_col)
+            elif render_method == 'manufacturer':
+                self._create_manufacturer_label(layout, driver, label_bg, label_border, font_weight, current_col)
+            elif render_method == 'division_position':
+                self._create_division_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, current_col)
+            elif render_method == 'driver_name':
+                self._create_driver_name_label(layout, driver, text_color, label_bg, label_border, font_weight, current_col)
+            elif render_method == 'combined_rating':
+                self._create_combined_rating_label(layout, driver, text_color, label_bg, label_border, font_weight, current_col)
+            elif render_method == 'car_number':
+                self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, current_col)
+            elif render_method == 'gap':
+                self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, current_col)
+            elif render_method == 'division_gap':
+                self._create_division_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, current_col)
+            elif render_method == 'interval':
+                self._create_interval_label(layout, driver, gap_color, label_bg, label_border, font_weight, current_col)
+            elif render_method == 'division_interval':
+                self._create_division_interval_label(layout, driver, gap_color, label_bg, label_border, font_weight, current_col)
+            elif render_method == 'best_lap':
+                self._create_best_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, current_col)
+            elif render_method == 'last_lap':
+                self._create_last_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, current_col)
+            elif render_method == 'delta':
+                self._create_delta_label(layout, driver, delta_faster_color, delta_slower_color, gap_color, label_bg, label_border, font_weight, current_col)
+            elif render_method == 'pit_lap':
+                self._create_pit_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, current_col)
+            else:
+                # Unknown render method — reset stretch and skip to avoid misalignment
+                layout.setColumnStretch(current_col, 0)
+                logger.warning(f"Unknown column render method '{render_method}' for column '{col_id}'")
+                continue
 
-        # Always show: Driver Name
-        self._create_driver_name_label(layout, driver, text_color, label_bg, label_border, font_weight, name_col)
-
-        # Optional: Combined Rating (iRating + Safety Rating with license color background)
-        if rating_col is not None:
-            self._create_combined_rating_label(layout, driver, text_color, label_bg, label_border, font_weight, rating_col)
-
-        # Optional: Car Number (moved to after Rating)
-        if car_num_col is not None:
-            self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_num_col)
-
-        # Gap to overall leader
-        if gap_col is not None:
-            self._create_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, gap_col)
-
-        # Gap to division leader (C-Gap)
-        if div_gap_col is not None:
-            self._create_division_gap_label(layout, driver, gap_color, label_bg, label_border, font_weight, div_gap_col)
-
-        # Interval to car ahead (overall)
-        if interval_col is not None:
-            self._create_interval_label(layout, driver, gap_color, label_bg, label_border, font_weight, interval_col)
-
-        # Interval to car ahead in division (C-Int)
-        if div_interval_col is not None:
-            self._create_division_interval_label(layout, driver, gap_color, label_bg, label_border, font_weight, div_interval_col)
-
-        # Optional: Best Lap
-        if best_lap_col is not None:
-            self._create_best_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, best_lap_col)
-
-        # Optional: Last Lap
-        if last_lap_col is not None:
-            self._create_last_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, last_lap_col)
-
-        # Optional: Delta
-        if delta_col is not None:
-            self._create_delta_label(layout, driver, delta_faster_color, delta_slower_color, gap_color, label_bg, label_border, font_weight, delta_col)
-
-        # Optional: Pit Lap (combined Last Pit + Out Lap)
-        if pit_lap_col is not None:
-            self._create_pit_lap_label(layout, driver, gap_color, label_bg, label_border, font_weight, pit_lap_col)
+            current_col += 1
 
         # Set context menu for row widget
         row_widget.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -308,7 +200,7 @@ class DriverRowRenderer:
         return container_widget if container_widget else row_widget
 
     def _create_position_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
-                               label_bg: str, label_border: str, font_weight: str, styling: Dict = None) -> None:
+                               label_bg: str, label_border: str, font_weight: str, styling: Dict = None, column: int = 0) -> None:
         """Create position label."""
         # Check for special position styling (for Default style)
         pos_color = styling.get('position_color', text_color) if styling else text_color
@@ -330,7 +222,7 @@ class DriverRowRenderer:
         pos_label.customContextMenuRequested.connect(
             lambda pos, d=driver: self.parent.show_context_menu(d)
         )
-        layout.addWidget(pos_label, 0, 0)
+        layout.addWidget(pos_label, 0, column)
 
     def _create_division_position_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                        label_bg: str, label_border: str, font_weight: str, styling: Dict = None, column: int = 1) -> None:

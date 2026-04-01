@@ -9,7 +9,7 @@ Defaults are extracted from the AppSettings dataclass to ensure a single source 
 
 from dataclasses import fields, MISSING
 from typing import Optional, Any, List, Dict
-from config.constants import TELEMETRY_CONFIG
+from config.constants import TELEMETRY_CONFIG, VALID_COLUMN_IDS, DEFAULT_COLUMN_ORDER
 from config.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -272,6 +272,12 @@ class SettingsValidator:
             data.get('slower_color'),
             default=self.defaults['slower_color'],
             field_name='slower_color'
+        )
+
+        # Column order
+        validated['column_order'] = self.coerce_column_order(
+            data.get('column_order'),
+            field_name='column_order'
         )
 
         return validated
@@ -579,3 +585,52 @@ class SettingsValidator:
             return True
         except ValueError:
             return False
+
+    def coerce_column_order(self, value: Any, field_name: str) -> List[str]:
+        """Validate and coerce column_order to a complete list of valid column IDs.
+
+        Handles: missing value, non-list types, invalid IDs, duplicates, and
+        missing IDs (appended in default order to preserve forward-compatibility
+        when new columns are added).
+
+        Args:
+            value: Raw value from JSON
+            field_name: Name of field (for logging)
+
+        Returns:
+            List of valid column IDs in the user's chosen order
+        """
+        default = list(DEFAULT_COLUMN_ORDER)
+
+        if value is None:
+            return default
+
+        if not isinstance(value, list):
+            logger.warning(
+                f"Field '{field_name}' has invalid type {type(value).__name__}, using default"
+            )
+            return default
+
+        # Filter to valid, non-duplicate IDs while preserving order
+        seen = set()
+        result = []
+        for item in value:
+            if not isinstance(item, str):
+                logger.warning(f"Field '{field_name}' contains non-string item {item}, skipping")
+                continue
+            if item not in VALID_COLUMN_IDS:
+                logger.warning(f"Field '{field_name}' contains unknown column ID '{item}', skipping")
+                continue
+            if item in seen:
+                logger.warning(f"Field '{field_name}' contains duplicate column ID '{item}', skipping")
+                continue
+            seen.add(item)
+            result.append(item)
+
+        # Append any missing IDs in their default order (handles newly added columns)
+        for col_id in DEFAULT_COLUMN_ORDER:
+            if col_id not in seen:
+                logger.info(f"Field '{field_name}' missing column '{col_id}', appending in default position")
+                result.append(col_id)
+
+        return result

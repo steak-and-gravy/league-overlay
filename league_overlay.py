@@ -24,7 +24,8 @@ import irsdk
 # Import from modular structure
 from config.constants import (
     UI_CONFIG, FILE_CONFIG, VERSION,
-    UI_COLORS, UI_DIMENSIONS, COLUMN_LAYOUT, COLUMN_MIN_WIDTHS, TIMING, TELEMETRY_CONFIG
+    UI_COLORS, UI_DIMENSIONS, COLUMN_LAYOUT, COLUMN_MIN_WIDTHS, TIMING, TELEMETRY_CONFIG,
+    COLUMN_REGISTRY
 )
 from config.settings import SettingsManager
 from config.logging_config import setup_logging, get_logger
@@ -667,7 +668,7 @@ class LeagueOverlay(QMainWindow):
         self.main_layout.addWidget(self.title_bar)
         
     def create_headers(self):
-        """Create column headers"""
+        """Create column headers based on column_order from settings."""
         # Clear existing
         while self.header_layout.count():
             item = self.header_layout.takeAt(0)
@@ -679,110 +680,23 @@ class LeagueOverlay(QMainWindow):
         self.header_layout.setSpacing(2)
 
         # Reset all column stretches first (clear old values from hidden columns)
-        for col_idx in range(14):  # Max possible columns (5 base + 9 optional)
+        for col_idx in range(len(COLUMN_REGISTRY)):
             self.header_layout.setColumnStretch(col_idx, 0)
 
-        # Build column configuration based on settings
-        # Column order: Pos | [+/-] | [Mfr] | C-Pos | Driver | [Rating] | Car# | [Gap] | [C-Gap] | [Int] | [C-Int] | [Best] | [Last] | [Delta] | [Pit]
-        # Columns in brackets are optional
+        # Build visible columns in user-configured order
+        col_idx = 0
+        for col_id in self.settings.column_order:
+            col_def = COLUMN_REGISTRY.get(col_id)
+            if col_def is None:
+                continue
 
-        headers = ["Overall"]
-        stretches = [COLUMN_LAYOUT.POS]
+            # Skip optional columns that are toggled off
+            if col_def.settings_key and not getattr(self.settings, col_def.settings_key, False):
+                continue
 
-        # Optional: Positions Gained
-        if self.settings.show_positions_gained:
-            headers.append("+/-")
-            stretches.append(COLUMN_LAYOUT.POSITIONS_GAINED)
+            self.header_layout.setColumnStretch(col_idx, col_def.stretch)
 
-        # Optional: Car Manufacturer
-        if self.settings.show_car_manufacturer:
-            headers.append("Mfr")
-            stretches.append(COLUMN_LAYOUT.CAR_MANUFACTURER)
-
-        # C-Pos (always shown)
-        headers.append("Class")
-        stretches.append(COLUMN_LAYOUT.DIV_POS)
-
-        # Driver (always shown)
-        headers.append("Driver")
-        stretches.append(COLUMN_LAYOUT.DRIVER_NAME)
-
-        # Optional: Combined Rating (iRating + Safety Rating)
-        if self.settings.show_rating:
-            headers.append("Rating")
-            stretches.append(COLUMN_LAYOUT.RATING)
-
-        # Optional: Car# (moved to after Rating)
-        if self.settings.show_car_number:
-            headers.append("Car#")
-            stretches.append(COLUMN_LAYOUT.CAR_NUM)
-
-        # Gap to overall leader (optional)
-        if self.settings.show_gap:
-            headers.append("Gap")
-            stretches.append(COLUMN_LAYOUT.GAP)
-
-        # Gap to division leader (optional)
-        if self.settings.show_division_gap:
-            headers.append("C-Gap")
-            stretches.append(COLUMN_LAYOUT.DIV_GAP)
-
-        # Interval to car ahead overall (optional)
-        if self.settings.show_interval:
-            headers.append("Int")
-            stretches.append(COLUMN_LAYOUT.INTERVAL)
-
-        # Interval to car ahead in division (optional)
-        if self.settings.show_division_interval:
-            headers.append("C-Int")
-            stretches.append(COLUMN_LAYOUT.DIV_INTERVAL)
-
-        # Optional: Best Lap
-        if self.settings.show_best_lap:
-            headers.append("Best Lap")
-            stretches.append(COLUMN_LAYOUT.BEST_LAP)
-
-        # Optional: Last Lap
-        if self.settings.show_last_lap:
-            headers.append("Last Lap")
-            stretches.append(COLUMN_LAYOUT.LAST_LAP)
-
-        # Optional: Delta
-        if self.settings.show_delta:
-            headers.append("Delta")
-            stretches.append(COLUMN_LAYOUT.DELTA)
-
-        # Optional: Pit Lap (combined Last Pit + Out Lap)
-        if self.settings.show_pit_lap:
-            headers.append("Pit")
-            stretches.append(COLUMN_LAYOUT.PIT_LAP)
-
-        # Apply column stretches
-        for col_idx, stretch in enumerate(stretches):
-            self.header_layout.setColumnStretch(col_idx, stretch)
-
-        # Define minimum widths mapping from header text to constant
-        min_width_map = {
-            "Overall": COLUMN_MIN_WIDTHS.POS,
-            "+/-": COLUMN_MIN_WIDTHS.POSITIONS_GAINED,
-            "Mfr": COLUMN_MIN_WIDTHS.CAR_MANUFACTURER,
-            "Class": COLUMN_MIN_WIDTHS.DIV_POS,
-            "Driver": COLUMN_MIN_WIDTHS.DRIVER_NAME,
-            "Rating": COLUMN_MIN_WIDTHS.RATING,
-            "Car#": COLUMN_MIN_WIDTHS.CAR_NUM,
-            "Gap": COLUMN_MIN_WIDTHS.GAP,
-            "C-Gap": COLUMN_MIN_WIDTHS.DIV_GAP,
-            "Int": COLUMN_MIN_WIDTHS.INTERVAL,
-            "C-Int": COLUMN_MIN_WIDTHS.DIV_INTERVAL,
-            "Best Lap": COLUMN_MIN_WIDTHS.BEST_LAP,
-            "Last Lap": COLUMN_MIN_WIDTHS.LAST_LAP,
-            "Delta": COLUMN_MIN_WIDTHS.DELTA,
-            "Pit": COLUMN_MIN_WIDTHS.PIT_LAP
-        }
-
-        # Create header labels
-        for i, header in enumerate(headers):
-            label = QLabel(header)
+            label = QLabel(col_def.header)
             label.setStyleSheet(f"""
                 QLabel {{
                     color: white;
@@ -796,20 +710,12 @@ class LeagueOverlay(QMainWindow):
             """)
             label.setAlignment(Qt.AlignCenter)
 
-            # Add tooltips for gap and interval headers
-            if header == "Gap":
-                label.setToolTip("Gap to overall leader")
-            elif header == "C-Gap":
-                label.setToolTip("Gap to division leader")
-            elif header == "Int":
-                label.setToolTip("Interval to car ahead in overall standings")
-            elif header == "C-Int":
-                label.setToolTip("Interval to car ahead in your division")
+            if col_def.tooltip:
+                label.setToolTip(col_def.tooltip)
 
-            # Set same minimum widths as detail rows for consistent column sizing
-            if header in min_width_map:
-                label.setMinimumWidth(min_width_map[header])
-            self.header_layout.addWidget(label, 0, i)
+            label.setMinimumWidth(col_def.min_width)
+            self.header_layout.addWidget(label, 0, col_idx)
+            col_idx += 1
 
     def _update_header_labels(self):
         """Update header labels when column visibility settings change."""

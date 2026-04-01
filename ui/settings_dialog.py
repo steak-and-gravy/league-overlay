@@ -7,12 +7,13 @@ import re
 from typing import TYPE_CHECKING
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog, QComboBox, QSpinBox, QGridLayout
+    QFrame, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog,
+    QComboBox, QSpinBox, QGridLayout, QListWidget, QListWidgetItem, QAbstractItemView
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
-from config.constants import VERSION, UI_DIMENSIONS, TelemetryConfig
+from config.constants import VERSION, UI_DIMENSIONS, TelemetryConfig, COLUMN_REGISTRY, DEFAULT_COLUMN_ORDER
 from config.logging_config import set_log_level, get_logger
 
 logger = get_logger(__name__)
@@ -289,6 +290,105 @@ class SettingsDialog(QDialog):
         colors_layout.addLayout(slower_color_row)
 
         left_column.addWidget(colors_group)
+
+        # Broadcast settings section (moved to left column)
+        broadcast_group = QFrame()
+        broadcast_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
+        broadcast_group.setMinimumWidth(300)
+        broadcast_group.setMaximumWidth(300)
+        broadcast_layout = QVBoxLayout(broadcast_group)
+        broadcast_layout.setSpacing(8)
+
+        broadcast_title = QLabel("Broadcast Settings")
+        broadcast_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
+        broadcast_layout.addWidget(broadcast_title)
+
+        broadcast_grid = QGridLayout()
+        broadcast_grid.setHorizontalSpacing(10)
+        broadcast_grid.setVerticalSpacing(8)
+
+        self.broadcast_header_cb = QCheckBox("Broadcast header")
+        self.broadcast_header_cb.setStyleSheet("""
+            QCheckBox { border: none; color: white; font-size: 9pt; }
+            QCheckBox:disabled { color: #777777; }
+        """)
+        self.broadcast_header_cb.setChecked(self.parent_overlay.settings.show_broadcast_header)
+        broadcast_grid.addWidget(self.broadcast_header_cb, 0, 0)
+
+        self.broadcast_roll_enabled_cb = QCheckBox("Rolling standings")
+        self.broadcast_roll_enabled_cb.setStyleSheet("""
+            QCheckBox { border: none; color: white; font-size: 9pt; }
+            QCheckBox:disabled { color: #777777; }
+        """)
+        self.broadcast_roll_enabled_cb.setChecked(self.parent_overlay.settings.broadcast_roll_enabled)
+        self.broadcast_roll_enabled_cb.setToolTip("When enabled, top rows stay fixed while lower rows rotate")
+        broadcast_grid.addWidget(self.broadcast_roll_enabled_cb, 0, 1)
+
+        self.roll_rows_label = QLabel("Rolling rows:")
+        self.roll_rows_label.setStyleSheet("""
+            QLabel { border: none; color: white; font-size: 9pt; }
+            QLabel:disabled { color: #777777; }
+        """)
+        self.roll_rows_label.setMinimumWidth(100)
+        broadcast_grid.addWidget(self.roll_rows_label, 1, 0)
+
+        self.broadcast_roll_rows_spin = QSpinBox()
+        self.broadcast_roll_rows_spin.setRange(1, 20)
+        self.broadcast_roll_rows_spin.setValue(self.parent_overlay.settings.broadcast_roll_rows)
+        self.broadcast_roll_rows_spin.setFixedWidth(70)
+        self.broadcast_roll_rows_spin.setToolTip("Number of standings rows to rotate in broadcast mode")
+        self.broadcast_roll_rows_spin.setStyleSheet("""
+            QSpinBox {
+                background-color: #404040;
+                color: white;
+                border: 1px solid #555555;
+                padding: 2px 6px;
+                font-size: 9pt;
+            }
+            QSpinBox:disabled {
+                background-color: #2a2a2a;
+                color: #777777;
+            }
+        """)
+        broadcast_grid.addWidget(self.broadcast_roll_rows_spin, 1, 1)
+
+        self.roll_interval_label = QLabel("Rotate every (sec):")
+        self.roll_interval_label.setStyleSheet("""
+            QLabel { border: none; color: white; font-size: 9pt; }
+            QLabel:disabled { color: #777777; }
+        """)
+        self.roll_interval_label.setMinimumWidth(100)
+        broadcast_grid.addWidget(self.roll_interval_label, 2, 0)
+
+        self.broadcast_roll_interval_spin = QSpinBox()
+        self.broadcast_roll_interval_spin.setRange(1, 60)
+        self.broadcast_roll_interval_spin.setValue(self.parent_overlay.settings.broadcast_roll_interval_seconds)
+        self.broadcast_roll_interval_spin.setFixedWidth(70)
+        self.broadcast_roll_interval_spin.setToolTip("Seconds between broadcast standings page changes")
+        self.broadcast_roll_interval_spin.setStyleSheet("""
+            QSpinBox {
+                background-color: #404040;
+                color: white;
+                border: 1px solid #555555;
+                padding: 2px 6px;
+                font-size: 9pt;
+            }
+            QSpinBox:disabled {
+                background-color: #2a2a2a;
+                color: #777777;
+            }
+        """)
+        broadcast_grid.addWidget(self.broadcast_roll_interval_spin, 2, 1)
+
+        broadcast_grid.setColumnStretch(0, 1)
+        broadcast_grid.setColumnStretch(1, 1)
+        broadcast_layout.addLayout(broadcast_grid)
+
+        self.broadcast_header_cb.toggled.connect(self._sync_broadcast_roll_control_state)
+        self.broadcast_roll_enabled_cb.toggled.connect(self._sync_broadcast_roll_control_state)
+        self._sync_broadcast_roll_control_state()
+
+        left_column.addWidget(broadcast_group)
         left_column.addStretch()
 
         # RIGHT COLUMN
@@ -508,214 +608,92 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row3)
 
-        # Column visibility checkboxes - ordered to match overlay column order:
-        # Pos | [+/-] | [Mfr] | C-Pos | Driver | [Rating] | [Car#] | [Gap] | [C-Gap] | [Int] | [C-Int] | [Best] | [Last] | [Delta] | [Pit]
-
-        # Row 5: Positions gained and Manufacturer
-        checkbox_row4 = QHBoxLayout()
-        checkbox_row4.setSpacing(10)
-
-        self.show_positions_gained_cb = QCheckBox("Show positions +/-")
-        self.show_positions_gained_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_positions_gained_cb.setChecked(self.parent_overlay.settings.show_positions_gained)
-        checkbox_row4.addWidget(self.show_positions_gained_cb)
-
-        self.show_car_manufacturer_cb = QCheckBox("Show manufacturer")
-        self.show_car_manufacturer_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_car_manufacturer_cb.setChecked(self.parent_overlay.settings.show_car_manufacturer)
-        checkbox_row4.addWidget(self.show_car_manufacturer_cb)
-
-        window_layout.addLayout(checkbox_row4)
-
-        # Row 6: Rating and Car#
-        checkbox_row5 = QHBoxLayout()
-        checkbox_row5.setSpacing(10)
-
-        self.show_rating_cb = QCheckBox("Show rating")
-        self.show_rating_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_rating_cb.setChecked(self.parent_overlay.settings.show_rating)
-        checkbox_row5.addWidget(self.show_rating_cb)
-
-        self.show_car_number_cb = QCheckBox("Show car #")
-        self.show_car_number_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_car_number_cb.setChecked(self.parent_overlay.settings.show_car_number)
-        checkbox_row5.addWidget(self.show_car_number_cb)
-
-        window_layout.addLayout(checkbox_row5)
-
-        # Row 7: Gap and Class gap
-        checkbox_row6 = QHBoxLayout()
-        checkbox_row6.setSpacing(10)
-
-        self.show_gap_cb = QCheckBox("Show gap")
-        self.show_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_gap_cb.setChecked(self.parent_overlay.settings.show_gap)
-        self.show_gap_cb.setToolTip("Gap to overall leader")
-        checkbox_row6.addWidget(self.show_gap_cb)
-
-        self.show_division_gap_cb = QCheckBox("Show Class gap")
-        self.show_division_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_division_gap_cb.setChecked(self.parent_overlay.settings.show_division_gap)
-        self.show_division_gap_cb.setToolTip("Gap to class leader")
-        checkbox_row6.addWidget(self.show_division_gap_cb)
-
-        window_layout.addLayout(checkbox_row6)
-
-        # Row 8: Interval and Class interval
-        checkbox_row7 = QHBoxLayout()
-        checkbox_row7.setSpacing(10)
-
-        self.show_interval_cb = QCheckBox("Show interval")
-        self.show_interval_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_interval_cb.setChecked(self.parent_overlay.settings.show_interval)
-        self.show_interval_cb.setToolTip("Interval to car ahead in overall standings")
-        checkbox_row7.addWidget(self.show_interval_cb)
-
-        self.show_division_interval_cb = QCheckBox("Show Class interval")
-        self.show_division_interval_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_division_interval_cb.setChecked(self.parent_overlay.settings.show_division_interval)
-        self.show_division_interval_cb.setToolTip("Interval to car ahead in your class")
-        checkbox_row7.addWidget(self.show_division_interval_cb)
-
-        window_layout.addLayout(checkbox_row7)
-
-        # Row 9: Best lap and Last lap
-        checkbox_row8 = QHBoxLayout()
-        checkbox_row8.setSpacing(10)
-
-        self.show_best_lap_cb = QCheckBox("Show best lap")
-        self.show_best_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_best_lap_cb.setChecked(self.parent_overlay.settings.show_best_lap)
-        checkbox_row8.addWidget(self.show_best_lap_cb)
-
-        self.show_last_lap_cb = QCheckBox("Show last lap")
-        self.show_last_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_last_lap_cb.setChecked(self.parent_overlay.settings.show_last_lap)
-        checkbox_row8.addWidget(self.show_last_lap_cb)
-
-        window_layout.addLayout(checkbox_row8)
-
-        # Row 10: Delta and Pit lap
-        checkbox_row9 = QHBoxLayout()
-        checkbox_row9.setSpacing(10)
-
-        self.show_delta_cb = QCheckBox("Show delta")
-        self.show_delta_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_delta_cb.setChecked(self.parent_overlay.settings.show_delta)
-        checkbox_row9.addWidget(self.show_delta_cb)
-
-        self.show_pit_lap_cb = QCheckBox("Show pit lap")
-        self.show_pit_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.show_pit_lap_cb.setChecked(self.parent_overlay.settings.show_pit_lap)
-        checkbox_row9.addWidget(self.show_pit_lap_cb)
-
-        window_layout.addLayout(checkbox_row9)
-
-        # Spacer after last checkbox row
-        window_layout.addSpacing(10)
-
         window_group.setMinimumHeight(window_group.sizeHint().height())
 
         right_column.addWidget(window_group)
 
-        # Broadcast settings section
-        broadcast_group = QFrame()
-        broadcast_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
-        broadcast_group.setMinimumWidth(300)
-        broadcast_group.setMaximumWidth(300)
-        broadcast_layout = QVBoxLayout(broadcast_group)
-        broadcast_layout.setSpacing(8)
+        # Column Configuration section — reorderable list with visibility checkboxes
+        column_group = QFrame()
+        column_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
+        column_group.setMinimumWidth(300)
+        column_group.setMaximumWidth(300)
+        column_layout_v = QVBoxLayout(column_group)
+        column_layout_v.setSpacing(6)
 
-        broadcast_title = QLabel("Broadcast Settings")
-        broadcast_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
-        broadcast_layout.addWidget(broadcast_title)
+        column_title = QLabel("Column Order && Visibility")
+        column_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
+        column_layout_v.addWidget(column_title)
 
-        broadcast_grid = QGridLayout()
-        broadcast_grid.setHorizontalSpacing(10)
-        broadcast_grid.setVerticalSpacing(8)
+        column_hint = QLabel("Check to show, drag or use ▲/▼ to reorder")
+        column_hint.setStyleSheet("border: none; color: #aaaaaa; font-size: 8pt;")
+        column_layout_v.addWidget(column_hint)
 
-        self.broadcast_header_cb = QCheckBox("Broadcast header")
-        self.broadcast_header_cb.setStyleSheet("""
-            QCheckBox { border: none; color: white; font-size: 9pt; }
-            QCheckBox:disabled { color: #777777; }
-        """)
-        self.broadcast_header_cb.setChecked(self.parent_overlay.settings.show_broadcast_header)
-        broadcast_grid.addWidget(self.broadcast_header_cb, 0, 0)
-
-        self.broadcast_roll_enabled_cb = QCheckBox("Rolling standings")
-        self.broadcast_roll_enabled_cb.setStyleSheet("""
-            QCheckBox { border: none; color: white; font-size: 9pt; }
-            QCheckBox:disabled { color: #777777; }
-        """)
-        self.broadcast_roll_enabled_cb.setChecked(self.parent_overlay.settings.broadcast_roll_enabled)
-        self.broadcast_roll_enabled_cb.setToolTip("When enabled, top rows stay fixed while lower rows rotate")
-        broadcast_grid.addWidget(self.broadcast_roll_enabled_cb, 0, 1)
-
-        self.roll_rows_label = QLabel("Rolling rows:")
-        self.roll_rows_label.setStyleSheet("""
-            QLabel { border: none; color: white; font-size: 9pt; }
-            QLabel:disabled { color: #777777; }
-        """)
-        self.roll_rows_label.setMinimumWidth(100)
-        broadcast_grid.addWidget(self.roll_rows_label, 1, 0)
-
-        self.broadcast_roll_rows_spin = QSpinBox()
-        self.broadcast_roll_rows_spin.setRange(1, 20)
-        self.broadcast_roll_rows_spin.setValue(self.parent_overlay.settings.broadcast_roll_rows)
-        self.broadcast_roll_rows_spin.setFixedWidth(70)
-        self.broadcast_roll_rows_spin.setToolTip("Number of standings rows to rotate in broadcast mode")
-        self.broadcast_roll_rows_spin.setStyleSheet("""
-            QSpinBox {
+        # List widget showing columns with checkboxes
+        self.column_list = QListWidget()
+        self.column_list.setDragDropMode(QAbstractItemView.InternalMove)
+        self.column_list.setDefaultDropAction(Qt.MoveAction)
+        self.column_list.setStyleSheet("""
+            QListWidget {
                 background-color: #404040;
                 color: white;
                 border: 1px solid #555555;
-                padding: 2px 6px;
                 font-size: 9pt;
+                outline: none;
             }
-            QSpinBox:disabled {
-                background-color: #2a2a2a;
-                color: #777777;
+            QListWidget::item {
+                padding: 3px 6px;
+                border-bottom: 1px solid #555555;
+            }
+            QListWidget::item:selected {
+                background-color: #505050;
+            }
+            QListWidget::item:hover {
+                background-color: #484848;
             }
         """)
-        broadcast_grid.addWidget(self.broadcast_roll_rows_spin, 1, 1)
+        self._populate_column_list()
+        column_layout_v.addWidget(self.column_list)
 
-        self.roll_interval_label = QLabel("Rotate every (sec):")
-        self.roll_interval_label.setStyleSheet("""
-            QLabel { border: none; color: white; font-size: 9pt; }
-            QLabel:disabled { color: #777777; }
-        """)
-        self.roll_interval_label.setMinimumWidth(100)
-        broadcast_grid.addWidget(self.roll_interval_label, 2, 0)
+        # Up/Down buttons
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(5)
 
-        self.broadcast_roll_interval_spin = QSpinBox()
-        self.broadcast_roll_interval_spin.setRange(1, 60)
-        self.broadcast_roll_interval_spin.setValue(self.parent_overlay.settings.broadcast_roll_interval_seconds)
-        self.broadcast_roll_interval_spin.setFixedWidth(70)
-        self.broadcast_roll_interval_spin.setToolTip("Seconds between broadcast standings page changes")
-        self.broadcast_roll_interval_spin.setStyleSheet("""
-            QSpinBox {
-                background-color: #404040;
+        move_up_btn = QPushButton("▲ Up")
+        move_up_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #555555;
                 color: white;
-                border: 1px solid #555555;
-                padding: 2px 6px;
+                padding: 4px 10px;
+                border: none;
                 font-size: 9pt;
             }
-            QSpinBox:disabled {
-                background-color: #2a2a2a;
-                color: #777777;
+            QPushButton:hover {
+                background-color: #666666;
             }
         """)
-        broadcast_grid.addWidget(self.broadcast_roll_interval_spin, 2, 1)
+        move_up_btn.clicked.connect(self._move_column_up)
+        btn_row.addWidget(move_up_btn)
 
-        broadcast_grid.setColumnStretch(0, 1)
-        broadcast_grid.setColumnStretch(1, 1)
-        broadcast_layout.addLayout(broadcast_grid)
+        move_down_btn = QPushButton("▼ Down")
+        move_down_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #555555;
+                color: white;
+                padding: 4px 10px;
+                border: none;
+                font-size: 9pt;
+            }
+            QPushButton:hover {
+                background-color: #666666;
+            }
+        """)
+        move_down_btn.clicked.connect(self._move_column_down)
+        btn_row.addWidget(move_down_btn)
 
-        self.broadcast_header_cb.toggled.connect(self._sync_broadcast_roll_control_state)
-        self.broadcast_roll_enabled_cb.toggled.connect(self._sync_broadcast_roll_control_state)
-        self._sync_broadcast_roll_control_state()
+        btn_row.addStretch()
+        column_layout_v.addLayout(btn_row)
 
-        right_column.addWidget(broadcast_group)
+        right_column.addWidget(column_group)
 
         # Add columns to main layout with equal stretch factors (1:1 ratio)
         columns_layout.addLayout(left_column, 1)
@@ -831,7 +809,96 @@ class SettingsDialog(QDialog):
                 border: 1px solid #666666;
             }
         """)
-        
+
+    # --- Column order list helpers ---
+
+    def _populate_column_list(self):
+        """Populate the column list widget from current settings."""
+        self.column_list.clear()
+        settings = self.parent_overlay.settings
+
+        for col_id in settings.column_order:
+            col_def = COLUMN_REGISTRY.get(col_id)
+            if col_def is None:
+                continue
+
+            item = QListWidgetItem(col_def.header)
+            item.setData(Qt.UserRole, col_id)
+
+            # Always-visible columns (no settings_key) are always checked
+            if col_def.settings_key:
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
+                is_checked = getattr(settings, col_def.settings_key, False)
+                item.setCheckState(Qt.Checked if is_checked else Qt.Unchecked)
+            else:
+                # Always-visible: show checked but don't allow unchecking
+                item.setFlags((item.flags() | Qt.ItemIsDragEnabled) & ~Qt.ItemIsUserCheckable)
+                item.setCheckState(Qt.Checked)
+
+            if col_def.tooltip:
+                item.setToolTip(col_def.tooltip)
+
+            self.column_list.addItem(item)
+
+    def _move_column_up(self):
+        """Move the selected column up in the list."""
+        row = self.column_list.currentRow()
+        if row <= 0:
+            return
+        item = self.column_list.takeItem(row)
+        self.column_list.insertItem(row - 1, item)
+        self.column_list.setCurrentRow(row - 1)
+
+    def _move_column_down(self):
+        """Move the selected column down in the list."""
+        row = self.column_list.currentRow()
+        if row < 0 or row >= self.column_list.count() - 1:
+            return
+        item = self.column_list.takeItem(row)
+        self.column_list.insertItem(row + 1, item)
+        self.column_list.setCurrentRow(row + 1)
+
+    def _read_column_list(self):
+        """Read column order and visibility from the list widget.
+
+        Returns:
+            Tuple of (column_order: list[str], visibility: dict[str, bool])
+        """
+        column_order = []
+        visibility = {}
+        for i in range(self.column_list.count()):
+            item = self.column_list.item(i)
+            col_id = item.data(Qt.UserRole)
+            column_order.append(col_id)
+            col_def = COLUMN_REGISTRY.get(col_id)
+            if col_def and col_def.settings_key:
+                visibility[col_def.settings_key] = (item.checkState() == Qt.Checked)
+        return column_order, visibility
+
+    def _reset_column_list_to_defaults(self, defaults):
+        """Reset the column list widget to default order and visibility.
+
+        Only updates the UI list — does not touch live settings.
+        Changes are applied when the user clicks Apply.
+        """
+        self.column_list.clear()
+        for col_id in defaults.column_order:
+            col_def = COLUMN_REGISTRY.get(col_id)
+            if col_def is None:
+                continue
+            item = QListWidgetItem(col_def.header)
+            item.setData(Qt.UserRole, col_id)
+            if col_def.settings_key:
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
+                is_checked = getattr(defaults, col_def.settings_key, False)
+                item.setCheckState(Qt.Checked if is_checked else Qt.Unchecked)
+            else:
+                item.setFlags((item.flags() | Qt.ItemIsDragEnabled) & ~Qt.ItemIsUserCheckable)
+                item.setCheckState(Qt.Checked)
+            if col_def.tooltip:
+                item.setToolTip(col_def.tooltip)
+            self.column_list.addItem(item)
+
     def choose_color(self, division):
         """Open color picker to customize a division's color."""
         current_color = self.parent_overlay.division_manager.division_colors[division]
@@ -1204,18 +1271,6 @@ class SettingsDialog(QDialog):
             self.hide_headers_cb.setChecked(defaults.hide_headers)
             self.center_drivers_cb.setChecked(defaults.center_drivers)
             self.bold_drivers_cb.setChecked(defaults.bold_drivers)
-            self.show_gap_cb.setChecked(defaults.show_gap)
-            self.show_division_gap_cb.setChecked(defaults.show_division_gap)
-            self.show_interval_cb.setChecked(defaults.show_interval)
-            self.show_division_interval_cb.setChecked(defaults.show_division_interval)
-            self.show_best_lap_cb.setChecked(defaults.show_best_lap)
-            self.show_last_lap_cb.setChecked(defaults.show_last_lap)
-            self.show_delta_cb.setChecked(defaults.show_delta)
-            self.show_positions_gained_cb.setChecked(defaults.show_positions_gained)
-            self.show_car_manufacturer_cb.setChecked(defaults.show_car_manufacturer)
-            self.show_rating_cb.setChecked(defaults.show_rating)
-            self.show_car_number_cb.setChecked(defaults.show_car_number)
-            self.show_pit_lap_cb.setChecked(defaults.show_pit_lap)
             self.show_footer_cb.setChecked(defaults.show_footer)
             self.broadcast_header_cb.setChecked(defaults.show_broadcast_header)
             self.broadcast_roll_enabled_cb.setChecked(defaults.broadcast_roll_enabled)
@@ -1225,6 +1280,9 @@ class SettingsDialog(QDialog):
             self.font_size_combo.setCurrentText(defaults.font_size)
             self.color_style_combo.setCurrentText(defaults.row_color_style)
             self.log_level_combo.setCurrentText(defaults.log_level)
+
+            # Reset column order and visibility in the UI list only (applied on Apply)
+            self._reset_column_list_to_defaults(defaults)
 
             # Reset division colors from defaults
             for division, color in defaults.division_colors.items():
@@ -1277,18 +1335,6 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.hide_headers = self.hide_headers_cb.isChecked()
             self.parent_overlay.settings.center_drivers = self.center_drivers_cb.isChecked()
             self.parent_overlay.settings.bold_drivers = self.bold_drivers_cb.isChecked()
-            self.parent_overlay.settings.show_gap = self.show_gap_cb.isChecked()
-            self.parent_overlay.settings.show_division_gap = self.show_division_gap_cb.isChecked()
-            self.parent_overlay.settings.show_interval = self.show_interval_cb.isChecked()
-            self.parent_overlay.settings.show_division_interval = self.show_division_interval_cb.isChecked()
-            self.parent_overlay.settings.show_last_lap = self.show_last_lap_cb.isChecked()
-            self.parent_overlay.settings.show_delta = self.show_delta_cb.isChecked()
-            self.parent_overlay.settings.show_best_lap = self.show_best_lap_cb.isChecked()
-            self.parent_overlay.settings.show_positions_gained = self.show_positions_gained_cb.isChecked()
-            self.parent_overlay.settings.show_car_manufacturer = self.show_car_manufacturer_cb.isChecked()
-            self.parent_overlay.settings.show_rating = self.show_rating_cb.isChecked()
-            self.parent_overlay.settings.show_car_number = self.show_car_number_cb.isChecked()
-            self.parent_overlay.settings.show_pit_lap = self.show_pit_lap_cb.isChecked()
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()
             self.parent_overlay.settings.show_broadcast_header = self.broadcast_header_cb.isChecked()
             self.parent_overlay.settings.broadcast_roll_enabled = self.broadcast_roll_enabled_cb.isChecked()
@@ -1296,6 +1342,13 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.broadcast_roll_interval_seconds = self.broadcast_roll_interval_spin.value()
             self.parent_overlay.settings.font_size = self.font_size_combo.currentText()
             self.parent_overlay.settings.row_color_style = self.color_style_combo.currentText()
+
+            # Read column order and visibility from the list widget
+            column_order, visibility = self._read_column_list()
+            self.parent_overlay.settings.column_order = column_order
+            for settings_key, is_visible in visibility.items():
+                setattr(self.parent_overlay.settings, settings_key, is_visible)
+
             self.parent_overlay.apply_official_league_broadcast_metadata()
 
             # Apply log level change immediately
