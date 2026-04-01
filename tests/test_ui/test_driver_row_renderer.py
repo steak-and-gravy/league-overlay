@@ -15,6 +15,7 @@ def _make_parent():
         show_positions_gained=False,
         show_car_manufacturer=True,
         show_rating=False,
+        show_car_number=True,
         show_gap=False,
         show_division_gap=False,
         show_interval=False,
@@ -37,7 +38,7 @@ def _make_parent():
     )
 
 
-def _make_driver(car_path: str, manufacturer: str = "MFR") -> DriverState:
+def _make_driver(car_path: str, manufacturer: str = "MFR", positions_gained: str = "") -> DriverState:
     return DriverState(
         car_idx=5,
         driver_info={
@@ -48,6 +49,7 @@ def _make_driver(car_path: str, manufacturer: str = "MFR") -> DriverState:
         },
         division_color="#00AAFF",
         car_manufacturer=manufacturer,
+        positions_gained=positions_gained,
     )
 
 
@@ -102,4 +104,19 @@ def test_create_row_falls_back_to_text_when_logo_missing(qapp):
     pixmap = manufacturer_label.pixmap()
     assert pixmap is None or pixmap.isNull()
     assert manufacturer_label.text() == "HYU"
+    row.deleteLater()
+
+
+def test_create_row_uses_triangle_symbol_for_positions_gained(qapp):
+    parent = _make_parent()
+    parent.settings.show_positions_gained = True
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver("porsche 911 gt3 r", manufacturer="POR", positions_gained="↑3")
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    positions_label = layout.itemAtPosition(0, 1).widget()
+
+    assert positions_label.text() == "▲ 3"
+    assert "font-size: calc(9pt + 2pt);" in positions_label.styleSheet()
     row.deleteLater()

@@ -50,27 +50,27 @@ class UIDimensions:
 @dataclass(frozen=True)
 class ColumnLayout:
     """Column stretch factors for driver list."""
-    POS: int = 6
-    POSITIONS_GAINED: int = 6
-    CAR_MANUFACTURER: int = 5  # Small column for manufacturer badge
+    POS: int = 7
+    POSITIONS_GAINED: int = 5
+    CAR_MANUFACTURER: int = 4  # Small column for manufacturer badge
     DIV_POS: int = 6
     CAR_NUM: int = 6
     DRIVER_NAME: int = 25
-    GAP: int = 9  # Gap to overall leader
-    DIV_GAP: int = 9  # Gap to division leader (C-Gap)
-    INTERVAL: int = 9  # Interval to car ahead (overall)
-    DIV_INTERVAL: int = 9  # Interval to car ahead in division (C-Int)
+    GAP: int = 8  # Gap to overall leader
+    DIV_GAP: int = 8  # Gap to division leader (C-Gap)
+    INTERVAL: int = 8  # Interval to car ahead (overall)
+    DIV_INTERVAL: int = 8  # Interval to car ahead in division (C-Int)
     BEST_LAP: int = 9
     DELTA: int = 6
     LAST_LAP: int = 9
-    RATING: int = 13
+    RATING: int = 14
     PIT_LAP: int = 5
 
 
 @dataclass(frozen=True)
 class ColumnMinWidths:
     """Minimum pixel widths for columns to prevent misalignment at small window sizes."""
-    POS: int = 25
+    POS: int = 42
     POSITIONS_GAINED: int = 30
     CAR_MANUFACTURER: int = 30
     DIV_POS: int = 35
@@ -117,7 +117,7 @@ class UIConfig:
         if self.FONT_SIZES is None:
             object.__setattr__(self, 'FONT_SIZES', {
                 "Small": {
-                    "title": "8.5pt",
+                    "title": "8pt",
                     "button": "8pt",
                     "status": "8pt",
                     "header": "8pt",
@@ -128,7 +128,7 @@ class UIConfig:
                     "spacing": 2
                 },
                 "Medium": {
-                    "title": "9.5pt",
+                    "title": "9pt",
                     "button": "8.5pt",
                     "status": "9pt",
                     "header": "9pt",
@@ -139,7 +139,7 @@ class UIConfig:
                     "spacing": 3
                 },
                 "Large": {
-                    "title": "10.5pt",
+                    "title": "10pt",
                     "button": "9pt",
                     "status": "10pt",
                     "header": "10pt",
@@ -150,7 +150,7 @@ class UIConfig:
                     "spacing": 4
                 },
                 "Extra Large": {
-                    "title": "11.5pt",
+                    "title": "11pt",
                     "button": "9.5pt",
                     "status": "11pt",
                     "header": "11pt",

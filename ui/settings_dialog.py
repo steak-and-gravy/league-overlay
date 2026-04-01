@@ -509,7 +509,7 @@ class SettingsDialog(QDialog):
         window_layout.addLayout(checkbox_row3)
 
         # Column visibility checkboxes - ordered to match overlay column order:
-        # Pos | [+/-] | C-Pos | Driver | [Rating] | Car# | [Gap] | [C-Gap] | [Int] | [C-Int] | [Best] | [Last] | [Delta] | [Pit]
+        # Pos | [+/-] | [Mfr] | C-Pos | Driver | [Rating] | [Car#] | [Gap] | [C-Gap] | [Int] | [C-Int] | [Best] | [Last] | [Delta] | [Pit]
 
         # Row 5: Positions gained and Manufacturer
         checkbox_row4 = QHBoxLayout()
@@ -527,7 +527,7 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row4)
 
-        # Row 6: Rating and Gap
+        # Row 6: Rating and Car#
         checkbox_row5 = QHBoxLayout()
         checkbox_row5.setSpacing(10)
 
@@ -536,17 +536,22 @@ class SettingsDialog(QDialog):
         self.show_rating_cb.setChecked(self.parent_overlay.settings.show_rating)
         checkbox_row5.addWidget(self.show_rating_cb)
 
+        self.show_car_number_cb = QCheckBox("Show car #")
+        self.show_car_number_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_car_number_cb.setChecked(self.parent_overlay.settings.show_car_number)
+        checkbox_row5.addWidget(self.show_car_number_cb)
+
+        window_layout.addLayout(checkbox_row5)
+
+        # Row 7: Gap and Class gap
+        checkbox_row6 = QHBoxLayout()
+        checkbox_row6.setSpacing(10)
+
         self.show_gap_cb = QCheckBox("Show gap")
         self.show_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_gap_cb.setChecked(self.parent_overlay.settings.show_gap)
         self.show_gap_cb.setToolTip("Gap to overall leader")
-        checkbox_row5.addWidget(self.show_gap_cb)
-
-        window_layout.addLayout(checkbox_row5)
-
-        # Row 7: Division gap and Interval
-        checkbox_row6 = QHBoxLayout()
-        checkbox_row6.setSpacing(10)
+        checkbox_row6.addWidget(self.show_gap_cb)
 
         self.show_division_gap_cb = QCheckBox("Show Class gap")
         self.show_division_gap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
@@ -554,17 +559,17 @@ class SettingsDialog(QDialog):
         self.show_division_gap_cb.setToolTip("Gap to class leader")
         checkbox_row6.addWidget(self.show_division_gap_cb)
 
+        window_layout.addLayout(checkbox_row6)
+
+        # Row 8: Interval and Class interval
+        checkbox_row7 = QHBoxLayout()
+        checkbox_row7.setSpacing(10)
+
         self.show_interval_cb = QCheckBox("Show interval")
         self.show_interval_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_interval_cb.setChecked(self.parent_overlay.settings.show_interval)
         self.show_interval_cb.setToolTip("Interval to car ahead in overall standings")
-        checkbox_row6.addWidget(self.show_interval_cb)
-
-        window_layout.addLayout(checkbox_row6)
-
-        # Row 8: Division interval and Best lap
-        checkbox_row7 = QHBoxLayout()
-        checkbox_row7.setSpacing(10)
+        checkbox_row7.addWidget(self.show_interval_cb)
 
         self.show_division_interval_cb = QCheckBox("Show Class interval")
         self.show_division_interval_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
@@ -572,32 +577,32 @@ class SettingsDialog(QDialog):
         self.show_division_interval_cb.setToolTip("Interval to car ahead in your class")
         checkbox_row7.addWidget(self.show_division_interval_cb)
 
+        window_layout.addLayout(checkbox_row7)
+
+        # Row 9: Best lap and Last lap
+        checkbox_row8 = QHBoxLayout()
+        checkbox_row8.setSpacing(10)
+
         self.show_best_lap_cb = QCheckBox("Show best lap")
         self.show_best_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_best_lap_cb.setChecked(self.parent_overlay.settings.show_best_lap)
-        checkbox_row7.addWidget(self.show_best_lap_cb)
-
-        window_layout.addLayout(checkbox_row7)
-
-        # Row 9: Last lap and Delta
-        checkbox_row8 = QHBoxLayout()
-        checkbox_row8.setSpacing(10)
+        checkbox_row8.addWidget(self.show_best_lap_cb)
 
         self.show_last_lap_cb = QCheckBox("Show last lap")
         self.show_last_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_last_lap_cb.setChecked(self.parent_overlay.settings.show_last_lap)
         checkbox_row8.addWidget(self.show_last_lap_cb)
 
+        window_layout.addLayout(checkbox_row8)
+
+        # Row 10: Delta and Pit lap
+        checkbox_row9 = QHBoxLayout()
+        checkbox_row9.setSpacing(10)
+
         self.show_delta_cb = QCheckBox("Show delta")
         self.show_delta_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_delta_cb.setChecked(self.parent_overlay.settings.show_delta)
-        checkbox_row8.addWidget(self.show_delta_cb)
-
-        window_layout.addLayout(checkbox_row8)
-
-        # Row 10: Pit lap
-        checkbox_row9 = QHBoxLayout()
-        checkbox_row9.setSpacing(10)
+        checkbox_row9.addWidget(self.show_delta_cb)
 
         self.show_pit_lap_cb = QCheckBox("Show pit lap")
         self.show_pit_lap_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
@@ -1209,6 +1214,7 @@ class SettingsDialog(QDialog):
             self.show_positions_gained_cb.setChecked(defaults.show_positions_gained)
             self.show_car_manufacturer_cb.setChecked(defaults.show_car_manufacturer)
             self.show_rating_cb.setChecked(defaults.show_rating)
+            self.show_car_number_cb.setChecked(defaults.show_car_number)
             self.show_pit_lap_cb.setChecked(defaults.show_pit_lap)
             self.show_footer_cb.setChecked(defaults.show_footer)
             self.broadcast_header_cb.setChecked(defaults.show_broadcast_header)
@@ -1281,6 +1287,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_positions_gained = self.show_positions_gained_cb.isChecked()
             self.parent_overlay.settings.show_car_manufacturer = self.show_car_manufacturer_cb.isChecked()
             self.parent_overlay.settings.show_rating = self.show_rating_cb.isChecked()
+            self.parent_overlay.settings.show_car_number = self.show_car_number_cb.isChecked()
             self.parent_overlay.settings.show_pit_lap = self.show_pit_lap_cb.isChecked()
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()
             self.parent_overlay.settings.show_broadcast_header = self.broadcast_header_cb.isChecked()

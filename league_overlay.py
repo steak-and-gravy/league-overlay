@@ -686,7 +686,7 @@ class LeagueOverlay(QMainWindow):
         # Column order: Pos | [+/-] | [Mfr] | C-Pos | Driver | [Rating] | Car# | [Gap] | [C-Gap] | [Int] | [C-Int] | [Best] | [Last] | [Delta] | [Pit]
         # Columns in brackets are optional
 
-        headers = ["Pos"]
+        headers = ["Overall"]
         stretches = [COLUMN_LAYOUT.POS]
 
         # Optional: Positions Gained
@@ -700,7 +700,7 @@ class LeagueOverlay(QMainWindow):
             stretches.append(COLUMN_LAYOUT.CAR_MANUFACTURER)
 
         # C-Pos (always shown)
-        headers.append("C-Pos")
+        headers.append("Class")
         stretches.append(COLUMN_LAYOUT.DIV_POS)
 
         # Driver (always shown)
@@ -712,9 +712,10 @@ class LeagueOverlay(QMainWindow):
             headers.append("Rating")
             stretches.append(COLUMN_LAYOUT.RATING)
 
-        # Car# (moved to after Rating)
-        headers.append("Car#")
-        stretches.append(COLUMN_LAYOUT.CAR_NUM)
+        # Optional: Car# (moved to after Rating)
+        if self.settings.show_car_number:
+            headers.append("Car#")
+            stretches.append(COLUMN_LAYOUT.CAR_NUM)
 
         # Gap to overall leader (optional)
         if self.settings.show_gap:
@@ -762,10 +763,10 @@ class LeagueOverlay(QMainWindow):
 
         # Define minimum widths mapping from header text to constant
         min_width_map = {
-            "Pos": COLUMN_MIN_WIDTHS.POS,
+            "Overall": COLUMN_MIN_WIDTHS.POS,
             "+/-": COLUMN_MIN_WIDTHS.POSITIONS_GAINED,
             "Mfr": COLUMN_MIN_WIDTHS.CAR_MANUFACTURER,
-            "C-Pos": COLUMN_MIN_WIDTHS.DIV_POS,
+            "Class": COLUMN_MIN_WIDTHS.DIV_POS,
             "Driver": COLUMN_MIN_WIDTHS.DRIVER_NAME,
             "Rating": COLUMN_MIN_WIDTHS.RATING,
             "Car#": COLUMN_MIN_WIDTHS.CAR_NUM,

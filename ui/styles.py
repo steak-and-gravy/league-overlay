@@ -197,7 +197,7 @@ class DefaultColorStyle(ColorStyleStrategy):
     """Default color style: Red position background, division color car number and driver name, white gap."""
 
     def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
-        text_color = driver.division_color
+        text_color = "white"
         gap_color = "white"
         delta_faster_color = parent.settings.faster_color
         delta_slower_color = parent.settings.slower_color
@@ -205,9 +205,12 @@ class DefaultColorStyle(ColorStyleStrategy):
         label_border = ''
         position_bg = parent.get_bg_color('#FF0000')
         position_color = "white"
-        car_number_bg = parent.get_bg_color(driver.division_color)
-        # Use black text for light division colors, white for dark
-        car_number_color = "#000000" if is_light_color(driver.division_color) else "white"
+        division_position_bg = parent.get_bg_color(driver.division_color)
+        division_position_color = "white"
+        division_position_border = f"border: 2px solid {driver.division_color};"
+        car_number_bg = parent.get_bg_color('#000000')
+        car_number_border = f"border: 2px solid {driver.division_color};"
+        car_number_color = "white"
 
         if driver.is_player:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
@@ -215,7 +218,7 @@ class DefaultColorStyle(ColorStyleStrategy):
         else:
             bg_style = f"background-color: {parent.get_bg_color('#000000')};"
 
-        border_style = "border: 1px solid yellow;" if driver.is_spectated else ""
+        border_style = "border: 2px solid yellow;" if driver.is_spectated and not driver.is_player else ""
 
         row_widget = QWidget()
         row_widget.setObjectName("driverRow")
@@ -235,6 +238,10 @@ class DefaultColorStyle(ColorStyleStrategy):
             # Special styling for specific labels
             'position_bg': position_bg,  # Red background for position
             'position_color': position_color,
-            'car_number_bg': car_number_bg,  # Division color for car number
-            'car_number_color': car_number_color  # White text for car number and div position
+            'division_position_bg': division_position_bg,
+            'division_position_color': division_position_color,
+            'division_position_border': division_position_border,
+            'car_number_bg': car_number_bg,  # Black background for car number
+            'car_number_border': car_number_border,  # Division color outline for car number
+            'car_number_color': car_number_color
         }

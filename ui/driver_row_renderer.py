@@ -174,10 +174,11 @@ class DriverRowRenderer:
             rating_col = current_col
             current_col += 1
 
-        # Car# (moved to after Rating)
-        stretches.append(COLUMN_LAYOUT.CAR_NUM)
-        car_num_col = current_col
-        current_col += 1
+        # Optional: Car# (moved to after Rating)
+        if self.parent.settings.show_car_number:
+            stretches.append(COLUMN_LAYOUT.CAR_NUM)
+            car_num_col = current_col
+            current_col += 1
 
         # Optional: Gap to overall leader
         if self.parent.settings.show_gap:
@@ -255,8 +256,9 @@ class DriverRowRenderer:
         if rating_col is not None:
             self._create_combined_rating_label(layout, driver, text_color, label_bg, label_border, font_weight, rating_col)
 
-        # Always show: Car Number (moved to after Rating)
-        self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_num_col)
+        # Optional: Car Number (moved to after Rating)
+        if car_num_col is not None:
+            self._create_car_number_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, car_num_col)
 
         # Gap to overall leader
         if gap_col is not None:
@@ -333,9 +335,9 @@ class DriverRowRenderer:
     def _create_division_position_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                        label_bg: str, label_border: str, font_weight: str, styling: Dict = None, column: int = 1) -> None:
         """Create division position label."""
-        # Check for special division position styling (same as car number for Default style)
-        div_pos_color = styling.get('car_number_color', text_color) if styling else text_color
-        div_pos_bg = styling.get('car_number_bg', label_bg) if styling else label_bg
+        div_pos_color = styling.get('division_position_color', text_color) if styling else text_color
+        div_pos_bg = styling.get('division_position_bg', label_bg) if styling else label_bg
+        div_pos_border = styling.get('division_position_border', label_border) if styling else label_border
 
         div_pos_label = QLabel(str(driver.division_position if driver.division_position else ''))
         div_pos_label.setStyleSheet(f"""
@@ -344,7 +346,7 @@ class DriverRowRenderer:
                 background-color: {div_pos_bg};
                 font-size: {self.parent.get_font_size('data')};
                 font-weight: {font_weight};
-                {label_border}
+                {div_pos_border}
             }}
         """)
         div_pos_label.setAlignment(Qt.AlignCenter)
@@ -361,6 +363,7 @@ class DriverRowRenderer:
         # Check for special car number styling (for Default style)
         car_color = styling.get('car_number_color', text_color) if styling else text_color
         car_bg = styling.get('car_number_bg', label_bg) if styling else label_bg
+        car_border = styling.get('car_number_border', label_border) if styling else label_border
 
         car_label = QLabel(str(driver.car_number))
         car_label.setStyleSheet(f"""
@@ -369,7 +372,7 @@ class DriverRowRenderer:
                 background-color: {car_bg};
                 font-size: {self.parent.get_font_size('data')};
                 font-weight: {font_weight};
-                {label_border}
+                {car_border}
             }}
         """)
         car_label.setAlignment(Qt.AlignCenter)
@@ -604,23 +607,27 @@ class DriverRowRenderer:
             font_weight: Font weight
             column: Column index to place label
         """
+        positions_text = driver.positions_gained
+
         # Determine color based on positions gained/lost
-        if driver.positions_gained.startswith("↑"):
+        if positions_text.startswith("↑"):
             # Gained positions - use faster_color (green by default)
             positions_color = self.parent.settings.faster_color
-        elif driver.positions_gained.startswith("↓"):
+            positions_text = positions_text.replace("↑", "▲ ", 1)
+        elif positions_text.startswith("↓"):
             # Lost positions - use slower_color (red by default)
             positions_color = self.parent.settings.slower_color
+            positions_text = positions_text.replace("↓", "▼ ", 1)
         else:
             # No change or invalid - use default color
             positions_color = text_color
 
-        positions_gained_label = QLabel(driver.positions_gained)
+        positions_gained_label = QLabel(positions_text)
         positions_gained_label.setStyleSheet(f"""
             QLabel {{
                 color: {positions_color};
                 background-color: {label_bg};
-                font-size: {self.parent.get_font_size('data')};
+                font-size: calc({self.parent.get_font_size('data')} + 2pt);
                 font-weight: {font_weight};
                 {label_border}
             }}

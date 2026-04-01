@@ -863,6 +863,20 @@ class TestPerformanceIndicatorColors:
 class TestNewDriverInfoColumns:
     """Test cases for new driver info column settings (iRating, SR, Last Pit, Out Lap, Car)."""
 
+    def test_show_car_number_default_true(self):
+        """Test show_car_number defaults to True."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['show_car_number'] is True
+
+    def test_show_car_number_false(self):
+        """Test show_car_number can be set to False."""
+        validator = SettingsValidator()
+        data = {'show_car_number': False}
+        result = validator.validate_and_coerce(data)
+        assert result['show_car_number'] is False
+
     def test_show_rating_default_false(self):
         """Test show_rating defaults to False."""
         validator = SettingsValidator()
@@ -1035,10 +1049,11 @@ class TestNewDriverInfoColumns:
         assert result['show_last_lap'] is True
         assert result['show_delta'] is False
 
-        # CRITICAL: Verify new settings default to False
+        # CRITICAL: Verify new settings get their intended defaults
         # Without the fix in settings_validator.py, these would be missing
         # from the validated dict, causing KeyError when constructing AppSettings
         assert result['show_rating'] is False
+        assert result['show_car_number'] is True
         assert result['show_pit_lap'] is False
         assert result['show_division_gap'] is False
         assert result['show_division_interval'] is False
