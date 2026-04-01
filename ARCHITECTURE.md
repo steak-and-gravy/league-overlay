@@ -55,7 +55,7 @@ The iRacing League Overlay is a real-time race position display application buil
 
 These modules provide configuration, persistence, validation, and logging. They do not contain race logic.
 
-- `constants.py` — Centralized configuration constants
+- `constants.py` — Centralized configuration constants, including the `COLUMN_REGISTRY` (authoritative column definitions used by both the header and row renderer)
 - `settings.py` — Settings persistence and defaults
 - `settings_validator.py` — Validation and type coercion
 - `official_leagues.py` — Official remote league definitions
@@ -84,9 +84,9 @@ UI modules render data from `DriverState` objects and handle user interaction. T
 
 - `widgets.py` — Custom Qt widgets and signals
 - `styles.py` — Row styling strategies
-- `driver_row_renderer.py` — Driver row rendering
+- `driver_row_renderer.py` — Driver row rendering; dispatches to per-column render methods via `COLUMN_REGISTRY` in the order defined by `settings.column_order`
 - `broadcast_header.py` — Broadcast-quality header widget with league logo, session info, and track name
-- `settings_dialog.py` — Settings UI
+- `settings_dialog.py` — Settings UI; includes a reorderable column list (drag-and-drop or ▲/▼) for configuring column order and visibility
 - `auto_center_controller.py` — Auto-centering logic
 
 Broadcast rolling standings mode is coordinated in `league_overlay.py` and configured in `settings_dialog.py`:

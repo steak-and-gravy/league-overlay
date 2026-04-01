@@ -50,7 +50,7 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - Division colors
 - License class colors (for Rating column background)
 - Performance indicator colors (faster/gained and slower/lost)
-- Column visibility (show/hide Positions Gained, Best Lap, Last Lap, Delta, Rating, and Pit Lap columns)
+- **Column ordering and visibility** — Drag-and-drop or ▲/▼ to reorder any column (including Pos, Class, Driver). Check/uncheck optional columns: Positions Gained, Manufacturer, Rating, Car #, Gap, Class Gap, Interval, Class Interval, Best Lap, Last Lap, Delta, Pit Lap. Order and visibility are saved to config.
 - Log level (DEBUG, INFO, WARNING, ERROR)
 - Broadcast rolling standings (enable/disable)
 - Broadcast rolling timer (1-60 seconds, default 5)
@@ -142,7 +142,7 @@ This project uses a modular architecture with clear separation of concerns:
 │   ├── styles.py                 # Color schemes
 │   ├── widgets.py                # Custom Qt widgets
 │   └── auto_center_controller.py # Auto-scroll logic
-├── tests/               # Test suites (485 tests)
+├── tests/               # Test suites (620 tests)
 └── league_overlay.py    # Main application entry point
 ```
 
@@ -157,7 +157,7 @@ For AI-Assisted development, see [CLAUDE.md](CLAUDE.md) for project context.
 - **PySide6** - Qt framework for UI
 - **pyirsdk** - iRacing SDK Python wrapper for telemetry access
 - **Nuitka** - Python-to-executable compilation
-- **pytest** - Testing framework (485 comprehensive tests)
+- **pytest** - Testing framework (620 comprehensive tests)
 
 ---
 
