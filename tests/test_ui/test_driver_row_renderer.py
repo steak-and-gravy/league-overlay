@@ -26,7 +26,7 @@ def _make_parent():
         show_delta=False,
         show_pit_lap=False,
         bold_drivers=False,
-        center_drivers=False,
+        pit_required=True,
         column_order=list(DEFAULT_COLUMN_ORDER),
     )
 

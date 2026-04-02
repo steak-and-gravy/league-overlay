@@ -21,6 +21,7 @@ BB’s League Overlay displays live standings and gaps with a focus on divisions
 - **Division System** — Assign drivers to divisions (Pro, ProAm, Am, Rookie) with customizable colors.
 - **Driver Rating** — Optional column showing iRating + Safety Rating combined (e.g., "A 2.5  6.0k") with license class background colors.
 - **Pit Strategy** — Optional column showing last pit lap or "OUT" during out lap (orange when on out lap).
+- **Pit Required Indicator** — Optional race-only Car # outline that stays visible until a valid pit stop is completed after lap 1.
 - **Division Filtering** — Toggle between viewing all divisions, your division only, or specific divisions (if spectating).
 - **Multi-Class Support** — Automatically filters to your car class in multi-class races.
 - **Auto-Centering** — Keeps you in view with intelligent timeout after manual scrolling.
@@ -50,6 +51,7 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - Division colors
 - License class colors (for Rating column background)
 - Performance indicator colors (faster/gained and slower/lost)
+- Pit Required toggle for the race-only Car # mandatory-stop indicator
 - **Column ordering and visibility** — Drag-and-drop or ▲/▼ to reorder any column (including Pos, Class, Driver). Check/uncheck optional columns: Positions Gained, Manufacturer, Rating, Car #, Gap, Class Gap, Interval, Class Interval, Best Lap, Last Lap, Delta, Pit Lap. Order and visibility are saved to config.
 - Log level (DEBUG, INFO, WARNING, ERROR)
 - Broadcast rolling standings (enable/disable)
@@ -74,6 +76,7 @@ The overlay saves your preferences to `LeagueOverlay.config`. You can customize:
 - **Last Lap column**: Shows formatted lap times (e.g., "1:24.56" or "58.34" for times under 60 seconds)
 - **Rating column**: Shows combined iRating + Safety Rating (e.g., "A 2.5  6.0k") with license class background colors (R=dark red, D=orange, C=gold, B=green, A=blue, P=indigo)
 - **Pit Lap column**: Shows last pit lap (e.g., "L12") or "OUT" in orange during out lap
+- **Pit Required toggle**: In races, the Car # outline stays visible until a valid pit stop after lap 1 is completed. Disable this in Settings if your league does not require it.
 
 ---
 

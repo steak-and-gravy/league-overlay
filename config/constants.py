@@ -194,7 +194,7 @@ class UIConfig:
                     "title": "11pt",
                     "button": "9.5pt",
                     "status": "11pt",
-                    "header": "11pt",
+                    "header": "10.5pt",
                     "data": "11pt",
                     "broadcast_title": "13pt",
                     "broadcast_session": "11pt",

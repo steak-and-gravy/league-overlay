@@ -1251,6 +1251,7 @@ class LeagueOverlay(QMainWindow):
             # Check fields that affect display structure
             new_position = new_driver.position
             old_position = old_driver.position
+            compare_car_number_outline = getattr(self.settings, 'pit_required', True)
 
             # Build comparison based on visible columns
             changes = (new_driver.car_idx != old_driver.car_idx or
@@ -1259,7 +1260,7 @@ class LeagueOverlay(QMainWindow):
                        new_position != old_position or
                        new_driver.division_position != old_driver.division_position or
                        new_driver.car_number != old_driver.car_number or
-                       new_driver.show_car_number_outline != old_driver.show_car_number_outline or
+                       (compare_car_number_outline and new_driver.show_car_number_outline != old_driver.show_car_number_outline) or
                        new_driver.driver_name != old_driver.driver_name or
                        new_driver.is_player != old_driver.is_player or
                        new_driver.is_spectated != old_driver.is_spectated or

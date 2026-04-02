@@ -487,17 +487,19 @@ class TelemetryProcessor:
                 end_time = self.tow_end_time.get(car_idx, 0.0)
                 player_tow_done = (car_idx == player_car_idx and player_tow_time <= 0)
                 non_player_tow_done = (car_idx != player_car_idx and end_time > 0 and now >= end_time)
-                done = car_idx_lap[car_idx] < 0
                 moving_forward = False
-                if (prev_track_position is not None and track_length_m > 0):
+                if (not current_invalid and not prev_invalid and track_length_m > 0):
                     small_distance_pct = 0.05 / track_length_m
                     moving_forward = current_track_position > (prev_track_position + small_distance_pct)
 
-                left_pit_and_stall = (not current_on_pit and current_surface != TRACK_SURFACE_IN_PIT_STALL)
+                left_pit_and_stall = (
+                    not current_invalid
+                    and not current_on_pit
+                    and current_surface != TRACK_SURFACE_IN_PIT_STALL
+                )
                 if (player_tow_done
                         or non_player_tow_done
                         or moving_forward
-                        or done
                         or left_pit_and_stall):
                     clear_reasons = []
                     if player_tow_done:
@@ -506,8 +508,6 @@ class TelemetryProcessor:
                         clear_reasons.append("estimated_tow_end")
                     if moving_forward:
                         clear_reasons.append("moving_forward")
-                    if done:
-                        clear_reasons.append("car_inactive")
                     if left_pit_and_stall:
                         clear_reasons.append("left_pit_and_stall")
                     logger.debug(
@@ -608,10 +608,11 @@ class TelemetryProcessor:
                 self.tow_last_live_track_position[car_idx] = current_track_position
 
             # Update last-known values
-            self.tow_last_surface[car_idx] = current_surface
-            self.tow_last_on_pit_road[car_idx] = current_on_pit
-            self.tow_last_track_position[car_idx] = current_track_position
-            self.tow_last_update_time[car_idx] = now
+            if not current_invalid:
+                self.tow_last_surface[car_idx] = current_surface
+                self.tow_last_on_pit_road[car_idx] = current_on_pit
+                self.tow_last_track_position[car_idx] = current_track_position
+                self.tow_last_update_time[car_idx] = now
             if not current_invalid:
                 self.tow_last_valid_track_position[car_idx] = current_track_position
                 self.tow_last_valid_time[car_idx] = now
@@ -823,7 +824,7 @@ class TelemetryProcessor:
     def _should_show_car_number_outline(self, car_idx: int, is_race: bool) -> bool:
         """Return True when the mandatory-stop indicator should be shown."""
         if not is_race:
-            return False
+            return True
 
         return not self._has_completed_mandatory_pit_stop(car_idx)
 

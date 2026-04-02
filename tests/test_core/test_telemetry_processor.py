@@ -633,6 +633,77 @@ class TestTowAwareFinishLeaderSelection:
         assert [driver['car_idx'] for driver in active_drivers] == [1, 2]
         assert processor.get_tow_aware_overall_leader_idx() == 1
 
+    def test_tow_disconnect_reconnect_preserves_tow_until_timer_expires(self):
+        """An in-progress tow should survive disconnect/reconnect and only end when its timer ends."""
+        ir = MagicMock()
+        race_state_tracker = RaceStateTracker(ir)
+        position_calculator = MagicMock(spec=PositionCalculator)
+        position_calculator.player_car_idx = 99
+
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=MagicMock(spec=DivisionManager),
+            race_state_tracker=race_state_tracker,
+            gap_calculator=MagicMock(spec=GapCalculator),
+            position_calculator=position_calculator
+        )
+
+        car_idx = 2
+        processor.tow_tracking[car_idx] = True
+        processor.tow_end_time[car_idx] = 250.0
+        processor.tow_frozen_track_position[car_idx] = 10.30
+        processor.tow_last_track_position[car_idx] = 10.98
+        processor.tow_last_surface[car_idx] = 1
+        processor.tow_last_on_pit_road[car_idx] = True
+        processor.tow_last_update_time[car_idx] = 190.0
+        processor.tow_last_valid_track_position[car_idx] = 10.98
+        processor.tow_last_valid_time[car_idx] = 190.0
+        processor.pit_tracking[car_idx] = 10
+        processor.pit_on_road[car_idx] = True
+
+        live_data = {
+            'CarIdxTrackSurface': [3, 3, 0],
+            'CarIdxOnPitRoad': [False, False, False],
+            'CarIdxLap': [0, 10, -1],
+            'CarIdxLapDistPct': [0.0, 0.50, 0.0],
+            'DriverInfo': {
+                'Drivers': [
+                    {'CarNumber': '0'},
+                    {'CarNumber': '1'},
+                    {'CarNumber': '2'},
+                ]
+            },
+            'PlayerCarTowTime': 0.0,
+            'WeekendInfo': {'TrackLength': '5 km'},
+            'SessionTime': 200.0,
+        }
+        ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        processor._update_tow_tracking()
+
+        assert processor.tow_tracking[car_idx] is True
+        assert processor.tow_end_time[car_idx] == pytest.approx(250.0)
+        assert processor.tow_last_track_position[car_idx] == pytest.approx(10.98)
+
+        live_data['CarIdxTrackSurface'][car_idx] = 1
+        live_data['CarIdxOnPitRoad'][car_idx] = True
+        live_data['CarIdxLap'][car_idx] = 10
+        live_data['CarIdxLapDistPct'][car_idx] = 0.98
+        live_data['SessionTime'] = 220.0
+
+        processor._update_tow_tracking()
+
+        assert processor.tow_tracking[car_idx] is True
+        assert processor.tow_frozen_track_position[car_idx] == pytest.approx(10.30)
+        assert processor._get_live_pit_display(car_idx, 10) == "TOW"
+
+        live_data['SessionTime'] = 251.0
+
+        processor._update_tow_tracking()
+
+        assert processor.tow_tracking[car_idx] is False
+        assert processor._get_live_pit_display(car_idx, 10) == "PIT"
+
     def test_process_telemetry_uses_tow_aware_leader_for_finish_tracking(self):
         """process_telemetry should pass the tow-aware leader function into finish tracking."""
         ir = MagicMock()
@@ -2688,8 +2759,8 @@ class TestFinishingGapCalculation:
 
         assert driver_state.show_car_number_outline is False
 
-    def test_non_race_entry_never_shows_mandatory_stop_outline(self, processor):
-        """Practice and qualifying entries keep the car-number cell borderless."""
+    def test_non_race_entry_keeps_car_number_outline(self, processor):
+        """Practice and qualifying entries keep the car-number outline visible."""
         car_idx = 3
 
         driver_state = processor._build_race_data_entry(
@@ -2713,7 +2784,7 @@ class TestFinishingGapCalculation:
             starting_position=0
         )
 
-        assert driver_state.show_car_number_outline is False
+        assert driver_state.show_car_number_outline is True
 
     def test_stale_results_positions_returns_empty(self, mock_ir):
         """Test that stale ResultsPositions data (lap count behind live) returns empty string."""

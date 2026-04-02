@@ -41,7 +41,7 @@ class TestAppSettingsDefaults:
         settings = AppSettings()
         assert settings.refresh_rate == 1.0  # Default from AppSettings
         assert settings.hide_headers is False
-        assert settings.center_drivers is False
+        assert settings.pit_required is True
         assert settings.bold_drivers is True
         assert settings.broadcast_roll_rows == 5
         assert settings.broadcast_roll_interval_seconds == 5
@@ -86,7 +86,7 @@ class TestLoadSettings:
             'row_color_style': 'Alternate',
             'refresh_rate': 1.5,
             'hide_headers': True,
-            'center_drivers': True,
+            'pit_required': False,
             'bold_drivers': False,
             'league_config': '/path/to/config.json',
             'recent_local_configs': ['/path/to/file1.json', '/path/to/file2.json']
@@ -107,7 +107,7 @@ class TestLoadSettings:
         assert settings.row_color_style == 'Alternate'
         assert settings.refresh_rate == 1.5
         assert settings.hide_headers is True
-        assert settings.center_drivers is True
+        assert settings.pit_required is False
         assert settings.bold_drivers is False
         assert settings.league_config == '/path/to/config.json'
         assert settings.recent_local_configs == ['/path/to/file1.json', '/path/to/file2.json']
@@ -229,7 +229,7 @@ class TestSaveSettings:
             row_color_style='Alternate',
             refresh_rate=1.5,
             hide_headers=True,
-            center_drivers=True,
+            pit_required=False,
             bold_drivers=False,
             league_config='/path/to/config.json',
             division_colors={'Pro': '#FF0000'}
@@ -242,7 +242,25 @@ class TestSaveSettings:
             assert data['x'] == 200
             assert data['opacity'] == 0.8
             assert data['font_size'] == 'Large'
+            assert data['pit_required'] is False
             assert data['division_colors'] == {'Pro': '#FF0000'}
+
+    def test_load_legacy_center_drivers_config_uses_pit_required_default(self, tmp_path):
+        """Legacy configs should ignore removed center_drivers and default Pit Required on."""
+        settings_file = tmp_path / "settings.config"
+        settings_data = {
+            'opacity': 0.8,
+            'center_drivers': True,
+        }
+
+        with open(settings_file, 'w') as f:
+            json.dump(settings_data, f)
+
+        manager = SettingsManager(str(settings_file))
+        settings = manager.load()
+
+        assert settings.pit_required is True
+        assert not hasattr(settings, 'center_drivers')
 
     def test_save_overwrites_existing(self, tmp_path):
         """Test saving overwrites existing settings file."""

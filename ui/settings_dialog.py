@@ -637,10 +637,13 @@ class SettingsDialog(QDialog):
         checkbox_row3 = QHBoxLayout()
         checkbox_row3.setSpacing(10)
 
-        self.center_drivers_cb = QCheckBox("Center driver names")
-        self.center_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.center_drivers_cb.setChecked(self.parent_overlay.settings.center_drivers)
-        checkbox_row3.addWidget(self.center_drivers_cb)
+        self.pit_required_cb = QCheckBox("Pit Required")
+        self.pit_required_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.pit_required_cb.setChecked(self.parent_overlay.settings.pit_required)
+        self.pit_required_cb.setToolTip(
+            "In races, shows a 1px Car# outline until a valid pit stop is completed."
+        )
+        checkbox_row3.addWidget(self.pit_required_cb)
 
         self.bold_drivers_cb = QCheckBox("Bold all driver rows")
         self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
@@ -1303,7 +1306,7 @@ class SettingsDialog(QDialog):
             self.opacity_slider.setValue(int(defaults.opacity * 20))  # Convert 0.5 -> 10
             self.refresh_slider.setValue(int(defaults.refresh_rate * 4))  # Convert to slider value
             self.hide_headers_cb.setChecked(defaults.hide_headers)
-            self.center_drivers_cb.setChecked(defaults.center_drivers)
+            self.pit_required_cb.setChecked(defaults.pit_required)
             self.bold_drivers_cb.setChecked(defaults.bold_drivers)
             self.show_footer_cb.setChecked(defaults.show_footer)
             self.broadcast_header_cb.setChecked(defaults.show_broadcast_header)
@@ -1367,7 +1370,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.opacity = self.opacity_slider.value() / 20.0
             self.parent_overlay.settings.refresh_rate = self.refresh_slider.value() / 4.0
             self.parent_overlay.settings.hide_headers = self.hide_headers_cb.isChecked()
-            self.parent_overlay.settings.center_drivers = self.center_drivers_cb.isChecked()
+            self.parent_overlay.settings.pit_required = self.pit_required_cb.isChecked()
             self.parent_overlay.settings.bold_drivers = self.bold_drivers_cb.isChecked()
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()
             self.parent_overlay.settings.show_broadcast_header = self.broadcast_header_cb.isChecked()

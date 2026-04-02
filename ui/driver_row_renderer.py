@@ -278,7 +278,6 @@ class DriverRowRenderer:
     def _create_driver_name_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                   label_bg: str, label_border: str, font_weight: str, column: int = 3) -> None:
         """Create driver name label."""
-        name_align = Qt.AlignCenter if self.parent.settings.center_drivers else Qt.AlignLeft
         name_label = QLabel(driver.team_name if driver.team_name > "" else driver.driver_name)
         name_label.setStyleSheet(f"""
             QLabel {{
@@ -290,7 +289,7 @@ class DriverRowRenderer:
                 {label_border}
             }}
         """)
-        name_label.setAlignment(name_align | Qt.AlignVCenter)
+        name_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         name_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         name_label.setMinimumWidth(COLUMN_MIN_WIDTHS.DRIVER_NAME)
         name_label.setWordWrap(False)

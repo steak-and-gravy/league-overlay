@@ -136,10 +136,10 @@ class SettingsValidator:
             default=self.defaults['hide_headers'],
             field_name='hide_headers'
         )
-        validated['center_drivers'] = self.coerce_bool(
-            data.get('center_drivers'),
-            default=self.defaults['center_drivers'],
-            field_name='center_drivers'
+        validated['pit_required'] = self.coerce_bool(
+            data.get('pit_required'),
+            default=self.defaults['pit_required'],
+            field_name='pit_required'
         )
         validated['bold_drivers'] = self.coerce_bool(
             data.get('bold_drivers'),

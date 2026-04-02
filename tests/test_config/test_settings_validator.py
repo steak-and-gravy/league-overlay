@@ -396,7 +396,7 @@ class TestValidateAndCoerce:
             'opacity': 0.75,
             'refresh_rate': 1.5,
             'hide_headers': True,
-            'center_drivers': False,
+            'pit_required': False,
             'bold_drivers': True,
             'font_size': 'Large',
             'row_color_style': 'Alternate',
@@ -961,6 +961,18 @@ class TestNewDriverInfoColumns:
         result = validator.validate_and_coerce(data)
         assert result['show_pit_lap'] is False
 
+    def test_pit_required_defaults_true(self):
+        """Test pit_required defaults to True."""
+        validator = SettingsValidator()
+        result = validator.validate_and_coerce({})
+        assert result['pit_required'] is True
+
+    def test_pit_required_false(self):
+        """Test pit_required can be disabled."""
+        validator = SettingsValidator()
+        result = validator.validate_and_coerce({'pit_required': False})
+        assert result['pit_required'] is False
+
     def test_all_four_new_settings_together(self):
         """Test all four new driver info settings can be set together."""
         validator = SettingsValidator()
@@ -968,13 +980,15 @@ class TestNewDriverInfoColumns:
             'show_rating': True,
             'show_rating': True,
             'show_pit_lap': True,
-            'show_pit_lap': True
+            'show_pit_lap': True,
+            'pit_required': False,
         }
         result = validator.validate_and_coerce(data)
         assert result['show_rating'] is True
         assert result['show_rating'] is True
         assert result['show_pit_lap'] is True
         assert result['show_pit_lap'] is True
+        assert result['pit_required'] is False
 
     def test_show_rating_invalid_returns_default(self):
         """Test invalid show_rating value returns default."""
@@ -1055,6 +1069,7 @@ class TestNewDriverInfoColumns:
         assert result['show_rating'] is False
         assert result['show_car_number'] is True
         assert result['show_pit_lap'] is False
+        assert result['pit_required'] is True
         assert result['show_division_gap'] is False
         assert result['show_division_interval'] is False
 

@@ -764,6 +764,7 @@ class TestHasDataChanged:
             show_delta=False,
             show_last_lap=False,
             show_pit_lap=False,
+            pit_required=True,
         )
 
         old_driver = DriverState(
@@ -787,6 +788,38 @@ class TestHasDataChanged:
         app._has_data_changed = LeagueOverlay._has_data_changed.__get__(app)
 
         assert app._has_data_changed([new_driver]) is True
+
+    def test_car_number_outline_change_ignored_when_pit_required_disabled(self):
+        """Outline state alone should not force a redraw when the indicator is disabled."""
+        app = Mock(spec=LeagueOverlay)
+        app.settings = SimpleNamespace(
+            show_delta=False,
+            show_last_lap=False,
+            show_pit_lap=False,
+            pit_required=False,
+        )
+
+        old_driver = DriverState(
+            car_idx=5,
+            driver_info={"UserName": "Focused Driver", "CarNumber": "42"},
+            position=1,
+            division_position=1,
+            division_name="Pro",
+            show_car_number_outline=True,
+        )
+        new_driver = DriverState(
+            car_idx=5,
+            driver_info={"UserName": "Focused Driver", "CarNumber": "42"},
+            position=1,
+            division_position=1,
+            division_name="Pro",
+            show_car_number_outline=False,
+        )
+        app._last_emitted_data = [old_driver]
+
+        app._has_data_changed = LeagueOverlay._has_data_changed.__get__(app)
+
+        assert app._has_data_changed([new_driver]) is False
 
     def test_apply_official_league_broadcast_metadata_resets_to_defaults_for_non_official_config(self):
         app = Mock(spec=LeagueOverlay)
