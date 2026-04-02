@@ -578,6 +578,61 @@ class TestTowAwareFinishLeaderSelection:
         assert processor.tow_frozen_track_position[2] == pytest.approx(10.30)
         assert processor.get_tow_aware_overall_leader_idx() == 1
 
+    def test_reconnected_pit_car_is_treated_like_tow_for_sorting(self):
+        """A disconnected car rejoining in the pits ahead of its snapshot should be frozen like a tow."""
+        ir = MagicMock()
+        race_state_tracker = RaceStateTracker(ir)
+        position_calculator = MagicMock(spec=PositionCalculator)
+        position_calculator.player_car_idx = 99
+
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=MagicMock(spec=DivisionManager),
+            race_state_tracker=race_state_tracker,
+            gap_calculator=MagicMock(spec=GapCalculator),
+            position_calculator=position_calculator
+        )
+
+        snapshot = DriverState(
+            car_idx=2,
+            current_lap=10,
+            lap_pct=0.20,
+            is_disconnected=True
+        )
+        race_state_tracker.update_snapshot(2, snapshot)
+
+        live_data = {
+            'CarIdxTrackSurface': [3, 3, 1],
+            'CarIdxOnPitRoad': [False, False, True],
+            'CarIdxLap': [0, 10, 10],
+            'CarIdxLapDistPct': [0.0, 0.50, 0.98],
+            'DriverInfo': {
+                'Drivers': [
+                    {'CarNumber': '0'},
+                    {'CarNumber': '1'},
+                    {'CarNumber': '2'},
+                ]
+            },
+            'PlayerCarTowTime': 0.0,
+            'WeekendInfo': {'TrackLength': '5 km'},
+            'SessionTime': 200.0,
+        }
+        ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        processor._update_tow_tracking()
+
+        assert processor.tow_tracking[2] is True
+        assert processor.tow_frozen_track_position[2] == pytest.approx(10.20)
+
+        active_drivers = [
+            {'car_idx': 1, 'total_track_position': 10.50},
+            {'car_idx': 2, 'total_track_position': 10.98},
+        ]
+        active_drivers.sort(key=processor._get_tow_aware_sort_track_position, reverse=True)
+
+        assert [driver['car_idx'] for driver in active_drivers] == [1, 2]
+        assert processor.get_tow_aware_overall_leader_idx() == 1
+
     def test_process_telemetry_uses_tow_aware_leader_for_finish_tracking(self):
         """process_telemetry should pass the tow-aware leader function into finish tracking."""
         ir = MagicMock()
