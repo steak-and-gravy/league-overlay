@@ -12,6 +12,7 @@ import pytest
 from unittest.mock import Mock, MagicMock, patch
 from typing import Optional, List, Dict
 from league_overlay import LeagueOverlay
+from core.driver_state import DriverState
 
 
 class TestHandleTelemetryUpdate:
@@ -400,13 +401,14 @@ class TestSessionChangeFooterRefresh:
     """Tests for footer refresh behavior during session transitions."""
 
     def test_clears_standings_when_session_changes_and_race_data_none(self):
-        """Session change should still clear standings even when race_data is None."""
+        """Practice to qualifying should show registered-driver placeholders when race_data is None."""
         app = Mock(spec=LeagueOverlay)
         app.current_session_id = 100
         app.current_session_type = "Practice"
         app.race_data = [{'position': 1}]
         app._last_emitted_data = [{'position': 1}]
         app.class_leader_lap = 12
+        placeholder_data = [Mock(spec=DriverState)]
 
         app.telemetry_processor = Mock()
         app.telemetry_processor.current_session_id = 101
@@ -427,6 +429,7 @@ class TestSessionChangeFooterRefresh:
         app.signals.update_footer.emit = Mock()
         app.signals.update_data = Mock()
         app.signals.update_data.emit = Mock()
+        app._build_registered_driver_placeholders = Mock(return_value=placeholder_data)
 
         app._handle_telemetry_update = LeagueOverlay._handle_telemetry_update.__get__(app)
 
@@ -434,10 +437,10 @@ class TestSessionChangeFooterRefresh:
 
         assert app.current_session_id == 101
         assert app.current_session_type == "Qualifying"
-        assert app.race_data == []
-        assert app._last_emitted_data == []
+        assert app.race_data == placeholder_data
+        assert app._last_emitted_data == placeholder_data
         assert app.class_leader_lap is None
-        app.signals.update_data.emit.assert_called_once_with([])
+        app.signals.update_data.emit.assert_called_once_with(placeholder_data)
         app.telemetry_processor.get_footer_data.assert_not_called()
         app.signals.update_footer.emit.assert_not_called()
 
@@ -526,13 +529,14 @@ class TestSessionChangeFooterRefresh:
         app.signals.update_footer.emit.assert_not_called()
 
     def test_practice_to_open_qualify_clears_when_race_data_none(self):
-        """Qualifying variants like Open Qualify should also clear standings."""
+        """Qualifying variants like Open Qualify should also show registered-driver placeholders."""
         app = Mock(spec=LeagueOverlay)
         app.current_session_id = 100
         app.current_session_type = "Practice"
         app.race_data = [{'position': 1}]
         app._last_emitted_data = [{'position': 1}]
         app.class_leader_lap = 12
+        placeholder_data = [Mock(spec=DriverState)]
 
         app.telemetry_processor = Mock()
         app.telemetry_processor.current_session_id = 101
@@ -553,6 +557,7 @@ class TestSessionChangeFooterRefresh:
         app.signals.update_footer.emit = Mock()
         app.signals.update_data = Mock()
         app.signals.update_data.emit = Mock()
+        app._build_registered_driver_placeholders = Mock(return_value=placeholder_data)
 
         app._handle_telemetry_update = LeagueOverlay._handle_telemetry_update.__get__(app)
 
@@ -560,13 +565,13 @@ class TestSessionChangeFooterRefresh:
 
         assert app.current_session_id == 101
         assert app.current_session_type == "Open Qualify"
-        assert app.race_data == []
-        assert app._last_emitted_data == []
+        assert app.race_data == placeholder_data
+        assert app._last_emitted_data == placeholder_data
         assert app.class_leader_lap is None
-        app.signals.update_data.emit.assert_called_once_with([])
+        app.signals.update_data.emit.assert_called_once_with(placeholder_data)
 
-    def test_practice_to_qualifying_with_race_data_clears_then_renders_new_data(self):
-        """Practice to qualifying should emit an empty clear before new standings."""
+    def test_practice_to_qualifying_with_race_data_shows_placeholders_then_renders_new_data(self):
+        """Practice to qualifying should emit placeholders before new standings."""
         app = Mock(spec=LeagueOverlay)
         app.current_session_id = 100
         app.current_session_type = "Practice"
@@ -575,6 +580,7 @@ class TestSessionChangeFooterRefresh:
         app.class_leader_lap = 12
         app.player_car_idx = None
         app.spectated_car_idx = None
+        placeholder_data = [Mock(spec=DriverState)]
 
         app.telemetry_processor = Mock()
         app.telemetry_processor.current_session_id = 101
@@ -600,6 +606,7 @@ class TestSessionChangeFooterRefresh:
         app.signals.update_footer.emit = Mock()
         app.signals.update_data = Mock()
         app.signals.update_data.emit = Mock()
+        app._build_registered_driver_placeholders = Mock(return_value=placeholder_data)
 
         app._handle_telemetry_update = LeagueOverlay._handle_telemetry_update.__get__(app)
 
@@ -612,8 +619,71 @@ class TestSessionChangeFooterRefresh:
         assert app.player_car_idx == 5
         assert app.class_leader_lap == 0
         assert app._last_emitted_data == current_data
-        assert app.signals.update_data.emit.call_args_list[0].args == ([],)
+        assert app.signals.update_data.emit.call_args_list[0].args == (placeholder_data,)
         assert app.signals.update_data.emit.call_args_list[1].args == (current_data,)
+
+    def test_build_registered_driver_placeholders_uses_session_driver_info(self):
+        """Placeholder rows should come from live session driver info and preserve division colors."""
+        app = Mock(spec=LeagueOverlay)
+        app.ir = MagicMock()
+        app.ir.__getitem__.side_effect = lambda key: {
+            'DriverInfo': {
+                'Drivers': [
+                    {'CarIdx': 7, 'UserID': 101, 'UserName': 'Driver One', 'CarNumber': '12', 'CarClassID': 100},
+                    {'CarIdx': 8, 'UserID': 102, 'UserName': 'Driver Two', 'CarNumber': '42', 'CarClassID': 100},
+                    {'CarIdx': 9, 'UserID': 103, 'UserName': 'Other Class', 'CarNumber': '88', 'CarClassID': 200},
+                    {'CarIdx': 10, 'UserID': 104, 'UserName': 'Pace Car', 'CarNumber': 'PC', 'CarClassID': 100},
+                    {'CarIdx': 11, 'UserID': 105, 'UserName': 'Spectator', 'CarNumber': '0', 'CarClassID': 100},
+                ]
+            }
+        }[key]
+        app.position_calculator = Mock()
+        app.position_calculator.player_car_class_id = 100
+        app.division_manager = Mock()
+        app.division_manager.get_driver_division.side_effect = lambda driver_info: {
+            101: 'Pro',
+            102: None,
+        }.get(driver_info.get('UserID'))
+        app.division_manager.get_division_color.side_effect = lambda division: {
+            'Pro': '#FF8C00',
+            None: '#D3D3D3',
+        }.get(division, '#D3D3D3')
+
+        app._build_registered_driver_placeholders = (
+            LeagueOverlay._build_registered_driver_placeholders.__get__(app)
+        )
+
+        placeholders = app._build_registered_driver_placeholders()
+
+        assert len(placeholders) == 2
+        assert placeholders[0].car_idx == 7
+        assert placeholders[0].driver_name == 'Driver One'
+        assert placeholders[0].driver_info['UserID'] == 101
+        assert placeholders[0].car_number == '12'
+        assert placeholders[0].division_name == 'Pro'
+        assert placeholders[0].division_color == '#FF8C00'
+        assert placeholders[0].position == 0
+        assert placeholders[0].best_lap == ''
+        assert placeholders[1].car_idx == 8
+        assert placeholders[1].driver_name == 'Driver Two'
+        assert placeholders[1].car_number == '42'
+        assert placeholders[1].division_name is None
+        assert placeholders[1].division_color == '#D3D3D3'
+
+    def test_build_registered_driver_placeholders_returns_empty_when_driverinfo_unavailable(self):
+        """Missing DriverInfo should safely produce no placeholders."""
+        app = Mock(spec=LeagueOverlay)
+        app.ir = MagicMock()
+        app.ir.__getitem__.side_effect = KeyError('DriverInfo')
+        app.position_calculator = Mock()
+        app.position_calculator.player_car_class_id = 100
+        app.division_manager = Mock()
+
+        app._build_registered_driver_placeholders = (
+            LeagueOverlay._build_registered_driver_placeholders.__get__(app)
+        )
+
+        assert app._build_registered_driver_placeholders() == []
 
     def test_does_not_recalculate_footer_without_session_change_when_race_data_none(self):
         """No footer refresh should occur when session is unchanged and race data is None."""

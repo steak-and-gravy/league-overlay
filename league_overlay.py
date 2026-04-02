@@ -1104,6 +1104,56 @@ class LeagueOverlay(QMainWindow):
     # - _calculate_live_race_gap, _calculate_practice_gap, reset_fields
     # The telemetry_loop above now delegates to telemetry_processor.process_telemetry()
 
+    def _build_registered_driver_placeholders(self) -> List[DriverState]:
+        """Build placeholder rows from iRacing session driver info.
+
+        Used during practice -> qualifying handoff so stale practice standings
+        disappear without leaving the overlay completely empty.
+        """
+        placeholder_data: List[DriverState] = []
+        try:
+            driver_info = self.ir['DriverInfo']
+            session_drivers = driver_info['Drivers']
+        except (KeyError, TypeError):
+            return placeholder_data
+
+        if not session_drivers:
+            return placeholder_data
+
+        player_class_id = self.position_calculator.player_car_class_id
+
+        for session_driver in session_drivers:
+            if not session_driver:
+                continue
+
+            driver_name = session_driver.get('UserName', '')
+            if driver_name and 'pace car' in driver_name.lower():
+                continue
+
+            car_number = session_driver.get('CarNumber', '')
+            if not car_number or car_number == '0':
+                continue
+
+            if player_class_id is not None and session_driver.get('CarClassID') != player_class_id:
+                continue
+
+            car_idx = session_driver.get('CarIdx')
+            if car_idx is None:
+                continue
+
+            division_name = self.division_manager.get_driver_division(session_driver)
+
+            placeholder_data.append(
+                DriverState(
+                    car_idx=car_idx,
+                    driver_info=session_driver.copy(),
+                    division_name=division_name,
+                    division_color=self.division_manager.get_division_color(division_name),
+                )
+            )
+
+        return placeholder_data
+
     def _handle_telemetry_update(self, race_data: Optional[List[DriverState]]) -> None:
         """Handle telemetry update and sync state from processor.
 
@@ -1138,10 +1188,11 @@ class LeagueOverlay(QMainWindow):
                 and 'qual' in curr_type_normalized
             )
             if should_clear_standings:
-                self.race_data = []
-                self._last_emitted_data = []  # Reset change tracking on session change
+                cleared_data = self._build_registered_driver_placeholders()
+                self.race_data = cleared_data
+                self._last_emitted_data = cleared_data.copy()  # Reset change tracking on session change
                 self.class_leader_lap = None
-                self.signals.update_data.emit([])
+                self.signals.update_data.emit(cleared_data)
             # Note: Division filter state is intentionally preserved across session changes
 
         if race_data is None:
