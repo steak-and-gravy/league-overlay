@@ -59,10 +59,10 @@ class TestFormatCombinedRating:
         result = GapCalculator.format_combined_rating(5000, -1, 200)
         assert result == "—"
 
-    def test_invalid_license_level_too_high(self):
-        """Test invalid license level (>24) returns dash."""
+    def test_wc_license_level(self):
+        """Test World Championship license level formats correctly."""
         result = GapCalculator.format_combined_rating(5000, 25, 200)
-        assert result == "—"
+        assert result == "WC2.0  5.0k"
 
     def test_invalid_irating_zero(self):
         """Test invalid iRating (0) returns dash."""
@@ -251,10 +251,15 @@ class TestGetLicenseBackgroundColor:
         result = GapCalculator.get_license_background_color(-1)
         assert result == '#000000'
 
-    def test_invalid_level_too_high(self):
-        """Test invalid level >24 returns black."""
+    def test_wc_level_25(self):
+        """Test WC level 25 returns WC background color."""
         result = GapCalculator.get_license_background_color(25)
-        assert result == '#000000'
+        assert result == '#800080'
+
+    def test_wc_level_above_25(self):
+        """Test WC levels above 25 still return WC background color."""
+        result = GapCalculator.get_license_background_color(26)
+        assert result == '#800080'
 
     def test_all_valid_levels(self):
         """Test that all 24 valid levels return a valid hex color."""

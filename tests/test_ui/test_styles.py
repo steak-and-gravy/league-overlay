@@ -77,8 +77,8 @@ def test_default_style_does_not_add_yellow_outline_when_player_is_also_spectated
     assert "border: 2px solid yellow;" not in style_sheet
 
 
-def test_default_style_uses_black_car_number_background_with_division_outline():
-    """Default style renders the car number on black with a 2px division-color outline and white text."""
+def test_default_style_uses_black_car_number_background_without_outline_by_default():
+    """Default style leaves the car number borderless until the stop indicator is active."""
     style = DefaultColorStyle()
     parent = _make_parent()
     driver = _make_driver()
@@ -86,11 +86,22 @@ def test_default_style_uses_black_car_number_background_with_division_outline():
     styling = style.get_styling(driver, parent)
 
     assert styling["car_number_bg"] == "#000000"
-    assert styling["car_number_border"] == "border: 2px solid #00AAFF;"
+    assert styling["car_number_border"] == ""
     assert styling["car_number_color"] == "white"
     assert styling["division_position_bg"] == "#00AAFF"
     assert styling["position_bg"] == "#FFFFFF"
     assert styling["position_color"] == "#000000"
+
+
+def test_default_style_uses_division_outline_for_pending_mandatory_stop():
+    """Default style shows a 1px division outline when the required stop is still pending."""
+    style = DefaultColorStyle()
+    parent = _make_parent()
+    driver = _make_driver(show_car_number_outline=True)
+
+    styling = style.get_styling(driver, parent)
+
+    assert styling["car_number_border"] == "border: 1px solid #00AAFF;"
 
 
 def test_default_style_uses_black_division_position_with_division_outline():

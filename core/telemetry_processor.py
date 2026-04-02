@@ -815,6 +815,18 @@ class TelemetryProcessor:
             is_out_lap=is_on_out_lap
         )
 
+    def _has_completed_mandatory_pit_stop(self, car_idx: int) -> bool:
+        """Return True once a valid pit stop has been completed after lap 1."""
+        last_pit_lap_num = self.pit_tracking.get(car_idx, 0)
+        return last_pit_lap_num > 1
+
+    def _should_show_car_number_outline(self, car_idx: int, is_race: bool) -> bool:
+        """Return True when the mandatory-stop indicator should be shown."""
+        if not is_race:
+            return False
+
+        return not self._has_completed_mandatory_pit_stop(car_idx)
+
     def _get_snapshot_track_components(self, driver: Dict) -> Tuple[int, float]:
         """Return track-position components for snapshot storage.
 
@@ -860,7 +872,7 @@ class TelemetryProcessor:
         abbrev = first_word[:3].upper() if first_word else ''
         return (abbrev, '#FFFFFF')
 
-    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], interval: str, gap_to_leader: str, division_interval: str, division_gap_to_leader: str, display_position: int, division_color: str, division_name: Optional[str], delta: str = "--", last_lap_time: float = 0.0, best_lap_time: float = 0.0, starting_position: int = 0, irating: int = 0, lic_level: int = 0, lic_sublevel: int = 0) -> DriverState:
+    def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], interval: str, gap_to_leader: str, division_interval: str, division_gap_to_leader: str, display_position: int, division_color: str, division_name: Optional[str], is_race: bool, delta: str = "--", last_lap_time: float = 0.0, best_lap_time: float = 0.0, starting_position: int = 0, irating: int = 0, lic_level: int = 0, lic_sublevel: int = 0) -> DriverState:
         """Build a single race data entry for display.
 
         Args:
@@ -911,6 +923,7 @@ class TelemetryProcessor:
         # Calculate last pit lap and out lap indicator
         current_lap = driver.get('current_lap', 0)
         pit_lap_display = self._get_live_pit_display(car_idx, current_lap)
+        show_car_number_outline = self._should_show_car_number_outline(car_idx, is_race)
         if is_disconnected and not is_finished:
             # Preserve last known pit/status text while disconnected (team swaps, reconnects).
             if snapshot and snapshot.pit_lap:
@@ -946,6 +959,7 @@ class TelemetryProcessor:
             lic_level=lic_level,
             pit_lap=pit_lap_display,
             is_towing=is_towing,
+            show_car_number_outline=show_car_number_outline,
             is_player=is_player,
             is_spectated=is_spectated,
             is_disconnected=is_disconnected
@@ -976,6 +990,7 @@ class TelemetryProcessor:
                 driver_data.get('current_lap', 0)
             )
             snapshot_is_towing = self.tow_tracking.get(car_idx, False)
+            show_car_number_outline = self._should_show_car_number_outline(car_idx, True)
 
             # Get existing state or create new one
             driver_state = self.race_state_tracker.get_snapshot(car_idx)
@@ -988,6 +1003,7 @@ class TelemetryProcessor:
                 driver_state.is_disconnected = False
                 driver_state.pit_lap = snapshot_pit_lap
                 driver_state.is_towing = snapshot_is_towing
+                driver_state.show_car_number_outline = show_car_number_outline
                 # gap is preserved (not overwritten)
             else:
                 # Create new state
@@ -1008,6 +1024,7 @@ class TelemetryProcessor:
                     is_disconnected=False,
                     pit_lap=snapshot_pit_lap,
                     is_towing=snapshot_is_towing,
+                    show_car_number_outline=show_car_number_outline,
                     car_manufacturer=mfr_abbrev,
                     car_manufacturer_color=mfr_color,
                 )
@@ -2074,7 +2091,7 @@ class TelemetryProcessor:
                 race_entry = self._build_race_data_entry(
                     driver, division_positions, interval, gap_to_leader,
                     division_interval, division_gap_to_leader, position,
-                    current_driver_color, current_driver_division,
+                    current_driver_color, current_driver_division, is_race,
                     delta, last_lap_time, best_lap_time, starting_position,
                     irating, lic_level, lic_sublevel
                 )

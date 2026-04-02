@@ -2026,6 +2026,7 @@ class TestFinishingGapCalculation:
         race_state_tracker = RaceStateTracker(mock_ir)
         gap_calculator = GapCalculator()
         position_calculator = MagicMock(spec=PositionCalculator)
+        position_calculator.player_car_idx = None
         position_calculator.spectated_car_idx = None
 
         return TelemetryProcessor(
@@ -2421,6 +2422,7 @@ class TestFinishingGapCalculation:
             display_position=1,
             division_color="#FFFFFF",
             division_name="Pro",
+            is_race=True,
             delta="--",
             last_lap_time=120.5,
             best_lap_time=119.8,
@@ -2457,6 +2459,7 @@ class TestFinishingGapCalculation:
             display_position=2,
             division_color="#FFFFFF",
             division_name="Pro",
+            is_race=True,
             delta="--",
             last_lap_time=121.2,
             best_lap_time=120.5,
@@ -2494,6 +2497,7 @@ class TestFinishingGapCalculation:
             display_position=3,
             division_color="#FFFFFF",
             division_name="Pro",
+            is_race=True,
             delta="--",
             last_lap_time=122.0,
             best_lap_time=121.0,
@@ -2589,6 +2593,7 @@ class TestFinishingGapCalculation:
             display_position=2,
             division_color="#FFFFFF",
             division_name="Pro",
+            is_race=True,
             delta="--",
             last_lap_time=0.0,
             best_lap_time=0.0,
@@ -2598,6 +2603,117 @@ class TestFinishingGapCalculation:
         assert driver_state.gap_to_leader == "(DC)"
         assert driver_state.is_towing is True
         assert driver_state.pit_lap == "TOW"
+
+    def test_pending_mandatory_stop_shows_car_number_outline_in_race(self, processor):
+        """Race entries keep the outline visible until a valid stop after lap 1 is completed."""
+        car_idx = 3
+        driver = {
+            'car_idx': car_idx,
+            'driver_info': {'UserID': 103, 'UserName': 'Driver D', 'CarIdx': car_idx},
+            'current_lap': 5,
+        }
+
+        driver_state = processor._build_race_data_entry(
+            driver=driver,
+            division_positions={car_idx: 4},
+            interval="",
+            gap_to_leader="10.0",
+            division_interval="",
+            division_gap_to_leader="10.0",
+            display_position=4,
+            division_color="#FFFFFF",
+            division_name="Pro",
+            is_race=True,
+            delta="--",
+            last_lap_time=0.0,
+            best_lap_time=0.0,
+            starting_position=4
+        )
+
+        assert driver_state.show_car_number_outline is True
+
+    def test_lap_one_pit_stop_does_not_clear_mandatory_stop_outline(self, processor):
+        """A lap-1 stop does not satisfy the required pit stop."""
+        car_idx = 3
+        processor.pit_tracking[car_idx] = 1
+
+        driver_state = processor._build_race_data_entry(
+            driver={
+                'car_idx': car_idx,
+                'driver_info': {'UserID': 103, 'UserName': 'Driver D', 'CarIdx': car_idx},
+                'current_lap': 2,
+            },
+            division_positions={car_idx: 4},
+            interval="",
+            gap_to_leader="10.0",
+            division_interval="",
+            division_gap_to_leader="10.0",
+            display_position=4,
+            division_color="#FFFFFF",
+            division_name="Pro",
+            is_race=True,
+            delta="--",
+            last_lap_time=0.0,
+            best_lap_time=0.0,
+            starting_position=4
+        )
+
+        assert driver_state.show_car_number_outline is True
+
+    def test_valid_mandatory_pit_stop_removes_car_number_outline(self, processor):
+        """Once a valid stop occurs after lap 1, the indicator outline is removed."""
+        car_idx = 3
+        processor.pit_tracking[car_idx] = 6
+
+        driver_state = processor._build_race_data_entry(
+            driver={
+                'car_idx': car_idx,
+                'driver_info': {'UserID': 103, 'UserName': 'Driver D', 'CarIdx': car_idx},
+                'current_lap': 7,
+            },
+            division_positions={car_idx: 4},
+            interval="",
+            gap_to_leader="10.0",
+            division_interval="",
+            division_gap_to_leader="10.0",
+            display_position=4,
+            division_color="#FFFFFF",
+            division_name="Pro",
+            is_race=True,
+            delta="--",
+            last_lap_time=0.0,
+            best_lap_time=0.0,
+            starting_position=4
+        )
+
+        assert driver_state.show_car_number_outline is False
+
+    def test_non_race_entry_never_shows_mandatory_stop_outline(self, processor):
+        """Practice and qualifying entries keep the car-number cell borderless."""
+        car_idx = 3
+
+        driver_state = processor._build_race_data_entry(
+            driver={
+                'car_idx': car_idx,
+                'driver_info': {'UserID': 103, 'UserName': 'Driver D', 'CarIdx': car_idx},
+                'current_lap': 5,
+            },
+            division_positions={car_idx: 4},
+            interval="",
+            gap_to_leader="10.0",
+            division_interval="",
+            division_gap_to_leader="10.0",
+            display_position=4,
+            division_color="#FFFFFF",
+            division_name="Pro",
+            is_race=False,
+            delta="--",
+            last_lap_time=0.0,
+            best_lap_time=0.0,
+            starting_position=0
+        )
+
+        assert driver_state.show_car_number_outline is False
 
     def test_stale_results_positions_returns_empty(self, mock_ir):
         """Test that stale ResultsPositions data (lap count behind live) returns empty string."""

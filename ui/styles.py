@@ -209,7 +209,10 @@ class DefaultColorStyle(ColorStyleStrategy):
         division_position_color = "white"
         division_position_border = f"border: 2px solid {driver.division_color};"
         car_number_bg = parent.get_bg_color('#000000')
-        car_number_border = f"border: 2px solid {driver.division_color};"
+        car_number_border = (
+            f"border: 1px solid {driver.division_color};"
+            if driver.show_car_number_outline else ""
+        )
         car_number_color = "white"
 
         if driver.is_player:

@@ -281,7 +281,7 @@ class GapCalculator:
         """Get background color for license class.
 
         Args:
-            lic_level: License level (1-24)
+            lic_level: License level (1-24, WC=25+)
 
         Returns:
             Hex color string for license class background
@@ -301,7 +301,7 @@ class GapCalculator:
             return LICENSE_COLORS.A_CLASS
         elif 21 <= lic_level <= 24:
             return LICENSE_COLORS.PRO
-        elif lic_level <= 25:
+        elif lic_level >= 25:
             return LICENSE_COLORS.WC
         else:
             return '#000000'  # Black for invalid/unknown

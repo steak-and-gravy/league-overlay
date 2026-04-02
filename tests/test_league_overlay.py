@@ -11,6 +11,7 @@ Tests cover:
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 from typing import Optional, List, Dict
+from types import SimpleNamespace
 from league_overlay import LeagueOverlay
 from core.driver_state import DriverState
 
@@ -751,6 +752,41 @@ class TestOfficialLeagueBroadcastMetadata:
         assert app.broadcast_header_logo == "https://bwrl.net/_nuxt/bwrl-logo.DjQE3-f5.png"
         assert app.broadcast_header_accent_color == "#FF8C00"
         app.broadcast_header.refresh_styles.assert_called_once()
+
+
+class TestHasDataChanged:
+    """Tests for display-refresh change detection."""
+
+    def test_car_number_outline_change_triggers_refresh(self):
+        """The UI should redraw when the mandatory-stop outline state changes."""
+        app = Mock(spec=LeagueOverlay)
+        app.settings = SimpleNamespace(
+            show_delta=False,
+            show_last_lap=False,
+            show_pit_lap=False,
+        )
+
+        old_driver = DriverState(
+            car_idx=5,
+            driver_info={"UserName": "Focused Driver", "CarNumber": "42"},
+            position=1,
+            division_position=1,
+            division_name="Pro",
+            show_car_number_outline=True,
+        )
+        new_driver = DriverState(
+            car_idx=5,
+            driver_info={"UserName": "Focused Driver", "CarNumber": "42"},
+            position=1,
+            division_position=1,
+            division_name="Pro",
+            show_car_number_outline=False,
+        )
+        app._last_emitted_data = [old_driver]
+
+        app._has_data_changed = LeagueOverlay._has_data_changed.__get__(app)
+
+        assert app._has_data_changed([new_driver]) is True
 
     def test_apply_official_league_broadcast_metadata_resets_to_defaults_for_non_official_config(self):
         app = Mock(spec=LeagueOverlay)

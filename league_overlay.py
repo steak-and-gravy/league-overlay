@@ -1259,6 +1259,7 @@ class LeagueOverlay(QMainWindow):
                        new_position != old_position or
                        new_driver.division_position != old_driver.division_position or
                        new_driver.car_number != old_driver.car_number or
+                       new_driver.show_car_number_outline != old_driver.show_car_number_outline or
                        new_driver.driver_name != old_driver.driver_name or
                        new_driver.is_player != old_driver.is_player or
                        new_driver.is_spectated != old_driver.is_spectated or
