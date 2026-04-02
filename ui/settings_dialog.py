@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QSlider, QCheckBox, QFileDialog, QMessageBox, QColorDialog,
-    QComboBox, QSpinBox, QGridLayout, QListWidget, QListWidgetItem, QAbstractItemView
+    QComboBox, QSpinBox, QGridLayout, QListWidget, QListWidgetItem, QAbstractItemView,
+    QStyledItemDelegate, QStyle, QStyleOptionButton, QStyleOptionViewItem, QApplication
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -17,6 +18,46 @@ from config.constants import VERSION, UI_DIMENSIONS, TelemetryConfig, COLUMN_REG
 from config.logging_config import set_log_level, get_logger
 
 logger = get_logger(__name__)
+
+ALWAYS_VISIBLE_ROLE = Qt.UserRole + 1
+
+
+class ColumnListItemDelegate(QStyledItemDelegate):
+    """Paint fixed columns with a disabled checkbox while keeping rows reorderable."""
+
+    def paint(self, painter, option, index):
+        if not index.data(ALWAYS_VISIBLE_ROLE):
+            super().paint(painter, option, index)
+            return
+
+        view_option = QStyleOptionViewItem(option)
+        self.initStyleOption(view_option, index)
+        style = view_option.widget.style() if view_option.widget else QApplication.style()
+        check_rect = style.subElementRect(QStyle.SE_ItemViewItemCheckIndicator, view_option, view_option.widget)
+
+        view_option.features &= ~QStyleOptionViewItem.HasCheckIndicator
+        super().paint(painter, view_option, index)
+
+        checkbox_option = QStyleOptionButton()
+        checkbox_option.rect = check_rect
+        checkbox_option.state = QStyle.State_Off
+        if index.data(Qt.CheckStateRole) == Qt.Checked:
+            checkbox_option.state |= QStyle.State_On
+
+        self._paint_locked_checkbox(style, painter, checkbox_option)
+
+    def editorEvent(self, event, model, option, index):
+        if index.data(ALWAYS_VISIBLE_ROLE):
+            return False
+        return super().editorEvent(event, model, option, index)
+
+    def _paint_locked_checkbox(self, style, painter, checkbox_option):
+        """Draw a checked checkbox with reduced opacity to signal it is locked."""
+        painter.save()
+        painter.setOpacity(0.55)
+        checkbox_option.state = QStyle.State_On | QStyle.State_Enabled | QStyle.State_Active
+        style.drawPrimitive(QStyle.PE_IndicatorCheckBox, checkbox_option, painter)
+        painter.restore()
 
 if TYPE_CHECKING:
     from league_overlay import LeagueOverlay
@@ -620,7 +661,7 @@ class SettingsDialog(QDialog):
         column_layout_v = QVBoxLayout(column_group)
         column_layout_v.setSpacing(6)
 
-        column_title = QLabel("Column Order && Visibility")
+        column_title = QLabel("Column Order and Visibility")
         column_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
         column_layout_v.addWidget(column_title)
 
@@ -632,6 +673,7 @@ class SettingsDialog(QDialog):
         self.column_list = QListWidget()
         self.column_list.setDragDropMode(QAbstractItemView.InternalMove)
         self.column_list.setDefaultDropAction(Qt.MoveAction)
+        self.column_list.setItemDelegate(ColumnListItemDelegate(self.column_list))
         self.column_list.setStyleSheet("""
             QListWidget {
                 background-color: #404040;
@@ -821,24 +863,7 @@ class SettingsDialog(QDialog):
             col_def = COLUMN_REGISTRY.get(col_id)
             if col_def is None:
                 continue
-
-            item = QListWidgetItem(col_def.header)
-            item.setData(Qt.UserRole, col_id)
-
-            # Always-visible columns (no settings_key) are always checked
-            if col_def.settings_key:
-                item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
-                is_checked = getattr(settings, col_def.settings_key, False)
-                item.setCheckState(Qt.Checked if is_checked else Qt.Unchecked)
-            else:
-                # Always-visible: show checked but don't allow unchecking
-                item.setFlags((item.flags() | Qt.ItemIsDragEnabled) & ~Qt.ItemIsUserCheckable)
-                item.setCheckState(Qt.Checked)
-
-            if col_def.tooltip:
-                item.setToolTip(col_def.tooltip)
-
-            self.column_list.addItem(item)
+            self.column_list.addItem(self._create_column_list_item(col_def, settings))
 
     def _move_column_up(self):
         """Move the selected column up in the list."""
@@ -886,18 +911,27 @@ class SettingsDialog(QDialog):
             col_def = COLUMN_REGISTRY.get(col_id)
             if col_def is None:
                 continue
-            item = QListWidgetItem(col_def.header)
-            item.setData(Qt.UserRole, col_id)
-            if col_def.settings_key:
-                item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
-                is_checked = getattr(defaults, col_def.settings_key, False)
-                item.setCheckState(Qt.Checked if is_checked else Qt.Unchecked)
-            else:
-                item.setFlags((item.flags() | Qt.ItemIsDragEnabled) & ~Qt.ItemIsUserCheckable)
-                item.setCheckState(Qt.Checked)
-            if col_def.tooltip:
-                item.setToolTip(col_def.tooltip)
-            self.column_list.addItem(item)
+            self.column_list.addItem(self._create_column_list_item(col_def, defaults))
+
+    def _create_column_list_item(self, col_def, settings_source):
+        """Create a list item for a column, including fixed-column metadata."""
+        item = QListWidgetItem(col_def.header)
+        item.setData(Qt.UserRole, col_def.id)
+        item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
+
+        if col_def.settings_key:
+            is_checked = getattr(settings_source, col_def.settings_key, False)
+            item.setData(ALWAYS_VISIBLE_ROLE, False)
+            item.setCheckState(Qt.Checked if is_checked else Qt.Unchecked)
+        else:
+            item.setData(ALWAYS_VISIBLE_ROLE, True)
+            item.setCheckState(Qt.Checked)
+            item.setToolTip("Always visible")
+
+        if col_def.tooltip and not item.toolTip():
+            item.setToolTip(col_def.tooltip)
+
+        return item
 
     def choose_color(self, division):
         """Open color picker to customize a division's color."""
