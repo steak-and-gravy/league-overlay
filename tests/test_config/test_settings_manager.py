@@ -57,6 +57,7 @@ class TestAppSettingsDefaults:
         settings = AppSettings()
         assert settings.division_colors is not None
         assert isinstance(settings.division_colors, dict)
+        assert settings.division_colors["Default"] == "#C5C5C5"
 
 
 class TestLoadSettings:

@@ -24,7 +24,7 @@ def mock_division_manager():
         "ProAm": "#00FF00",
         "Am": "#0000FF",
         "Rookie": "#FFFF00",
-        "Default": "#FFFFFF",
+        "Default": "#C5C5C5",
         "All": "#FFFFFF"
     }
     return manager

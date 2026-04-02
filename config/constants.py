@@ -209,7 +209,7 @@ class UIConfig:
                 "ProAm": "#FE00FF",
                 "Am": "#45B3E0",
                 "Rookie": "#FF2000",
-                "Default": "#FFFFFF"
+                "Default": "#C5C5C5"
             })
 
 
