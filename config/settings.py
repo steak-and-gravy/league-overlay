@@ -31,7 +31,7 @@ class AppSettings:
     # Behavior
     refresh_rate: float = 1.0
     hide_headers: bool = False
-    pit_required: bool = True
+    pit_stop_indicator: bool = True
     bold_drivers: bool = True
     show_gap: bool = False  # Show Gap to overall leader column
     show_division_gap: bool = False  # Show Gap to division leader column (C-Gap)
@@ -175,7 +175,7 @@ class SettingsManager:
                 'refresh_rate': settings.refresh_rate,
                 'highlight': settings.highlight,
                 'hide_headers': settings.hide_headers,
-                'pit_required': settings.pit_required,
+                'pit_stop_indicator': settings.pit_stop_indicator,
                 'bold_drivers': settings.bold_drivers,
                 'show_gap': settings.show_gap,
                 'show_division_gap': settings.show_division_gap,
@@ -238,7 +238,7 @@ class SettingsManager:
             'refresh_rate': settings.refresh_rate,
             'highlight': settings.highlight,
             'hide_headers': settings.hide_headers,
-            'pit_required': settings.pit_required,
+            'pit_stop_indicator': settings.pit_stop_indicator,
             'bold_drivers': settings.bold_drivers,
             'show_gap': settings.show_gap,
             'show_division_gap': settings.show_division_gap,

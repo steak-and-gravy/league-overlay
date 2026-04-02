@@ -1251,7 +1251,7 @@ class LeagueOverlay(QMainWindow):
             # Check fields that affect display structure
             new_position = new_driver.position
             old_position = old_driver.position
-            compare_car_number_outline = getattr(self.settings, 'pit_required', True)
+            compare_car_number_outline = getattr(self.settings, 'pit_stop_indicator', True)
 
             # Build comparison based on visible columns
             changes = (new_driver.car_idx != old_driver.car_idx or
@@ -1540,7 +1540,7 @@ class LeagueOverlay(QMainWindow):
                     self.scroll_layout.count() - 1,
                     self._create_broadcast_roll_separator_line()
                 )
-            row = self.row_renderer.create_row(driver)
+            row = self.row_renderer.create_row(driver, row_index=idx)
             self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, row)
 
         for _ in range(blank_rows):

@@ -26,7 +26,7 @@ def _make_parent():
         show_delta=False,
         show_pit_lap=False,
         bold_drivers=False,
-        pit_required=True,
+        pit_stop_indicator=True,
         column_order=list(DEFAULT_COLUMN_ORDER),
     )
 
@@ -96,6 +96,22 @@ def test_create_row_uses_logo_when_asset_exists(qapp):
     assert manufacturer_label.pixmap() is not None
     assert manufacturer_label.text() == ""
     row.deleteLater()
+
+
+def test_create_row_applies_subtle_banding_to_alternate_rows(qapp):
+    parent = _make_parent()
+    parent.settings.row_color_style = "Banding"
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver("porsche 911 gt3 r", manufacturer="POR")
+
+    even_row = renderer.create_row(driver, row_index=0)
+    odd_row = renderer.create_row(driver, row_index=1)
+
+    assert "background-color: #000000;" in even_row.styleSheet()
+    assert "background-color: #333333;" in odd_row.styleSheet()
+
+    even_row.deleteLater()
+    odd_row.deleteLater()
 
 
 def test_create_row_falls_back_to_text_when_logo_missing(qapp):

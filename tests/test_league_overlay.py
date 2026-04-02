@@ -764,7 +764,7 @@ class TestHasDataChanged:
             show_delta=False,
             show_last_lap=False,
             show_pit_lap=False,
-            pit_required=True,
+            pit_stop_indicator=True,
         )
 
         old_driver = DriverState(
@@ -789,14 +789,14 @@ class TestHasDataChanged:
 
         assert app._has_data_changed([new_driver]) is True
 
-    def test_car_number_outline_change_ignored_when_pit_required_disabled(self):
+    def test_car_number_outline_change_ignored_when_pit_stop_indicator_disabled(self):
         """Outline state alone should not force a redraw when the indicator is disabled."""
         app = Mock(spec=LeagueOverlay)
         app.settings = SimpleNamespace(
             show_delta=False,
             show_last_lap=False,
             show_pit_lap=False,
-            pit_required=False,
+            pit_stop_indicator=False,
         )
 
         old_driver = DriverState(

@@ -5,6 +5,8 @@ from typing import Dict, Any, TYPE_CHECKING
 from PySide6.QtWidgets import QWidget, QVBoxLayout
 from PySide6.QtCore import Qt
 
+from config.constants import UI_COLORS
+
 if TYPE_CHECKING:
     from league_overlay import LeagueOverlay
     from core.driver_state import DriverState
@@ -43,11 +45,19 @@ def is_light_color(hex_color: str) -> bool:
         return False
 
 
+def get_banded_background(base_color: str, row_index: int) -> str:
+    """Return the header background color for every other rendered row."""
+    if row_index % 2 == 0:
+        return base_color
+    return UI_COLORS.HEADER_DARK_GRAY
+
+
 class ColorStyleStrategy(ABC):
     """Abstract base class for driver row color styles."""
 
     @abstractmethod
-    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
+    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay',
+                    row_index: int = 0) -> Dict[str, Any]:
         """Get styling configuration for a driver row.
 
         Args:
@@ -73,7 +83,8 @@ class ColorStyleStrategy(ABC):
 class DarkColorStyle(ColorStyleStrategy):
     """Dark color style: Black background with colored text, player gets gradient glow."""
 
-    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
+    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay',
+                    row_index: int = 0) -> Dict[str, Any]:
         text_color = driver.division_color
         gap_color = "white"
         delta_faster_color = parent.settings.faster_color
@@ -106,7 +117,8 @@ class DarkColorStyle(ColorStyleStrategy):
 class AlternateColorStyle(ColorStyleStrategy):
     """Alternate color style: Division color fills entire row background, black text."""
 
-    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
+    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay',
+                    row_index: int = 0) -> Dict[str, Any]:
         base_bg = driver.division_color
         bg_style = f"background-color: {parent.get_bg_color(base_bg)};"
         text_color = "#000000"
@@ -161,7 +173,8 @@ class AlternateColorStyle(ColorStyleStrategy):
 class OutlineColorStyle(ColorStyleStrategy):
     """Outline color style: Black background with colored border and text."""
 
-    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
+    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay',
+                    row_index: int = 0) -> Dict[str, Any]:
         text_color = driver.division_color
         gap_color = "white"
         delta_faster_color = parent.settings.faster_color
@@ -196,7 +209,8 @@ class OutlineColorStyle(ColorStyleStrategy):
 class DefaultColorStyle(ColorStyleStrategy):
     """Default color style: Red position background, division color car number and driver name, white gap."""
 
-    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay') -> Dict[str, Any]:
+    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay',
+                    row_index: int = 0) -> Dict[str, Any]:
         text_color = "white"
         gap_color = "white"
         delta_faster_color = parent.settings.faster_color
@@ -209,10 +223,10 @@ class DefaultColorStyle(ColorStyleStrategy):
         division_position_color = "white"
         division_position_border = f"border: 2px solid {driver.division_color};"
         car_number_bg = parent.get_bg_color('#000000')
-        pit_required_enabled = getattr(parent.settings, 'pit_required', True)
+        pit_stop_indicator_enabled = getattr(parent.settings, 'pit_stop_indicator', True)
         car_number_border = (
             ""
-            if pit_required_enabled and not driver.show_car_number_outline
+            if pit_stop_indicator_enabled and not driver.show_car_number_outline
             else f"border: 1px solid {driver.division_color};"
         )
         car_number_color = "white"
@@ -250,3 +264,24 @@ class DefaultColorStyle(ColorStyleStrategy):
             'car_number_border': car_number_border,  # Division color outline for car number
             'car_number_color': car_number_color
         }
+
+
+class BandingColorStyle(DefaultColorStyle):
+    """Default-style row colors with subtle alternating background banding."""
+
+    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay',
+                    row_index: int = 0) -> Dict[str, Any]:
+        styling = super().get_styling(driver, parent, row_index=row_index)
+
+        if driver.is_player:
+            return styling
+
+        banded_bg = get_banded_background("#000000", row_index)
+        styling['label_bg'] = parent.get_bg_color(banded_bg)
+        row_widget = styling['row_widget']
+        row_widget.setStyleSheet(
+            f"#driverRow {{ background-color: {parent.get_bg_color(banded_bg)}; "
+            f"{'border: 2px solid yellow;' if driver.is_spectated else ''} }}"
+        )
+
+        return styling

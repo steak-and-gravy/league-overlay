@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 from core.driver_state import DriverState
-from ui.styles import DefaultColorStyle
+from ui.styles import BandingColorStyle, DefaultColorStyle
 
 
 def _make_parent(row_color_style: str = "Default"):
@@ -16,7 +16,7 @@ def _make_parent(row_color_style: str = "Default"):
             highlight=highlight,
             faster_color="#00FF00",
             slower_color="#FF0000",
-            pit_required=True,
+            pit_stop_indicator=True,
         ),
         get_bg_color=lambda color: color,
         blend_color_with_black=lambda color, amount: "#112233",
@@ -108,7 +108,7 @@ def test_default_style_keeps_1px_outline_for_pending_mandatory_stop():
 
 
 def test_default_style_uses_no_outline_when_required_stop_is_complete():
-    """Completed required stops remove the car-number outline when Pit Required is enabled."""
+    """Completed required stops remove the car-number outline when Pit Stop Indicator is enabled."""
     style = DefaultColorStyle()
     parent = _make_parent()
     driver = _make_driver(show_car_number_outline=False)
@@ -119,11 +119,11 @@ def test_default_style_uses_no_outline_when_required_stop_is_complete():
     assert styling["car_number_border"] == ""
 
 
-def test_default_style_uses_1px_outline_when_pit_required_setting_disabled():
-    """Disabling Pit Required keeps the standard 1px outlined car-number style."""
+def test_default_style_uses_1px_outline_when_pit_stop_indicator_setting_disabled():
+    """Disabling Pit Stop Indicator keeps the standard 1px outlined car-number style."""
     style = DefaultColorStyle()
     parent = _make_parent()
-    parent.settings.pit_required = False
+    parent.settings.pit_stop_indicator = False
     driver = _make_driver(show_car_number_outline=False)
 
     styling = style.get_styling(driver, parent)
@@ -143,3 +143,17 @@ def test_default_style_uses_black_division_position_with_division_outline():
     assert styling["division_position_bg"] == "#00AAFF"
     assert styling["division_position_border"] == "border: 2px solid #00AAFF;"
     assert styling["division_position_color"] == "white"
+
+
+def test_banding_style_applies_alternating_row_backgrounds(qapp):
+    style = BandingColorStyle()
+    parent = _make_parent(row_color_style="Banding")
+    driver = _make_driver()
+
+    even_styling = style.get_styling(driver, parent, row_index=0)
+    odd_styling = style.get_styling(driver, parent, row_index=1)
+
+    assert "background-color: #000000;" in even_styling["row_widget"].styleSheet()
+    assert "background-color: #333333;" in odd_styling["row_widget"].styleSheet()
+    assert even_styling["label_bg"] == "#000000"
+    assert odd_styling["label_bg"] == "#333333"

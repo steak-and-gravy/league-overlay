@@ -136,10 +136,10 @@ class SettingsValidator:
             default=self.defaults['hide_headers'],
             field_name='hide_headers'
         )
-        validated['pit_required'] = self.coerce_bool(
-            data.get('pit_required'),
-            default=self.defaults['pit_required'],
-            field_name='pit_required'
+        validated['pit_stop_indicator'] = self.coerce_bool(
+            data.get('pit_stop_indicator'),
+            default=self.defaults['pit_stop_indicator'],
+            field_name='pit_stop_indicator'
         )
         validated['bold_drivers'] = self.coerce_bool(
             data.get('bold_drivers'),
@@ -245,7 +245,7 @@ class SettingsValidator:
         )
         validated['row_color_style'] = self.coerce_enum(
             data.get('row_color_style'),
-            valid_values=["Default", "Alternate", "Outline", "Dark"],
+            valid_values=["Default", "Banding", "Dark", "Alternate", "Outline"],
             default=self.defaults['row_color_style'],
             field_name='row_color_style'
         )

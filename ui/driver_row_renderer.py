@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt
 from config.constants import COLUMN_MIN_WIDTHS, COLUMN_REGISTRY
 from config.logging_config import get_logger
 from core.driver_state import DriverState
-from .styles import DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, DarkColorStyle
+from .styles import BandingColorStyle, DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, DarkColorStyle
 
 logger = get_logger(__name__)
 
@@ -51,6 +51,7 @@ class DriverRowRenderer:
 
     STYLES = {
         "Default": DefaultColorStyle(),
+        "Banding": BandingColorStyle(),
         "Dark": DarkColorStyle(),
         "Alternate": AlternateColorStyle(),
         "Outline": OutlineColorStyle()
@@ -97,7 +98,7 @@ class DriverRowRenderer:
 
         return cls._logo_cache[cache_key]
 
-    def create_row(self, driver: DriverState) -> QWidget:
+    def create_row(self, driver: DriverState, row_index: int = 0) -> QWidget:
         """Create a driver row widget using the configured color style.
 
         Columns are rendered in the order specified by settings.column_order,
@@ -105,13 +106,14 @@ class DriverRowRenderer:
 
         Args:
             driver: DriverState object containing driver information
+            row_index: Zero-based row index within the current rendered list
 
         Returns:
             QWidget representing the driver row
         """
         # Get color style
         style = self.STYLES.get(self.parent.settings.row_color_style, self.STYLES["Default"])
-        styling = style.get_styling(driver, self.parent)
+        styling = style.get_styling(driver, self.parent, row_index=row_index)
 
         # Extract styling components
         row_widget = styling['row_widget']
