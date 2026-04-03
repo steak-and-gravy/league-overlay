@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 from core.driver_state import DriverState
 from ui.driver_row_renderer import DriverRowRenderer
 
@@ -85,6 +87,24 @@ def test_get_manufacturer_logo_path_prefers_display_code_when_car_path_differs()
     assert logo_path.name == "porsche.png"
 
 
+@pytest.mark.parametrize(
+    ("manufacturer", "expected_file"),
+    [
+        ("HYU", "hyundai.png"),
+        ("KIA", "kia.png"),
+        ("PON", "pontiac.png"),
+        ("SUB", "subaru.png"),
+    ],
+)
+def test_get_manufacturer_logo_path_supports_new_logo_aliases(manufacturer, expected_file):
+    driver = _make_driver("", manufacturer=manufacturer)
+
+    logo_path = DriverRowRenderer._get_manufacturer_logo_path(driver)
+
+    assert logo_path is not None
+    assert logo_path.name == expected_file
+
+
 def test_create_row_uses_logo_when_asset_exists(qapp):
     renderer = DriverRowRenderer(_make_parent())
     driver = _make_driver("porsche 911 gt3 r", manufacturer="POR")
@@ -114,7 +134,7 @@ def test_create_row_applies_subtle_banding_to_alternate_rows(qapp):
     odd_row.deleteLater()
 
 
-def test_create_row_falls_back_to_text_when_logo_missing(qapp):
+def test_create_row_uses_logo_for_new_hyundai_asset(qapp):
     renderer = DriverRowRenderer(_make_parent())
     driver = _make_driver("hyundai elantra n", manufacturer="HYU")
 
@@ -122,9 +142,22 @@ def test_create_row_falls_back_to_text_when_logo_missing(qapp):
     layout = row.layout()
     manufacturer_label = layout.itemAtPosition(0, 1).widget()
 
+    assert manufacturer_label.pixmap() is not None
+    assert manufacturer_label.text() == ""
+    row.deleteLater()
+
+
+def test_create_row_falls_back_to_text_when_logo_missing(qapp):
+    renderer = DriverRowRenderer(_make_parent())
+    driver = _make_driver("orphan manufacturer", manufacturer="ORP")
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    manufacturer_label = layout.itemAtPosition(0, 1).widget()
+
     pixmap = manufacturer_label.pixmap()
     assert pixmap is None or pixmap.isNull()
-    assert manufacturer_label.text() == "HYU"
+    assert manufacturer_label.text() == "ORP"
     row.deleteLater()
 
 

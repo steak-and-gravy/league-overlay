@@ -37,14 +37,18 @@ class DriverRowRenderer:
         "FRD": "ford.png",
         "HND": "honda.png",
         "HON": "honda.png",
+        "HYU": "hyundai.png",
+        "KIA": "kia.png",
         "LAM": "lamborghini.png",
         "LIG": "ligier.png",
         "MAZ": "mazda.png",
         "MCL": "mclaren.png",
         "MER": "mercedes.png",
         "NIS": "nissan.png",
+        "PON": "pontiac.png",
         "POR": "porsche.png",
         "RAD": "radical.png",
+        "SUB": "subaru.png",
         "TOY": "toyota.png",
     }
     _logo_cache: Dict[str, Optional[QPixmap]] = {}

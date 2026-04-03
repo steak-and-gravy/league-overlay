@@ -2903,3 +2903,35 @@ class TestFinishingGapCalculation:
 
         # Should calculate gap because data is current
         assert gap == "2.5"
+
+
+class TestManufacturerExtraction:
+    """Unit tests for telemetry manufacturer extraction."""
+
+    @pytest.mark.parametrize(
+        ("car_path", "expected_abbrev", "expected_color"),
+        [
+            ("hyundai elantra n tc", "HYU", "#002C5F"),
+            ("kia optima", "KIA", "#05141F"),
+            ("pontiac solstice", "PON", "#C41E3A"),
+            ("subaru brz", "SUB", "#003C7D"),
+        ],
+    )
+    def test_extract_manufacturer_supports_new_logos(self, car_path, expected_abbrev, expected_color):
+        ir = MagicMock()
+        division_manager = MagicMock(spec=DivisionManager)
+        race_state_tracker = RaceStateTracker(ir)
+        gap_calculator = MagicMock(spec=GapCalculator)
+        position_calculator = MagicMock(spec=PositionCalculator)
+        processor = TelemetryProcessor(
+            ir,
+            division_manager,
+            race_state_tracker,
+            gap_calculator,
+            position_calculator,
+        )
+
+        abbrev, color = processor._extract_manufacturer({"CarPath": car_path})
+
+        assert abbrev == expected_abbrev
+        assert color == expected_color
