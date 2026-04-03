@@ -269,6 +269,7 @@ MANUFACTURER_MAP = {
     'nissan': ('NIS', '#C3002F'),
     'hyundai': ('HYU', '#002C5F'),
     'pontiac': ('PON', '#C41E3A'),
+    'renault': ('REN', '#FFD200'),
     'subaru': ('SUB', '#003C7D'),
     'cadillac': ('CAD', '#A69461'),
     'acura': ('ACU', '#1B1B1B'),

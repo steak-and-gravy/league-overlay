@@ -48,6 +48,7 @@ class DriverRowRenderer:
         "PON": "pontiac.png",
         "POR": "porsche.png",
         "RAD": "radical.png",
+        "REN": "renault.png",
         "SUB": "subaru.png",
         "TOY": "toyota.png",
     }

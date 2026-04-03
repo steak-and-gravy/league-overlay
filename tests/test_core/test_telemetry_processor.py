@@ -2914,6 +2914,7 @@ class TestManufacturerExtraction:
             ("hyundai elantra n tc", "HYU", "#002C5F"),
             ("kia optima", "KIA", "#05141F"),
             ("pontiac solstice", "PON", "#C41E3A"),
+            ("renault clio cup", "REN", "#FFD200"),
             ("subaru brz", "SUB", "#003C7D"),
         ],
     )

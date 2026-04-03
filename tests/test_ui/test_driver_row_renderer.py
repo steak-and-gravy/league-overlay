@@ -93,6 +93,7 @@ def test_get_manufacturer_logo_path_prefers_display_code_when_car_path_differs()
         ("HYU", "hyundai.png"),
         ("KIA", "kia.png"),
         ("PON", "pontiac.png"),
+        ("REN", "renault.png"),
         ("SUB", "subaru.png"),
     ],
 )
