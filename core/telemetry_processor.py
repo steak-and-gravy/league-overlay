@@ -450,31 +450,35 @@ class TelemetryProcessor:
                 self.tow_end_time[car_idx] = now + player_tow_time
 
             # A car that was previously restored as disconnected can reappear
-            # directly in pit lane or the stall. When that new telemetry point
-            # would promote a previously on-track car ahead of its stored
-            # snapshot, treat it like a tow so the pit placement cannot
-            # temporarily promote the car in the standings.
+            # directly in pit lane or the stall. If the car was on track before
+            # the disconnect, treat that reconnect as a tow/freeze so the pit
+            # placement cannot temporarily promote the car in the standings.
             snapshot_track_position = None
             if snapshot is not None:
                 snapshot_track_position = snapshot.total_track_position
-            snapshot_was_pitting = bool(snapshot and snapshot.pit_lap in ("PIT", "TOW", "OUT"))
-            in_pit_location = current_on_pit or current_surface == TRACK_SURFACE_IN_PIT_STALL
 
-            reconnected_into_pit_ahead = (
+            was_in_pit_before_disconnect = (
+                prev_surface == TRACK_SURFACE_IN_PIT_STALL
+                or bool(self.tow_last_on_pit_road.get(car_idx, False))
+            )
+            in_pit_location = current_on_pit or current_surface == TRACK_SURFACE_IN_PIT_STALL
+            started_reconnect_tow_this_frame = False
+
+            reconnected_into_pit = (
                 not current_invalid
                 and snapshot is not None
                 and snapshot.is_disconnected
                 and not self.race_state_tracker.is_driver_finished(car_idx)
                 and in_pit_location
-                and not snapshot_was_pitting
+                and not was_in_pit_before_disconnect
                 and snapshot_track_position is not None
                 and snapshot_track_position >= 0
-                and current_track_position > snapshot_track_position
             )
 
-            if reconnected_into_pit_ahead and not self.tow_tracking.get(car_idx, False):
+            if reconnected_into_pit and not self.tow_tracking.get(car_idx, False):
                 self.tow_tracking[car_idx] = True
                 self.tow_frozen_track_position[car_idx] = snapshot_track_position
+                started_reconnect_tow_this_frame = True
                 # No timer here: keep the freeze until the car begins moving
                 # again or exits the pit/stall, matching the defensive goal of
                 # suppressing reconnect teleports in race ordering.
@@ -484,7 +488,7 @@ class TelemetryProcessor:
                     f"snapshot_track_pos={snapshot_track_position:.4f} "
                     f"current_track_pos={current_track_position:.4f} "
                     f"on_pit={current_on_pit} surface={current_surface} "
-                    f"snapshot_was_pitting={snapshot_was_pitting}"
+                    f"was_in_pit_before_disconnect={was_in_pit_before_disconnect}"
                 )
 
             # Clear tow state when tow timer expires or car leaves pit road/stall.
@@ -493,7 +497,8 @@ class TelemetryProcessor:
                 player_tow_done = (car_idx == player_car_idx and player_tow_time <= 0)
                 non_player_tow_done = (car_idx != player_car_idx and end_time > 0 and now >= end_time)
                 moving_forward = False
-                if (not current_invalid and not prev_invalid and track_length_m > 0):
+                if (not started_reconnect_tow_this_frame
+                        and not current_invalid and not prev_invalid and track_length_m > 0):
                     small_distance_pct = 0.05 / track_length_m
                     moving_forward = current_track_position > (prev_track_position + small_distance_pct)
 
