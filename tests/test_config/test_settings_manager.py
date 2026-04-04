@@ -134,6 +134,7 @@ class TestLoadSettings:
         assert settings.x == 100
         assert settings.width == 320
         assert settings.refresh_rate == 1.0  # Default from AppSettings
+        assert settings.hide_headers is False
 
     def test_load_invalid_json(self, tmp_path):
         """Test loading malformed JSON returns defaults."""

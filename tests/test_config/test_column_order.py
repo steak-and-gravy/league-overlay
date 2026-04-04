@@ -26,6 +26,9 @@ class TestColumnOrderDefaults:
         settings = AppSettings()
         assert settings.column_order == list(DEFAULT_COLUMN_ORDER)
 
+    def test_manufacturer_default_order_follows_driver_name(self):
+        assert DEFAULT_COLUMN_ORDER.index('car_manufacturer') == DEFAULT_COLUMN_ORDER.index('driver_name') + 1
+
 
 class TestColumnOrderValidation:
     """Test SettingsValidator.coerce_column_order."""

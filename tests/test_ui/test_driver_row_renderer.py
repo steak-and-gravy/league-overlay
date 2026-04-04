@@ -8,6 +8,39 @@ from core.driver_state import DriverState
 from ui.driver_row_renderer import DriverRowRenderer
 
 
+def _column_index(parent, column_id: str) -> int:
+    current_col = 0
+    for configured_col_id in parent.settings.column_order:
+        if configured_col_id == "positions_gained" and not parent.settings.show_positions_gained:
+            continue
+        if configured_col_id == "car_manufacturer" and not parent.settings.show_car_manufacturer:
+            continue
+        if configured_col_id == "rating" and not parent.settings.show_rating:
+            continue
+        if configured_col_id == "car_number" and not parent.settings.show_car_number:
+            continue
+        if configured_col_id == "gap" and not parent.settings.show_gap:
+            continue
+        if configured_col_id == "div_gap" and not parent.settings.show_division_gap:
+            continue
+        if configured_col_id == "interval" and not parent.settings.show_interval:
+            continue
+        if configured_col_id == "div_interval" and not parent.settings.show_division_interval:
+            continue
+        if configured_col_id == "best_lap" and not parent.settings.show_best_lap:
+            continue
+        if configured_col_id == "last_lap" and not parent.settings.show_last_lap:
+            continue
+        if configured_col_id == "delta" and not parent.settings.show_delta:
+            continue
+        if configured_col_id == "pit_lap" and not parent.settings.show_pit_lap:
+            continue
+        if configured_col_id == column_id:
+            return current_col
+        current_col += 1
+    raise AssertionError(f"Column {column_id} was not rendered")
+
+
 def _make_parent():
     from config.constants import DEFAULT_COLUMN_ORDER
     settings = SimpleNamespace(
@@ -107,12 +140,13 @@ def test_get_manufacturer_logo_path_supports_new_logo_aliases(manufacturer, expe
 
 
 def test_create_row_uses_logo_when_asset_exists(qapp):
-    renderer = DriverRowRenderer(_make_parent())
+    parent = _make_parent()
+    renderer = DriverRowRenderer(parent)
     driver = _make_driver("porsche 911 gt3 r", manufacturer="POR")
 
     row = renderer.create_row(driver)
     layout = row.layout()
-    manufacturer_label = layout.itemAtPosition(0, 1).widget()
+    manufacturer_label = layout.itemAtPosition(0, _column_index(parent, "car_manufacturer")).widget()
 
     assert manufacturer_label.pixmap() is not None
     assert manufacturer_label.text() == ""
@@ -136,12 +170,13 @@ def test_create_row_applies_subtle_banding_to_alternate_rows(qapp):
 
 
 def test_create_row_uses_logo_for_new_hyundai_asset(qapp):
-    renderer = DriverRowRenderer(_make_parent())
+    parent = _make_parent()
+    renderer = DriverRowRenderer(parent)
     driver = _make_driver("hyundai elantra n", manufacturer="HYU")
 
     row = renderer.create_row(driver)
     layout = row.layout()
-    manufacturer_label = layout.itemAtPosition(0, 1).widget()
+    manufacturer_label = layout.itemAtPosition(0, _column_index(parent, "car_manufacturer")).widget()
 
     assert manufacturer_label.pixmap() is not None
     assert manufacturer_label.text() == ""
@@ -149,12 +184,13 @@ def test_create_row_uses_logo_for_new_hyundai_asset(qapp):
 
 
 def test_create_row_falls_back_to_text_when_logo_missing(qapp):
-    renderer = DriverRowRenderer(_make_parent())
+    parent = _make_parent()
+    renderer = DriverRowRenderer(parent)
     driver = _make_driver("orphan manufacturer", manufacturer="ORP")
 
     row = renderer.create_row(driver)
     layout = row.layout()
-    manufacturer_label = layout.itemAtPosition(0, 1).widget()
+    manufacturer_label = layout.itemAtPosition(0, _column_index(parent, "car_manufacturer")).widget()
 
     pixmap = manufacturer_label.pixmap()
     assert pixmap is None or pixmap.isNull()

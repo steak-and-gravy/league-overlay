@@ -103,9 +103,9 @@ class ColumnDef(NamedTuple):
 COLUMN_DEFS: List[ColumnDef] = [
     ColumnDef('pos',              'Overall',  7,  42, '',                       '',                                              'position'),
     ColumnDef('positions_gained', '+/-',      5,  30, 'show_positions_gained',  '',                                              'positions_gained'),
-    ColumnDef('car_manufacturer', 'Mfr',      4,  30, 'show_car_manufacturer',  '',                                              'manufacturer'),
     ColumnDef('div_pos',          'Class',    6,  35, '',                       '',                                              'division_position'),
     ColumnDef('driver_name',      'Driver',  25,  60, '',                       '',                                              'driver_name'),
+    ColumnDef('car_manufacturer', 'Mfr',      4,  30, 'show_car_manufacturer',  '',                                              'manufacturer'),
     ColumnDef('rating',           'Rating',  14,  55, 'show_rating',            '',                                              'combined_rating'),
     ColumnDef('car_number',       'Car#',     6,  35, 'show_car_number',        '',                                              'car_number'),
     ColumnDef('gap',              'Gap',      8,  50, 'show_gap',               'Gap to overall leader',                         'gap'),
