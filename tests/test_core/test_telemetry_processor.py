@@ -633,6 +633,150 @@ class TestTowAwareFinishLeaderSelection:
         assert [driver['car_idx'] for driver in active_drivers] == [1, 2]
         assert processor.get_tow_aware_overall_leader_idx() == 1
 
+    def test_reconnected_pit_stall_without_on_pit_flag_is_treated_like_tow(self):
+        """A reconnected pit-stall teleport should still freeze ordering even if OnPitRoad lags false."""
+        ir = MagicMock()
+        race_state_tracker = RaceStateTracker(ir)
+        position_calculator = MagicMock(spec=PositionCalculator)
+        position_calculator.player_car_idx = 99
+
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=MagicMock(spec=DivisionManager),
+            race_state_tracker=race_state_tracker,
+            gap_calculator=MagicMock(spec=GapCalculator),
+            position_calculator=position_calculator
+        )
+
+        snapshot = DriverState(
+            car_idx=2,
+            current_lap=10,
+            lap_pct=0.20,
+            is_disconnected=True
+        )
+        race_state_tracker.update_snapshot(2, snapshot)
+
+        live_data = {
+            'CarIdxTrackSurface': [3, 3, 1],
+            'CarIdxOnPitRoad': [False, False, False],
+            'CarIdxLap': [0, 10, 10],
+            'CarIdxLapDistPct': [0.0, 0.50, 0.98],
+            'CarIdxClassPosition': [0, 1, 2],
+            'DriverInfo': {
+                'Drivers': [
+                    {'CarNumber': '0'},
+                    {'CarNumber': '1'},
+                    {'CarNumber': '2'},
+                ]
+            },
+            'PlayerCarTowTime': 0.0,
+            'WeekendInfo': {'TrackLength': '5 km'},
+            'SessionTime': 200.0,
+        }
+        ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        processor._update_pit_tracking()
+        processor._update_tow_tracking()
+
+        assert processor.tow_tracking[2] is True
+        assert processor.tow_frozen_track_position[2] == pytest.approx(10.20)
+
+    def test_reconnected_pit_car_not_frozen_when_driver_was_already_pitting(self):
+        """Reconnects during a normal pit stop should not be reclassified as tow."""
+        ir = MagicMock()
+        race_state_tracker = RaceStateTracker(ir)
+        position_calculator = MagicMock(spec=PositionCalculator)
+        position_calculator.player_car_idx = 99
+
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=MagicMock(spec=DivisionManager),
+            race_state_tracker=race_state_tracker,
+            gap_calculator=MagicMock(spec=GapCalculator),
+            position_calculator=position_calculator
+        )
+
+        snapshot = DriverState(
+            car_idx=2,
+            current_lap=10,
+            lap_pct=0.20,
+            is_disconnected=True,
+            pit_lap="PIT"
+        )
+        race_state_tracker.update_snapshot(2, snapshot)
+        live_data = {
+            'CarIdxTrackSurface': [3, 3, 1],
+            'CarIdxOnPitRoad': [False, False, True],
+            'CarIdxLap': [0, 10, 10],
+            'CarIdxLapDistPct': [0.0, 0.50, 0.98],
+            'CarIdxClassPosition': [0, 1, 2],
+            'DriverInfo': {
+                'Drivers': [
+                    {'CarNumber': '0'},
+                    {'CarNumber': '1'},
+                    {'CarNumber': '2'},
+                ]
+            },
+            'PlayerCarTowTime': 0.0,
+            'WeekendInfo': {'TrackLength': '5 km'},
+            'SessionTime': 200.0,
+        }
+        ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        processor._update_pit_tracking()
+        processor._update_tow_tracking()
+
+        assert processor.tow_tracking.get(2, False) is False
+        assert 2 not in processor.tow_frozen_track_position
+
+    def test_reconnected_pit_car_is_treated_like_tow_in_process_order(self):
+        """Reconnect tow detection must still work after _update_pit_tracking runs first."""
+        ir = MagicMock()
+        race_state_tracker = RaceStateTracker(ir)
+        position_calculator = MagicMock(spec=PositionCalculator)
+        position_calculator.player_car_idx = 99
+
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=MagicMock(spec=DivisionManager),
+            race_state_tracker=race_state_tracker,
+            gap_calculator=MagicMock(spec=GapCalculator),
+            position_calculator=position_calculator
+        )
+
+        snapshot = DriverState(
+            car_idx=2,
+            current_lap=10,
+            lap_pct=0.20,
+            is_disconnected=True
+        )
+        race_state_tracker.update_snapshot(2, snapshot)
+
+        live_data = {
+            'CarIdxTrackSurface': [3, 3, 1],
+            'CarIdxOnPitRoad': [False, False, True],
+            'CarIdxLap': [0, 10, 10],
+            'CarIdxLapDistPct': [0.0, 0.50, 0.98],
+            'CarIdxClassPosition': [0, 1, 2],
+            'DriverInfo': {
+                'Drivers': [
+                    {'CarNumber': '0'},
+                    {'CarNumber': '1'},
+                    {'CarNumber': '2'},
+                ]
+            },
+            'PlayerCarTowTime': 0.0,
+            'WeekendInfo': {'TrackLength': '5 km'},
+            'SessionTime': 200.0,
+        }
+        ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        processor._update_pit_tracking()
+        processor._update_tow_tracking()
+
+        assert processor.tow_tracking[2] is True
+        assert processor.tow_frozen_track_position[2] == pytest.approx(10.20)
+
     def test_tow_disconnect_reconnect_preserves_tow_until_timer_expires(self):
         """An in-progress tow should survive disconnect/reconnect and only end when its timer ends."""
         ir = MagicMock()

@@ -450,19 +450,23 @@ class TelemetryProcessor:
                 self.tow_end_time[car_idx] = now + player_tow_time
 
             # A car that was previously restored as disconnected can reappear
-            # directly in pit lane or the stall. When that new telemetry point is
-            # ahead of the stored on-track snapshot, treat it like a tow so the
-            # pit placement cannot temporarily promote the car in the standings.
+            # directly in pit lane or the stall. When that new telemetry point
+            # would promote a previously on-track car ahead of its stored
+            # snapshot, treat it like a tow so the pit placement cannot
+            # temporarily promote the car in the standings.
             snapshot_track_position = None
             if snapshot is not None:
                 snapshot_track_position = snapshot.total_track_position
+            snapshot_was_pitting = bool(snapshot and snapshot.pit_lap in ("PIT", "TOW", "OUT"))
+            in_pit_location = current_on_pit or current_surface == TRACK_SURFACE_IN_PIT_STALL
 
             reconnected_into_pit_ahead = (
                 not current_invalid
                 and snapshot is not None
                 and snapshot.is_disconnected
                 and not self.race_state_tracker.is_driver_finished(car_idx)
-                and current_on_pit
+                and in_pit_location
+                and not snapshot_was_pitting
                 and snapshot_track_position is not None
                 and snapshot_track_position >= 0
                 and current_track_position > snapshot_track_position
@@ -479,7 +483,8 @@ class TelemetryProcessor:
                     f"TOW_START reconnect car_idx={car_idx} car_num={car_number} "
                     f"snapshot_track_pos={snapshot_track_position:.4f} "
                     f"current_track_pos={current_track_position:.4f} "
-                    f"on_pit={current_on_pit} surface={current_surface}"
+                    f"on_pit={current_on_pit} surface={current_surface} "
+                    f"snapshot_was_pitting={snapshot_was_pitting}"
                 )
 
             # Clear tow state when tow timer expires or car leaves pit road/stall.
