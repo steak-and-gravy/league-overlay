@@ -24,8 +24,8 @@ import irsdk
 # Import from modular structure
 from config.constants import (
     UI_CONFIG, FILE_CONFIG, VERSION,
-    UI_COLORS, UI_DIMENSIONS, COLUMN_LAYOUT, COLUMN_MIN_WIDTHS, TIMING, TELEMETRY_CONFIG,
-    COLUMN_REGISTRY
+    UI_COLORS, UI_DIMENSIONS, TIMING, TELEMETRY_CONFIG,
+    COLUMN_REGISTRY, get_scaled_column_widths
 )
 from config.settings import SettingsManager
 from config.logging_config import setup_logging, get_logger
@@ -713,7 +713,10 @@ class LeagueOverlay(QMainWindow):
             if col_def.tooltip:
                 label.setToolTip(col_def.tooltip)
 
-            label.setMinimumWidth(col_def.min_width)
+            min_width, max_width = get_scaled_column_widths(col_def, self.settings.font_size)
+            label.setMinimumWidth(min_width)
+            if max_width is not None:
+                label.setMaximumWidth(max_width)
             self.header_layout.addWidget(label, 0, col_idx)
             col_idx += 1
 

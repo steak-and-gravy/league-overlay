@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from config.constants import COLUMN_REGISTRY, get_scaled_column_widths
 from core.driver_state import DriverState
 from ui.driver_row_renderer import DriverRowRenderer
 
@@ -62,6 +63,7 @@ def _make_parent():
         show_pit_lap=False,
         bold_drivers=False,
         pit_stop_indicator=True,
+        font_size="Medium",
         column_order=list(DEFAULT_COLUMN_ORDER),
     )
 
@@ -210,6 +212,47 @@ def test_create_row_uses_triangle_symbol_for_positions_gained(qapp):
 
     assert positions_label.text() == "▲ 3"
     assert "font-size: calc(9pt + 2pt);" in positions_label.styleSheet()
+    row.deleteLater()
+
+
+def test_create_row_applies_column_max_widths(qapp):
+    parent = _make_parent()
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver("porsche 911 gt3 r", manufacturer="POR")
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    pos_label = layout.itemAtPosition(0, _column_index(parent, "pos")).widget()
+    name_label = layout.itemAtPosition(0, _column_index(parent, "driver_name")).widget()
+
+    expected_pos_min, expected_pos_max = get_scaled_column_widths(COLUMN_REGISTRY["pos"], "Medium")
+    expected_name_min, expected_name_max = get_scaled_column_widths(COLUMN_REGISTRY["driver_name"], "Medium")
+
+    assert pos_label.minimumWidth() == expected_pos_min
+    assert pos_label.maximumWidth() == expected_pos_max
+    assert name_label.minimumWidth() == expected_name_min
+    assert expected_name_max is None
+    assert name_label.maximumWidth() == 16777215
+    row.deleteLater()
+
+
+def test_create_row_scales_column_widths_with_font_size(qapp):
+    parent = _make_parent()
+    parent.settings.font_size = "Extra Large"
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver("porsche 911 gt3 r", manufacturer="POR")
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    pos_label = layout.itemAtPosition(0, _column_index(parent, "pos")).widget()
+
+    medium_min, medium_max = get_scaled_column_widths(COLUMN_REGISTRY["pos"], "Medium")
+    scaled_min, scaled_max = get_scaled_column_widths(COLUMN_REGISTRY["pos"], "Extra Large")
+
+    assert scaled_min > medium_min
+    assert scaled_max > medium_max
+    assert pos_label.minimumWidth() == scaled_min
+    assert pos_label.maximumWidth() == scaled_max
     row.deleteLater()
 
 

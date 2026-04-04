@@ -1,7 +1,7 @@
 """Configuration constants for the League Overlay application."""
 
 from dataclasses import dataclass
-from typing import Dict, Any, List, NamedTuple
+from typing import Dict, Any, List, NamedTuple, Optional
 
 
 # Application version
@@ -47,52 +47,13 @@ class UIDimensions:
     BROADCAST_HEADER_MIN_HEIGHT: int = 60
 
 
-@dataclass(frozen=True)
-class ColumnLayout:
-    """Column stretch factors for driver list."""
-    POS: int = 7
-    POSITIONS_GAINED: int = 5
-    CAR_MANUFACTURER: int = 4  # Small column for manufacturer badge
-    DIV_POS: int = 6
-    CAR_NUM: int = 6
-    DRIVER_NAME: int = 25
-    GAP: int = 8  # Gap to overall leader
-    DIV_GAP: int = 8  # Gap to division leader (C-Gap)
-    INTERVAL: int = 8  # Interval to car ahead (overall)
-    DIV_INTERVAL: int = 8  # Interval to car ahead in division (C-Int)
-    BEST_LAP: int = 9
-    DELTA: int = 6
-    LAST_LAP: int = 9
-    RATING: int = 14
-    PIT_LAP: int = 5
-
-
-@dataclass(frozen=True)
-class ColumnMinWidths:
-    """Minimum pixel widths for columns to prevent misalignment at small window sizes."""
-    POS: int = 42
-    POSITIONS_GAINED: int = 30
-    CAR_MANUFACTURER: int = 30
-    DIV_POS: int = 35
-    CAR_NUM: int = 35
-    DRIVER_NAME: int = 60
-    GAP: int = 50  # Gap to overall leader
-    DIV_GAP: int = 50  # Gap to division leader (C-Gap)
-    INTERVAL: int = 50  # Interval to car ahead (overall)
-    DIV_INTERVAL: int = 50  # Interval to car ahead in division (C-Int)
-    BEST_LAP: int = 55
-    DELTA: int = 35
-    LAST_LAP: int = 55
-    RATING: int = 55  # Combined iRating + Safety Rating column
-    PIT_LAP: int = 35  # Combined Last Pit + Out Lap column
-
-
 class ColumnDef(NamedTuple):
     """Definition of a single overlay column."""
     id: str                 # Unique identifier (matches settings key without 'show_' prefix)
     header: str             # Display text in header row
     stretch: int            # Stretch factor for layout
     min_width: int          # Minimum pixel width
+    max_width: Optional[int]  # Maximum pixel width (None = can keep stretching)
     settings_key: str       # AppSettings bool field name ('' = always visible)
     tooltip: str            # Tooltip text ('' = none)
     render_method: str      # Method name on DriverRowRenderer (without '_create_' prefix and '_label' suffix)
@@ -101,21 +62,21 @@ class ColumnDef(NamedTuple):
 # Authoritative column definitions — order here is the DEFAULT display order.
 # Both create_headers() and create_row() iterate this registry.
 COLUMN_DEFS: List[ColumnDef] = [
-    ColumnDef('pos',              'Overall',  7,  42, '',                       '',                                              'position'),
-    ColumnDef('positions_gained', '+/-',      5,  30, 'show_positions_gained',  '',                                              'positions_gained'),
-    ColumnDef('div_pos',          'Class',    6,  35, '',                       '',                                              'division_position'),
-    ColumnDef('driver_name',      'Driver',  25,  60, '',                       '',                                              'driver_name'),
-    ColumnDef('car_manufacturer', 'Mfr',      4,  30, 'show_car_manufacturer',  '',                                              'manufacturer'),
-    ColumnDef('rating',           'Rating',  14,  55, 'show_rating',            '',                                              'combined_rating'),
-    ColumnDef('car_number',       'Car#',     6,  35, 'show_car_number',        '',                                              'car_number'),
-    ColumnDef('gap',              'Gap',      8,  50, 'show_gap',               'Gap to overall leader',                         'gap'),
-    ColumnDef('div_gap',          'C-Gap',    8,  50, 'show_division_gap',      'Gap to division leader',                        'division_gap'),
-    ColumnDef('interval',         'Int',      8,  50, 'show_interval',          'Interval to car ahead in overall standings',    'interval'),
-    ColumnDef('div_interval',     'C-Int',    8,  50, 'show_division_interval', 'Interval to car ahead in your division',        'division_interval'),
-    ColumnDef('best_lap',         'Best Lap', 9,  55, 'show_best_lap',          '',                                              'best_lap'),
-    ColumnDef('last_lap',         'Last Lap', 9,  55, 'show_last_lap',          '',                                              'last_lap'),
-    ColumnDef('delta',            'Delta',    6,  35, 'show_delta',             '',                                              'delta'),
-    ColumnDef('pit_lap',          'Pit',      5,  35, 'show_pit_lap',           '',                                              'pit_lap'),
+    ColumnDef('pos',              'Overall',  7,  35,  35, '',                       '',                                              'position'),
+    ColumnDef('positions_gained', '+/-',      5,  27,  30, 'show_positions_gained',  '',                                              'positions_gained'),
+    ColumnDef('div_pos',          'Class',    6,  30,  35, '',                       '',                                              'division_position'),
+    ColumnDef('driver_name',      'Driver',  25,  60, None, '',                       '',                                              'driver_name'),
+    ColumnDef('car_manufacturer', 'Mfr',      4,  28,  33, 'show_car_manufacturer',  '',                                              'manufacturer'),
+    ColumnDef('rating',           'Rating',  14,  58,  65, 'show_rating',            '',                                              'combined_rating'),
+    ColumnDef('car_number',       'Car#',     6,  30,  34, 'show_car_number',        '',                                              'car_number'),
+    ColumnDef('gap',              'Gap',      8,  42,  46, 'show_gap',               'Gap to overall leader',                         'gap'),
+    ColumnDef('div_gap',          'C-Gap',    8,  42,  46, 'show_division_gap',      'Gap to division leader',                        'division_gap'),
+    ColumnDef('interval',         'Int',      8,  42,  46, 'show_interval',          'Interval to car ahead in overall standings',    'interval'),
+    ColumnDef('div_interval',     'C-Int',    8,  42,  46, 'show_division_interval', 'Interval to car ahead in your division',        'division_interval'),
+    ColumnDef('best_lap',         'Best Lap', 9,  50,  65, 'show_best_lap',          '',                                              'best_lap'),
+    ColumnDef('last_lap',         'Last Lap', 9,  50,  65, 'show_last_lap',          '',                                              'last_lap'),
+    ColumnDef('delta',            'Delta',    6,  34,  40, 'show_delta',             '',                                              'delta'),
+    ColumnDef('pit_lap',          'Pit',      5,  28,  32, 'show_pit_lap',           '',                                              'pit_lap'),
 ]
 
 # Column ID → ColumnDef lookup
@@ -161,7 +122,7 @@ class UIConfig:
                     "title": "8pt",
                     "button": "8pt",
                     "status": "8pt",
-                    "header": "8pt",
+                    "header": "7.5pt",
                     "data": "8pt",
                     "broadcast_title": "10pt",
                     "broadcast_session": "8pt",
@@ -172,10 +133,10 @@ class UIConfig:
                     "title": "9pt",
                     "button": "8.5pt",
                     "status": "9pt",
-                    "header": "9pt",
+                    "header": "8pt",
                     "data": "9pt",
                     "broadcast_title": "11pt",
-                    "broadcast_session": "9t",
+                    "broadcast_session": "9pt",
                     "broadcast_track": "8.5pt",
                     "spacing": 3
                 },
@@ -183,7 +144,7 @@ class UIConfig:
                     "title": "10pt",
                     "button": "9pt",
                     "status": "10pt",
-                    "header": "10pt",
+                    "header": "9pt",
                     "data": "10pt",
                     "broadcast_title": "12pt",
                     "broadcast_session": "10pt",
@@ -194,7 +155,7 @@ class UIConfig:
                     "title": "11pt",
                     "button": "9.5pt",
                     "status": "11pt",
-                    "header": "10.5pt",
+                    "header": "10pt",
                     "data": "11pt",
                     "broadcast_title": "13pt",
                     "broadcast_session": "11pt",
@@ -291,9 +252,52 @@ MANUFACTURER_MAP = {
 UI_COLORS = UIColors()
 LICENSE_COLORS = LicenseColors()
 UI_DIMENSIONS = UIDimensions()
-COLUMN_LAYOUT = ColumnLayout()
-COLUMN_MIN_WIDTHS = ColumnMinWidths()
 TIMING = Timing()
 UI_CONFIG = UIConfig()
 FILE_CONFIG = FileConfig()
 TELEMETRY_CONFIG = TelemetryConfig()
+
+
+def _parse_point_size(font_size_value: Any) -> float:
+    """Convert a '9pt' style value into a numeric point size."""
+    if isinstance(font_size_value, (int, float)):
+        return float(font_size_value)
+    if isinstance(font_size_value, str):
+        normalized = font_size_value.strip().lower().removesuffix("pt")
+        try:
+            return float(normalized)
+        except ValueError:
+            return 0.0
+    return 0.0
+
+
+def get_column_width_scale(font_size_name: str) -> float:
+    """Scale column widths to track the selected UI font size."""
+    medium_sizes = UI_CONFIG.FONT_SIZES["Medium"]
+    current_sizes = UI_CONFIG.FONT_SIZES.get(font_size_name, medium_sizes)
+
+    medium_pt = max(
+        _parse_point_size(medium_sizes.get("header")),
+        _parse_point_size(medium_sizes.get("data")),
+    )
+    current_pt = max(
+        _parse_point_size(current_sizes.get("header")),
+        _parse_point_size(current_sizes.get("data")),
+    )
+
+    if medium_pt <= 0 or current_pt <= 0:
+        return 1.0
+
+    return current_pt / medium_pt
+
+
+def get_scaled_column_widths(col_def: ColumnDef, font_size_name: str) -> tuple[int, Optional[int]]:
+    """Return font-scaled min/max widths for a column definition."""
+    scale = get_column_width_scale(font_size_name)
+    min_width = max(col_def.min_width, round(col_def.min_width * scale))
+
+    if col_def.max_width is None:
+        return min_width, None
+
+    max_width = max(min_width, round(col_def.max_width * scale))
+    return min_width, max_width
