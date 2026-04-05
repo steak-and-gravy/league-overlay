@@ -1778,7 +1778,7 @@ class LeagueOverlay(QMainWindow):
         separator = QWidget()
         separator.setFixedHeight(1)
         separator.setStyleSheet(
-            f"background-color: {self.get_bg_color(UI_COLORS.HEADER_DARK_GRAY)}; border: none;"
+            f"background-color: {self.get_bg_color('#DDDDDD')}; border: none;"
         )
         return separator
 
