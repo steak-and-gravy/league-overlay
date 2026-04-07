@@ -5,7 +5,7 @@ from typing import Dict, Any, List, NamedTuple, Optional
 
 
 # Application version
-VERSION = "0.9.9.8b"
+VERSION = "0.9.9.9"
 
 
 @dataclass(frozen=True)
