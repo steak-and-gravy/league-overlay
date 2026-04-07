@@ -237,7 +237,7 @@ class LeagueOverlay(QMainWindow):
     def get_font_size(self, element_type):
         """Get the appropriate font size or spacing for a UI element.
         Purpose: Centralizes font sizing to make the entire UI scale together
-        when user changes font size setting (Small/Medium/Large/Extra Large).
+        when user changes font size setting (Small/Medium/Slim Large/Large).
         """
         if element_type == "spacing":
             return self.font_sizes.get(self.settings.font_size, self.font_sizes["Medium"]).get(element_type, 3)

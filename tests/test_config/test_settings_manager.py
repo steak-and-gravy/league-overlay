@@ -82,7 +82,7 @@ class TestLoadSettings:
             'width': 500,
             'height': 600,
             'opacity': 0.8,
-            'font_size': 'Large',
+            'font_size': 'Slim Large',
             'row_color_style': 'Alternate',
             'refresh_rate': 1.5,
             'hide_headers': True,
@@ -103,7 +103,7 @@ class TestLoadSettings:
         assert settings.width == 500
         assert settings.height == 600
         assert settings.opacity == 0.8
-        assert settings.font_size == 'Large'
+        assert settings.font_size == 'Slim Large'
         assert settings.row_color_style == 'Alternate'
         assert settings.refresh_rate == 1.5
         assert settings.hide_headers is True
@@ -226,7 +226,7 @@ class TestSaveSettings:
             width=500,
             height=600,
             opacity=0.8,
-            font_size='Large',
+            font_size='Slim Large',
             row_color_style='Alternate',
             refresh_rate=1.5,
             hide_headers=True,
@@ -242,7 +242,7 @@ class TestSaveSettings:
             data = json.load(f)
             assert data['x'] == 200
             assert data['opacity'] == 0.8
-            assert data['font_size'] == 'Large'
+            assert data['font_size'] == 'Slim Large'
             assert data['pit_stop_indicator'] is False
             assert data['division_colors'] == {'Pro': '#FF0000'}
 
@@ -291,7 +291,7 @@ class TestSaveSettings:
             x=250,
             y=300,
             opacity=0.65,
-            font_size='Extra Large',
+            font_size='Large',
             hide_headers=True
         )
 
@@ -375,7 +375,7 @@ class TestValidateSettings:
         settings_file = tmp_path / "settings.config"
         manager = SettingsManager(str(settings_file))
 
-        valid_sizes = ["Small", "Medium", "Large", "Extra Large"]
+        valid_sizes = ["Small", "Medium", "Slim Large", "Large"]
 
         for size in valid_sizes:
             settings = AppSettings(font_size=size)
@@ -481,7 +481,7 @@ class TestLoadWithValidation:
         settings_file = tmp_path / "settings.config"
         settings_data = {
             'width': 50,  # Too small
-            'height': 5000  # Too large
+            'height': 5000  # Too Slim Large
         }
 
         with open(settings_file, 'w') as f:

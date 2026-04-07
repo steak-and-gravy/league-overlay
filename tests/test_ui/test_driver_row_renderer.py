@@ -238,7 +238,7 @@ def test_create_row_applies_column_max_widths(qapp):
 
 def test_create_row_scales_column_widths_with_font_size(qapp):
     parent = _make_parent()
-    parent.settings.font_size = "Extra Large"
+    parent.settings.font_size = "Large"
     renderer = DriverRowRenderer(parent)
     driver = _make_driver("porsche 911 gt3 r", manufacturer="POR")
 
@@ -247,7 +247,7 @@ def test_create_row_scales_column_widths_with_font_size(qapp):
     pos_label = layout.itemAtPosition(0, _column_index(parent, "pos")).widget()
 
     medium_min, medium_max = get_scaled_column_widths(COLUMN_REGISTRY["pos"], "Medium")
-    scaled_min, scaled_max = get_scaled_column_widths(COLUMN_REGISTRY["pos"], "Extra Large")
+    scaled_min, scaled_max = get_scaled_column_widths(COLUMN_REGISTRY["pos"], "Large")
 
     assert scaled_min > medium_min
     assert scaled_max > medium_max

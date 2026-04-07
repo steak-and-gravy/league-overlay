@@ -499,7 +499,7 @@ class SettingsDialog(QDialog):
         font_size_row.addWidget(font_size_label)
 
         self.font_size_combo = QComboBox()
-        self.font_size_combo.addItems(["Small", "Medium", "Large", "Extra Large"])
+        self.font_size_combo.addItems(["Small", "Medium", "Slim Large", "Large"])
         self.font_size_combo.setCurrentText(self.parent_overlay.settings.font_size)
         self.font_size_combo.setStyleSheet("""
             QComboBox {

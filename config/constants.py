@@ -5,7 +5,7 @@ from typing import Dict, Any, List, NamedTuple, Optional
 
 
 # Application version
-VERSION = "0.9.9.8"
+VERSION = "0.9.9.8b"
 
 
 @dataclass(frozen=True)
@@ -63,12 +63,12 @@ class ColumnDef(NamedTuple):
 # Both create_headers() and create_row() iterate this registry.
 COLUMN_DEFS: List[ColumnDef] = [
     ColumnDef('pos',              'Overall',  7,  35,  35, '',                       '',                                              'position'),
-    ColumnDef('positions_gained', '+/-',      5,  27,  30, 'show_positions_gained',  '',                                              'positions_gained'),
-    ColumnDef('div_pos',          'Class',    6,  30,  35, '',                       '',                                              'division_position'),
+    ColumnDef('positions_gained', '+/-',      5,  28,  28, 'show_positions_gained',  '',                                              'positions_gained'),
+    ColumnDef('div_pos',          'Class',    6,  27,  27, '',                       '',                                              'division_position'),
     ColumnDef('driver_name',      'Driver',  25,  60, None, '',                       '',                                              'driver_name'),
-    ColumnDef('car_manufacturer', 'Mfr',      4,  28,  33, 'show_car_manufacturer',  '',                                              'manufacturer'),
+    ColumnDef('car_manufacturer', 'Mfr',      4,  28,  28, 'show_car_manufacturer',  '',                                              'manufacturer'),
     ColumnDef('rating',           'Rating',  14,  58,  65, 'show_rating',            '',                                              'combined_rating'),
-    ColumnDef('car_number',       'Car#',     6,  30,  34, 'show_car_number',        '',                                              'car_number'),
+    ColumnDef('car_number',       'Car#',     6,  29,  30, 'show_car_number',        '',                                              'car_number'),
     ColumnDef('gap',              'Gap',      8,  42,  46, 'show_gap',               'Gap to overall leader',                         'gap'),
     ColumnDef('div_gap',          'C-Gap',    8,  42,  46, 'show_division_gap',      'Gap to division leader',                        'division_gap'),
     ColumnDef('interval',         'Int',      8,  42,  46, 'show_interval',          'Interval to car ahead in overall standings',    'interval'),
@@ -140,6 +140,17 @@ class UIConfig:
                     "broadcast_track": "8.5pt",
                     "spacing": 3
                 },
+                "Slim Large": {
+                    "title": "10pt",
+                    "button": "9pt",
+                    "status": "10pt",
+                    "header": "9pt",
+                    "data": "10pt",
+                    "broadcast_title": "12pt",
+                    "broadcast_session": "10pt",
+                    "broadcast_track": "9.5pt",
+                    "spacing": 2
+                },
                 "Large": {
                     "title": "10pt",
                     "button": "9pt",
@@ -150,17 +161,6 @@ class UIConfig:
                     "broadcast_session": "10pt",
                     "broadcast_track": "9.5pt",
                     "spacing": 4
-                },
-                "Extra Large": {
-                    "title": "11pt",
-                    "button": "9.5pt",
-                    "status": "11pt",
-                    "header": "10pt",
-                    "data": "11pt",
-                    "broadcast_title": "13pt",
-                    "broadcast_session": "11pt",
-                    "broadcast_track": "10.5pt",
-                    "spacing": 5
                 }
             })
 

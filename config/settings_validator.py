@@ -239,7 +239,7 @@ class SettingsValidator:
         # Enum fields (limited valid values)
         validated['font_size'] = self.coerce_enum(
             data.get('font_size'),
-            valid_values=["Small", "Medium", "Large", "Extra Large"],
+            valid_values=["Small", "Medium", "Slim Large", "Large"],
             default=self.defaults['font_size'],
             field_name='font_size'
         )

@@ -189,42 +189,42 @@ class TestCoerceEnum:
     def test_valid_value(self):
         """Test valid enum value is accepted."""
         validator = SettingsValidator()
-        valid_values = ["Small", "Medium", "Large", "Extra Large"]
+        valid_values = ["Small", "Medium", "Slim Large", "Large"]
         result = validator.coerce_enum("Medium", valid_values, default="Medium", field_name='font_size')
         assert result == "Medium"
 
     def test_invalid_value_returns_default(self):
         """Test invalid value returns default."""
         validator = SettingsValidator()
-        valid_values = ["Small", "Medium", "Large", "Extra Large"]
+        valid_values = ["Small", "Medium", "Slim Large", "Large"]
         result = validator.coerce_enum("Medum", valid_values, default="Medium", field_name='font_size')
         assert result == "Medium"
 
     def test_case_sensitive(self):
         """Test enum validation is case-sensitive."""
         validator = SettingsValidator()
-        valid_values = ["Small", "Medium", "Large", "Extra Large"]
+        valid_values = ["Small", "Medium", "Slim Large", "Large"]
         result = validator.coerce_enum("medium", valid_values, default="Medium", field_name='font_size')
         assert result == "Medium"
 
     def test_wrong_type_returns_default(self):
         """Test non-string type returns default."""
         validator = SettingsValidator()
-        valid_values = ["Small", "Medium", "Large", "Extra Large"]
+        valid_values = ["Small", "Medium", "Slim Large", "Large"]
         result = validator.coerce_enum(123, valid_values, default="Medium", field_name='font_size')
         assert result == "Medium"
 
     def test_none_returns_default(self):
         """Test None returns default."""
         validator = SettingsValidator()
-        valid_values = ["Small", "Medium", "Large", "Extra Large"]
+        valid_values = ["Small", "Medium", "Slim Large", "Large"]
         result = validator.coerce_enum(None, valid_values, default="Medium", field_name='font_size')
         assert result == "Medium"
 
     def test_empty_string_returns_default(self):
         """Test empty string returns default."""
         validator = SettingsValidator()
-        valid_values = ["Small", "Medium", "Large", "Extra Large"]
+        valid_values = ["Small", "Medium", "Slim Large", "Large"]
         result = validator.coerce_enum("", valid_values, default="Medium", field_name='font_size')
         assert result == "Medium"
 
@@ -398,7 +398,7 @@ class TestValidateAndCoerce:
             'hide_headers': True,
             'pit_stop_indicator': False,
             'bold_drivers': True,
-            'font_size': 'Large',
+            'font_size': 'Slim Large',
             'row_color_style': 'Alternate',
             'league_config': 'custom.json',
             'division_colors': {
@@ -412,7 +412,7 @@ class TestValidateAndCoerce:
         assert result['x'] == 250
         assert result['width'] == 500
         assert result['opacity'] == 0.75
-        assert result['font_size'] == 'Large'
+        assert result['font_size'] == 'Slim Large'
 
     def test_partial_fields_uses_defaults(self):
         """Test partial fields fills in defaults."""
@@ -606,7 +606,7 @@ class TestNewDisplaySettings:
             'show_division_interval': True,
             'show_last_lap': True,
             'show_delta': True,
-            'font_size': 'Large'
+            'font_size': 'Slim Large'
         }
         result = validator.validate_and_coerce(data)
         assert result['width'] == 500
@@ -615,7 +615,7 @@ class TestNewDisplaySettings:
         assert result['show_division_interval'] is True
         assert result['show_last_lap'] is True
         assert result['show_delta'] is True
-        assert result['font_size'] == 'Large'
+        assert result['font_size'] == 'Slim Large'
 
 
 class TestNewColumnSettings:
@@ -729,7 +729,7 @@ class TestNewColumnSettings:
             'show_best_lap': True,
             'show_last_lap': True,
             'show_delta': True,
-            'font_size': 'Large'
+            'font_size': 'Slim Large'
         }
         result = validator.validate_and_coerce(data)
         assert result['width'] == 500
@@ -740,7 +740,7 @@ class TestNewColumnSettings:
         assert result['show_best_lap'] is True
         assert result['show_last_lap'] is True
         assert result['show_delta'] is True
-        assert result['font_size'] == 'Large'
+        assert result['font_size'] == 'Slim Large'
 
 
 class TestPerformanceIndicatorColors:
@@ -848,7 +848,7 @@ class TestPerformanceIndicatorColors:
             'show_positions_gained': True,
             'faster_color': '#0000FF',
             'slower_color': '#FFFF00',
-            'font_size': 'Large'
+            'font_size': 'Slim Large'
         }
         result = validator.validate_and_coerce(data)
         assert result['width'] == 500
@@ -857,7 +857,7 @@ class TestPerformanceIndicatorColors:
         assert result['show_positions_gained'] is True
         assert result['faster_color'] == '#0000FF'
         assert result['slower_color'] == '#FFFF00'
-        assert result['font_size'] == 'Large'
+        assert result['font_size'] == 'Slim Large'
 
 
 class TestNewDriverInfoColumns:
@@ -1018,7 +1018,7 @@ class TestNewDriverInfoColumns:
             'show_pit_lap': True,
             'show_pit_lap': True,
             'show_car_manufacturer': True,
-            'font_size': 'Large'
+            'font_size': 'Slim Large'
         }
         result = validator.validate_and_coerce(data)
         assert result['width'] == 600
@@ -1033,7 +1033,7 @@ class TestNewDriverInfoColumns:
         assert result['show_rating'] is True
         assert result['show_pit_lap'] is True
         assert result['show_pit_lap'] is True
-        assert result['font_size'] == 'Large'
+        assert result['font_size'] == 'Slim Large'
 
     def test_backward_compatibility_old_config_without_new_columns(self):
         """Test backward compatibility - old config files without new columns.
