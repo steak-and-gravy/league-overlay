@@ -481,7 +481,7 @@ class TestLoadWithValidation:
         settings_file = tmp_path / "settings.config"
         settings_data = {
             'width': 50,  # Too small
-            'height': 5000  # Too Slim Large
+            'height': 5000  # Too large
         }
 
         with open(settings_file, 'w') as f:
