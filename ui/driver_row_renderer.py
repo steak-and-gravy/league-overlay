@@ -42,6 +42,7 @@ class DriverRowRenderer:
         "LAM": "lamborghini.png",
         "LIG": "ligier.png",
         "MAZ": "mazda.png",
+        "MX5": "mazda.png",
         "MCL": "mclaren.png",
         "MER": "mercedes.png",
         "NIS": "nissan.png",
