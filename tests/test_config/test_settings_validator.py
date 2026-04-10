@@ -628,12 +628,12 @@ class TestNewColumnSettings:
         result = validator.validate_and_coerce(data)
         assert result['show_best_lap'] is False
 
-    def test_show_positions_gained_default_false(self):
-        """Test show_positions_gained defaults to False."""
+    def test_show_positions_gained_default_true(self):
+        """Test show_positions_gained defaults to True."""
         validator = SettingsValidator()
         data = {}
         result = validator.validate_and_coerce(data)
-        assert result['show_positions_gained'] is False
+        assert result['show_positions_gained'] is True
 
     def test_show_best_lap_true(self):
         """Test show_best_lap can be set to True."""
@@ -700,7 +700,7 @@ class TestNewColumnSettings:
         validator = SettingsValidator()
         data = {'show_positions_gained': [True]}
         result = validator.validate_and_coerce(data)
-        assert result['show_positions_gained'] is False
+        assert result['show_positions_gained'] is True
 
     def test_all_four_column_settings_together(self):
         """Test all four optional column settings together."""

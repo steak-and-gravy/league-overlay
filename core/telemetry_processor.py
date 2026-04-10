@@ -29,13 +29,14 @@ from typing import Dict, List, Optional, Tuple, Any, Callable
 import time
 import irsdk
 
-from config.constants import TELEMETRY_CONFIG, TIMING, MANUFACTURER_MAP
+from config.constants import TELEMETRY_CONFIG, TIMING
 from config.logging_config import get_logger
 from core.gap_calculator import GapCalculator
 from core.division_manager import DivisionManager
 from core.race_state_tracker import RaceStateTracker
 from core.position_calculator import PositionCalculator
 from core.driver_state import DriverState
+from core.manufacturer import extract_manufacturer
 
 logger = get_logger(__name__)
 
@@ -870,18 +871,7 @@ class TelemetryProcessor:
         Returns:
             Tuple of (abbreviation, color_hex)
         """
-        car_path = driver_info.get('CarPath', '')
-        if not car_path:
-            return ('', '#FFFFFF')
-
-        first_word = car_path.split()[0].lower() if car_path.split() else ''
-
-        if first_word in MANUFACTURER_MAP:
-            return MANUFACTURER_MAP[first_word]
-
-        # Fallback: use first 3 chars uppercase
-        abbrev = first_word[:3].upper() if first_word else ''
-        return (abbrev, '#FFFFFF')
+        return extract_manufacturer(driver_info)
 
     def _build_race_data_entry(self, driver: Dict, division_positions: Dict[int, int], interval: str, gap_to_leader: str, division_interval: str, division_gap_to_leader: str, display_position: int, division_color: str, division_name: Optional[str], is_race: bool, delta: str = "--", last_lap_time: float = 0.0, best_lap_time: float = 0.0, starting_position: int = 0, irating: int = 0, lic_level: int = 0, lic_sublevel: int = 0) -> DriverState:
         """Build a single race data entry for display.

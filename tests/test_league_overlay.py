@@ -630,8 +630,8 @@ class TestSessionChangeFooterRefresh:
         app.ir.__getitem__.side_effect = lambda key: {
             'DriverInfo': {
                 'Drivers': [
-                    {'CarIdx': 7, 'UserID': 101, 'UserName': 'Driver One', 'CarNumber': '12', 'CarClassID': 100},
-                    {'CarIdx': 8, 'UserID': 102, 'UserName': 'Driver Two', 'CarNumber': '42', 'CarClassID': 100},
+                    {'CarIdx': 7, 'UserID': 101, 'UserName': 'Driver One', 'CarNumber': '12', 'CarClassID': 100, 'CarPath': 'porsche 911 gt3 r'},
+                    {'CarIdx': 8, 'UserID': 102, 'UserName': 'Driver Two', 'CarNumber': '42', 'CarClassID': 100, 'CarPath': 'orphan prototype'},
                     {'CarIdx': 9, 'UserID': 103, 'UserName': 'Other Class', 'CarNumber': '88', 'CarClassID': 200},
                     {'CarIdx': 10, 'UserID': 104, 'UserName': 'Pace Car', 'CarNumber': 'PC', 'CarClassID': 100},
                     {'CarIdx': 11, 'UserID': 105, 'UserName': 'Spectator', 'CarNumber': '0', 'CarClassID': 100},
@@ -663,6 +663,8 @@ class TestSessionChangeFooterRefresh:
         assert placeholders[0].car_number == '12'
         assert placeholders[0].division_name == 'Pro'
         assert placeholders[0].division_color == '#FF8C00'
+        assert placeholders[0].car_manufacturer == 'POR'
+        assert placeholders[0].car_manufacturer_color == '#C0C0C0'
         assert placeholders[0].position == 0
         assert placeholders[0].best_lap == ''
         assert placeholders[1].car_idx == 8
@@ -670,6 +672,8 @@ class TestSessionChangeFooterRefresh:
         assert placeholders[1].car_number == '42'
         assert placeholders[1].division_name is None
         assert placeholders[1].division_color == '#D3D3D3'
+        assert placeholders[1].car_manufacturer == 'ORP'
+        assert placeholders[1].car_manufacturer_color == '#FFFFFF'
 
     def test_build_registered_driver_placeholders_returns_empty_when_driverinfo_unavailable(self):
         """Missing DriverInfo should safely produce no placeholders."""

@@ -35,6 +35,7 @@ from core.division_manager import DivisionManager
 from core.division_filter import DivisionFilter
 from core.race_state_tracker import RaceStateTracker
 from core.position_calculator import PositionCalculator
+from core.manufacturer import extract_manufacturer
 from core.telemetry_processor import TelemetryProcessor
 from core.update_checker import UpdateChecker
 from ui.widgets import DataUpdateSignal, CustomSizeGrip
@@ -1145,6 +1146,7 @@ class LeagueOverlay(QMainWindow):
                 continue
 
             division_name = self.division_manager.get_driver_division(session_driver)
+            mfr_abbrev, mfr_color = extract_manufacturer(session_driver)
 
             placeholder_data.append(
                 DriverState(
@@ -1152,6 +1154,8 @@ class LeagueOverlay(QMainWindow):
                     driver_info=session_driver.copy(),
                     division_name=division_name,
                     division_color=self.division_manager.get_division_color(division_name),
+                    car_manufacturer=mfr_abbrev,
+                    car_manufacturer_color=mfr_color,
                 )
             )
 

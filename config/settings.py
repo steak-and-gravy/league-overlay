@@ -40,7 +40,7 @@ class AppSettings:
     show_last_lap: bool = False
     show_delta: bool = False
     show_best_lap: bool = False
-    show_positions_gained: bool = False
+    show_positions_gained: bool = True
     show_car_manufacturer: bool = False  # Show car manufacturer badge column
     show_rating: bool = False  # Combined iRating + Safety Rating column
     show_car_number: bool = True  # Show car number column
