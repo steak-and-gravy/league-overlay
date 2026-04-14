@@ -115,3 +115,17 @@ def test_reset_column_list_preserves_fixed_column_state(qapp):
 
     dialog.deleteLater()
     overlay.deleteLater()
+
+
+def test_apply_settings_updates_recent_lap_flash_checkbox(qapp):
+    """Applying the dialog should persist the recent-lap flash toggle."""
+    overlay, dialog = _build_dialog()
+
+    dialog.show_recent_lap_flash_cb.setChecked(False)
+    dialog.apply_settings()
+
+    assert overlay.settings.show_recent_lap_flash is False
+    assert overlay.signals.refresh_colors.emit.called
+
+    dialog.deleteLater()
+    overlay.deleteLater()

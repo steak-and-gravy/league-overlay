@@ -176,6 +176,11 @@ class SettingsValidator:
             default=self.defaults['show_delta'],
             field_name='show_delta'
         )
+        validated['show_recent_lap_flash'] = self.coerce_bool(
+            data.get('show_recent_lap_flash'),
+            default=self.defaults['show_recent_lap_flash'],
+            field_name='show_recent_lap_flash'
+        )
         validated['show_best_lap'] = self.coerce_bool(
             data.get('show_best_lap'),
             default=self.defaults['show_best_lap'],

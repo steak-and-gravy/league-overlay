@@ -45,6 +45,9 @@ class TelemetryProcessor:
     """Processes iRacing telemetry data and calculates race positions, gaps, and state."""
 
     RECENT_LAP_FLASH_DURATION_SECONDS = 5.0
+    RECENT_LAP_FLASH_FIRST_LAP = "first_lap"
+    RECENT_LAP_FLASH_FASTER = "faster"
+    RECENT_LAP_FLASH_SLOWER = "slower"
 
     def __init__(
         self,
@@ -293,7 +296,15 @@ class TelemetryProcessor:
         for car_idx in expired_car_idxs:
             self.recent_lap_flashes.pop(car_idx, None)
 
-    def _activate_recent_lap_flash(self, car_idx: int, lap_time: float, now: float) -> None:
+    def _classify_recent_lap_flash_state(self, lap_time: float, previous_lap_time: float) -> str:
+        """Return the semantic state for a newly completed lap flash."""
+        if not self._is_valid_display_lap_time(previous_lap_time):
+            return self.RECENT_LAP_FLASH_FIRST_LAP
+        if lap_time > previous_lap_time + 1e-6:
+            return self.RECENT_LAP_FLASH_SLOWER
+        return self.RECENT_LAP_FLASH_FASTER
+
+    def _activate_recent_lap_flash(self, car_idx: int, lap_time: float, now: float, flash_state: str) -> None:
         """Store a temporary flash entry for a newly completed lap."""
         if not self._is_valid_display_lap_time(lap_time):
             return
@@ -304,19 +315,34 @@ class TelemetryProcessor:
 
         self.recent_lap_flashes[car_idx] = {
             'text': flash_text,
+            'state': flash_state,
             'expires_at': now + self.RECENT_LAP_FLASH_DURATION_SECONDS
         }
 
-    def _get_recent_lap_flash_text(self, car_idx: int, now: Optional[float] = None) -> str:
-        """Return active recent-lap flash text for a car or an empty string."""
+    def _get_active_recent_lap_flash(self, car_idx: int, now: Optional[float] = None) -> Optional[Dict[str, Any]]:
+        """Return active recent-lap flash state for a car or None."""
         current_time = time.monotonic() if now is None else now
         flash_state = self.recent_lap_flashes.get(car_idx)
         if flash_state is None:
-            return ""
+            return None
         if flash_state['expires_at'] <= current_time:
             self.recent_lap_flashes.pop(car_idx, None)
+            return None
+        return flash_state
+
+    def _get_recent_lap_flash_text(self, car_idx: int, now: Optional[float] = None) -> str:
+        """Return active recent-lap flash text for a car or an empty string."""
+        flash_state = self._get_active_recent_lap_flash(car_idx, now=now)
+        if flash_state is None:
             return ""
         return flash_state['text']
+
+    def _get_recent_lap_flash_state(self, car_idx: int, now: Optional[float] = None) -> str:
+        """Return active recent-lap flash state for a car or an empty string."""
+        flash_state = self._get_active_recent_lap_flash(car_idx, now=now)
+        if flash_state is None:
+            return ""
+        return flash_state.get('state', self.RECENT_LAP_FLASH_FASTER)
 
     def _update_recent_lap_flashes(self, car_idx_lap: Any, car_idx_last_lap: Any) -> None:
         """Track newly completed laps and expose a 5-second flash string per car."""
@@ -359,7 +385,8 @@ class TelemetryProcessor:
             )
 
             if self.pending_lap_completions.get(car_idx) is not None and last_lap_changed:
-                self._activate_recent_lap_flash(car_idx, current_last_lap, now)
+                flash_state = self._classify_recent_lap_flash_state(current_last_lap, previous_last_lap)
+                self._activate_recent_lap_flash(car_idx, current_last_lap, now, flash_state)
                 self.pending_lap_completions.pop(car_idx, None)
 
             self.last_lap_observations[car_idx] = (current_lap, current_last_lap)
@@ -1009,6 +1036,7 @@ class TelemetryProcessor:
         last_lap_display = GapCalculator.format_lap_time(last_lap_time)
 
         recent_lap_flash = self._get_recent_lap_flash_text(car_idx)
+        recent_lap_flash_state = self._get_recent_lap_flash_state(car_idx)
 
         # Format best lap time for display
         best_lap_display = GapCalculator.format_lap_time(best_lap_time)
@@ -1048,6 +1076,7 @@ class TelemetryProcessor:
             delta=delta,
             last_lap=last_lap_display,
             recent_lap_flash=recent_lap_flash,
+            recent_lap_flash_state=recent_lap_flash_state,
             last_lap_time=last_lap_time,
             best_lap=best_lap_display,
             best_lap_time=best_lap_time,

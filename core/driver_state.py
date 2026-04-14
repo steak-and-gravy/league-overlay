@@ -125,6 +125,9 @@ class DriverState:
     recent_lap_flash: str = ""
     """Temporary last-lap flash text shown in the name cell for recent lap completions"""
 
+    recent_lap_flash_state: str = ""
+    """Temporary flash state ("first_lap", "faster", or "slower") used by the renderer"""
+
     best_lap: str = ""
     """Formatted best lap time for display (e.g., "1:24.5", "--")"""
 

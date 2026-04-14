@@ -172,7 +172,18 @@ class DriverRowRenderer:
             elif render_method == 'division_position':
                 self._create_division_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, current_col)
             elif render_method == 'driver_name':
-                self._create_driver_name_label(layout, driver, text_color, gap_color, label_bg, label_border, font_weight, current_col)
+                self._create_driver_name_label(
+                    layout,
+                    driver,
+                    text_color,
+                    gap_color,
+                    delta_faster_color,
+                    delta_slower_color,
+                    label_bg,
+                    label_border,
+                    font_weight,
+                    current_col
+                )
             elif render_method == 'combined_rating':
                 self._create_combined_rating_label(layout, driver, text_color, label_bg, label_border, font_weight, current_col)
             elif render_method == 'car_number':
@@ -293,9 +304,21 @@ class DriverRowRenderer:
         layout.addWidget(car_label, 0, column)
 
     def _create_driver_name_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
-                                  flash_color: str,
+                                  default_flash_color: str, faster_flash_color: str,
+                                  slower_flash_color: str,
                                   label_bg: str, label_border: str, font_weight: str, column: int = 3) -> None:
         """Create driver name label."""
+        flash_visible = (
+            getattr(self.parent.settings, 'show_recent_lap_flash', True)
+            and bool(driver.recent_lap_flash)
+        )
+        flash_color = default_flash_color
+        if flash_visible:
+            if driver.recent_lap_flash_state == "slower":
+                flash_color = slower_flash_color
+            else:
+                flash_color = faster_flash_color
+
         name_container = QWidget()
         name_container.setObjectName("driverNameCell")
         name_container.setStyleSheet(f"""
@@ -332,7 +355,7 @@ class DriverRowRenderer:
         container_layout.addWidget(name_label, 1)
 
         flash_label = None
-        if driver.recent_lap_flash:
+        if flash_visible:
             flash_label = QLabel(driver.recent_lap_flash)
             flash_label.setObjectName("driverNameLapFlash")
             flash_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)

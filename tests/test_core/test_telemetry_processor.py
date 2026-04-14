@@ -2909,11 +2909,51 @@ class TestFinishingGapCalculation:
         """Recent lap flashes should self-expire after the configured duration."""
         processor.recent_lap_flashes[0] = {
             'text': '1:31.2',
+            'state': TelemetryProcessor.RECENT_LAP_FLASH_FASTER,
             'expires_at': 105.0,
         }
 
         assert processor._get_recent_lap_flash_text(0, now=104.9) == "1:31.2"
         assert processor._get_recent_lap_flash_text(0, now=105.0) == ""
+
+    def test_recent_lap_flash_uses_first_lap_state_without_prior_lap(self, processor):
+        """The first comparable completed lap should keep a distinct first-lap state."""
+        with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
+            processor._update_recent_lap_flashes([0], [0.0])
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=101.0):
+            processor._update_recent_lap_flashes([1], [0.0])
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
+            processor._update_recent_lap_flashes([1], [91.234])
+
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_FIRST_LAP
+
+    def test_recent_lap_flash_uses_faster_state_for_quicker_lap(self, processor):
+        """Improved laps should use the faster state."""
+        with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
+            processor._update_recent_lap_flashes([10], [92.0])
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=101.0):
+            processor._update_recent_lap_flashes([11], [92.0])
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
+            processor._update_recent_lap_flashes([11], [91.234])
+
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_FASTER
+
+    def test_recent_lap_flash_uses_slower_state_for_slower_lap(self, processor):
+        """Regressed laps should use the slower state."""
+        with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
+            processor._update_recent_lap_flashes([10], [89.0])
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=101.0):
+            processor._update_recent_lap_flashes([11], [89.0])
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
+            processor._update_recent_lap_flashes([11], [91.234])
+
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_SLOWER
 
     def test_recent_lap_flash_suppresses_invalid_lap_times(self, processor):
         """Invalid lap times should never produce a temporary flash."""
@@ -3017,6 +3057,7 @@ class TestFinishingGapCalculation:
         car_idx = 7
         processor.recent_lap_flashes[car_idx] = {
             'text': '1:29.9',
+            'state': TelemetryProcessor.RECENT_LAP_FLASH_SLOWER,
             'expires_at': 200.0,
         }
 
@@ -3040,9 +3081,10 @@ class TestFinishingGapCalculation:
                 last_lap_time=89.9,
                 best_lap_time=88.8,
                 starting_position=0
-            )
+        )
 
         assert driver_state.recent_lap_flash == "1:29.9"
+        assert driver_state.recent_lap_flash_state == TelemetryProcessor.RECENT_LAP_FLASH_SLOWER
 
     def test_mid_tow_disconnect_preserves_tow_label_and_sort_position(self, processor, mock_ir):
         """A driver disconnecting mid-tow should keep TOW and their frozen on-track order."""

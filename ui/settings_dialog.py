@@ -652,6 +652,20 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row3)
 
+        checkbox_row4 = QHBoxLayout()
+        checkbox_row4.setSpacing(10)
+
+        self.show_recent_lap_flash_cb = QCheckBox("Recent lap flash")
+        self.show_recent_lap_flash_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.show_recent_lap_flash_cb.setChecked(self.parent_overlay.settings.show_recent_lap_flash)
+        self.show_recent_lap_flash_cb.setToolTip(
+            "Temporarily show the most recent completed lap inside the driver-name cell."
+        )
+        checkbox_row4.addWidget(self.show_recent_lap_flash_cb)
+        checkbox_row4.addStretch()
+
+        window_layout.addLayout(checkbox_row4)
+
         window_group.setMinimumHeight(window_group.sizeHint().height())
 
         right_column.addWidget(window_group)
@@ -1308,6 +1322,7 @@ class SettingsDialog(QDialog):
             self.hide_headers_cb.setChecked(defaults.hide_headers)
             self.pit_stop_indicator_cb.setChecked(defaults.pit_stop_indicator)
             self.bold_drivers_cb.setChecked(defaults.bold_drivers)
+            self.show_recent_lap_flash_cb.setChecked(defaults.show_recent_lap_flash)
             self.show_footer_cb.setChecked(defaults.show_footer)
             self.broadcast_header_cb.setChecked(defaults.show_broadcast_header)
             self.broadcast_roll_enabled_cb.setChecked(defaults.broadcast_roll_enabled)
@@ -1372,6 +1387,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.hide_headers = self.hide_headers_cb.isChecked()
             self.parent_overlay.settings.pit_stop_indicator = self.pit_stop_indicator_cb.isChecked()
             self.parent_overlay.settings.bold_drivers = self.bold_drivers_cb.isChecked()
+            self.parent_overlay.settings.show_recent_lap_flash = self.show_recent_lap_flash_cb.isChecked()
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()
             self.parent_overlay.settings.show_broadcast_header = self.broadcast_header_cb.isChecked()
             self.parent_overlay.settings.broadcast_roll_enabled = self.broadcast_roll_enabled_cb.isChecked()

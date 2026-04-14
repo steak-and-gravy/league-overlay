@@ -769,6 +769,7 @@ class TestHasDataChanged:
             show_last_lap=False,
             show_pit_lap=False,
             pit_stop_indicator=True,
+            show_recent_lap_flash=True,
         )
 
         old_driver = DriverState(
@@ -801,6 +802,7 @@ class TestHasDataChanged:
             show_last_lap=False,
             show_pit_lap=False,
             pit_stop_indicator=False,
+            show_recent_lap_flash=True,
         )
 
         old_driver = DriverState(
@@ -833,6 +835,7 @@ class TestHasDataChanged:
             show_last_lap=False,
             show_pit_lap=False,
             pit_stop_indicator=True,
+            show_recent_lap_flash=True,
         )
 
         old_driver = DriverState(
@@ -856,6 +859,76 @@ class TestHasDataChanged:
         app._has_data_changed = LeagueOverlay._has_data_changed.__get__(app)
 
         assert app._has_data_changed([new_driver]) is True
+
+    def test_recent_lap_flash_state_change_forces_redraw(self):
+        """Flash-state changes must redraw while the feature is enabled."""
+        app = Mock(spec=LeagueOverlay)
+        app.settings = SimpleNamespace(
+            show_delta=False,
+            show_last_lap=False,
+            show_pit_lap=False,
+            pit_stop_indicator=True,
+            show_recent_lap_flash=True,
+        )
+
+        old_driver = DriverState(
+            car_idx=5,
+            driver_info={"UserName": "Focused Driver", "CarNumber": "42"},
+            position=1,
+            division_position=1,
+            division_name="Pro",
+            recent_lap_flash="1:29.9",
+            recent_lap_flash_state="first_lap",
+        )
+        new_driver = DriverState(
+            car_idx=5,
+            driver_info={"UserName": "Focused Driver", "CarNumber": "42"},
+            position=1,
+            division_position=1,
+            division_name="Pro",
+            recent_lap_flash="1:29.9",
+            recent_lap_flash_state="slower",
+        )
+        app._last_emitted_data = [old_driver]
+
+        app._has_data_changed = LeagueOverlay._has_data_changed.__get__(app)
+
+        assert app._has_data_changed([new_driver]) is True
+
+    def test_recent_lap_flash_changes_are_ignored_when_feature_disabled(self):
+        """Hidden recent-lap flashes should not force redraws."""
+        app = Mock(spec=LeagueOverlay)
+        app.settings = SimpleNamespace(
+            show_delta=False,
+            show_last_lap=False,
+            show_pit_lap=False,
+            pit_stop_indicator=True,
+            show_recent_lap_flash=False,
+        )
+
+        old_driver = DriverState(
+            car_idx=5,
+            driver_info={"UserName": "Focused Driver", "CarNumber": "42"},
+            position=1,
+            division_position=1,
+            division_name="Pro",
+            recent_lap_flash="",
+            recent_lap_flash_state="",
+        )
+        new_driver = DriverState(
+            car_idx=5,
+            driver_info={"UserName": "Focused Driver", "CarNumber": "42"},
+            position=1,
+            division_position=1,
+            division_name="Pro",
+            recent_lap_flash="1:29.9",
+            recent_lap_flash_state="slower",
+        )
+        app._last_emitted_data = [old_driver]
+
+        app._has_data_changed = LeagueOverlay._has_data_changed.__get__(app)
+
+        assert app._has_data_changed([new_driver]) is False
 
     def test_apply_official_league_broadcast_metadata_resets_to_defaults_for_non_official_config(self):
         app = Mock(spec=LeagueOverlay)

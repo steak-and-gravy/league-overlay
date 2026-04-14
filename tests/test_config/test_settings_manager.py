@@ -43,6 +43,7 @@ class TestAppSettingsDefaults:
         assert settings.hide_headers is False
         assert settings.pit_stop_indicator is True
         assert settings.bold_drivers is True
+        assert settings.show_recent_lap_flash is True
         assert settings.broadcast_roll_rows == 5
         assert settings.broadcast_roll_interval_seconds == 5
 
@@ -232,6 +233,7 @@ class TestSaveSettings:
             hide_headers=True,
             pit_stop_indicator=False,
             bold_drivers=False,
+            show_recent_lap_flash=False,
             league_config='/path/to/config.json',
             division_colors={'Pro': '#FF0000'}
         )
@@ -244,6 +246,7 @@ class TestSaveSettings:
             assert data['opacity'] == 0.8
             assert data['font_size'] == 'Slim Large'
             assert data['pit_stop_indicator'] is False
+            assert data['show_recent_lap_flash'] is False
             assert data['division_colors'] == {'Pro': '#FF0000'}
 
     def test_load_legacy_center_drivers_config_uses_pit_stop_indicator_default(self, tmp_path):
@@ -292,7 +295,8 @@ class TestSaveSettings:
             y=300,
             opacity=0.65,
             font_size='Large',
-            hide_headers=True
+            hide_headers=True,
+            show_recent_lap_flash=False,
         )
 
         manager.save(original)
@@ -303,6 +307,7 @@ class TestSaveSettings:
         assert loaded.opacity == original.opacity
         assert loaded.font_size == original.font_size
         assert loaded.hide_headers == original.hide_headers
+        assert loaded.show_recent_lap_flash == original.show_recent_lap_flash
 
 
 class TestValidateSettings:

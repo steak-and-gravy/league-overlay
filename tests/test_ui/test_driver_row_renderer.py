@@ -260,7 +260,11 @@ def test_create_row_scales_column_widths_with_font_size(qapp):
 def test_create_row_renders_recent_lap_flash_inside_driver_name_cell(qapp):
     parent = _make_parent()
     renderer = DriverRowRenderer(parent)
-    driver = _make_driver("porsche 911 gt3 r", recent_lap_flash="1:31.2")
+    driver = _make_driver(
+        "porsche 911 gt3 r",
+        recent_lap_flash="1:31.2",
+        recent_lap_flash_state="slower",
+    )
 
     row = renderer.create_row(driver)
     layout = row.layout()
@@ -272,6 +276,7 @@ def test_create_row_renders_recent_lap_flash_inside_driver_name_cell(qapp):
     assert name_text.text() == "Logo Driver"
     assert flash_text is not None
     assert flash_text.text() == "1:31.2"
+    assert parent.settings.slower_color in name_container.styleSheet()
     row.deleteLater()
 
 
@@ -285,6 +290,20 @@ def test_create_row_omits_recent_lap_flash_when_empty(qapp):
     name_container = layout.itemAtPosition(0, _column_index(parent, "driver_name")).widget()
 
     assert name_container.findChild(QLabel, "driverNameText") is not None
+    assert name_container.findChild(QLabel, "driverNameLapFlash") is None
+    row.deleteLater()
+
+
+def test_create_row_omits_recent_lap_flash_when_setting_disabled(qapp):
+    parent = _make_parent()
+    parent.settings.show_recent_lap_flash = False
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver("porsche 911 gt3 r", recent_lap_flash="1:31.2")
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    name_container = layout.itemAtPosition(0, _column_index(parent, "driver_name")).widget()
+
     assert name_container.findChild(QLabel, "driverNameLapFlash") is None
     row.deleteLater()
 

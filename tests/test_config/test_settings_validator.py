@@ -529,6 +529,13 @@ class TestNewDisplaySettings:
         result = validator.validate_and_coerce(data)
         assert result['show_delta'] is False
 
+    def test_show_recent_lap_flash_default_true(self):
+        """Test show_recent_lap_flash defaults to True."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['show_recent_lap_flash'] is True
+
     def test_show_last_lap_true(self):
         """Test show_last_lap can be set to True."""
         validator = SettingsValidator()
@@ -542,6 +549,13 @@ class TestNewDisplaySettings:
         data = {'show_delta': True}
         result = validator.validate_and_coerce(data)
         assert result['show_delta'] is True
+
+    def test_show_recent_lap_flash_false(self):
+        """Test show_recent_lap_flash can be disabled."""
+        validator = SettingsValidator()
+        data = {'show_recent_lap_flash': False}
+        result = validator.validate_and_coerce(data)
+        assert result['show_recent_lap_flash'] is False
 
     def test_show_last_lap_string_coercion(self):
         """Test show_last_lap string coercion."""
@@ -576,11 +590,13 @@ class TestNewDisplaySettings:
         validator = SettingsValidator()
         data = {
             'show_last_lap': True,
-            'show_delta': True
+            'show_delta': True,
+            'show_recent_lap_flash': False
         }
         result = validator.validate_and_coerce(data)
         assert result['show_last_lap'] is True
         assert result['show_delta'] is True
+        assert result['show_recent_lap_flash'] is False
 
     def test_show_last_lap_invalid_returns_default(self):
         """Test invalid show_last_lap value returns default."""
@@ -596,6 +612,13 @@ class TestNewDisplaySettings:
         result = validator.validate_and_coerce(data)
         assert result['show_delta'] is False
 
+    def test_show_recent_lap_flash_invalid_returns_default(self):
+        """Test invalid show_recent_lap_flash value returns default."""
+        validator = SettingsValidator()
+        data = {'show_recent_lap_flash': 'maybe'}
+        result = validator.validate_and_coerce(data)
+        assert result['show_recent_lap_flash'] is True
+
     def test_complete_settings_with_display_columns(self):
         """Test complete settings including new display columns."""
         validator = SettingsValidator()
@@ -606,6 +629,7 @@ class TestNewDisplaySettings:
             'show_division_interval': True,
             'show_last_lap': True,
             'show_delta': True,
+            'show_recent_lap_flash': False,
             'font_size': 'Slim Large'
         }
         result = validator.validate_and_coerce(data)
@@ -615,6 +639,7 @@ class TestNewDisplaySettings:
         assert result['show_division_interval'] is True
         assert result['show_last_lap'] is True
         assert result['show_delta'] is True
+        assert result['show_recent_lap_flash'] is False
         assert result['font_size'] == 'Slim Large'
 
 

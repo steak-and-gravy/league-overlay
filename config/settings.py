@@ -39,6 +39,7 @@ class AppSettings:
     show_division_interval: bool = False  # Show Interval to car ahead in division column (C-Int)
     show_last_lap: bool = False
     show_delta: bool = False
+    show_recent_lap_flash: bool = True
     show_best_lap: bool = False
     show_positions_gained: bool = True
     show_car_manufacturer: bool = False  # Show car manufacturer badge column
@@ -183,6 +184,7 @@ class SettingsManager:
                 'show_division_interval': settings.show_division_interval,
                 'show_last_lap': settings.show_last_lap,
                 'show_delta': settings.show_delta,
+                'show_recent_lap_flash': settings.show_recent_lap_flash,
                 'show_best_lap': settings.show_best_lap,
                 'show_positions_gained': settings.show_positions_gained,
                 'show_car_manufacturer': settings.show_car_manufacturer,
@@ -246,6 +248,7 @@ class SettingsManager:
             'show_division_interval': settings.show_division_interval,
             'show_last_lap': settings.show_last_lap,
             'show_delta': settings.show_delta,
+            'show_recent_lap_flash': settings.show_recent_lap_flash,
             'show_best_lap': settings.show_best_lap,
             'show_positions_gained': settings.show_positions_gained,
             'show_car_manufacturer': settings.show_car_manufacturer,
