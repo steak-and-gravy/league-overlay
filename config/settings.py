@@ -54,7 +54,7 @@ class AppSettings:
 
     # Performance indicator colors
     faster_color: str = "#00FF00"  # Green - for faster lap times and positions gained
-    slower_color: str = "#FF0000"  # Red - for slower lap times and positions lost
+    slower_color: str = "#FF4242"  # Red - for slower lap times and positions lost
 
     # Configuration files
     league_config: Optional[str] = None

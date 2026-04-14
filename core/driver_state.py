@@ -49,7 +49,7 @@ class DriverState:
     """Division name: "Pro", "ProAm", "Am", "Rookie", or None for default"""
 
     division_color: str = "#FFFFFF"
-    """Hex color code for division (e.g., "#FF0000" for red)"""
+    """Hex color code for division (e.g., "#FF4242" for red)"""
 
     # ═══════════════════════════════════════════════════════════════════════════
     # TELEMETRY (updated every frame)
