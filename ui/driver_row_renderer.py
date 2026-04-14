@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QWidget, QLabel, QGridLayout, QSizePolicy
+from PySide6.QtWidgets import QWidget, QLabel, QGridLayout, QHBoxLayout, QSizePolicy
 from PySide6.QtCore import Qt
 
 from config.constants import COLUMN_REGISTRY, get_scaled_column_widths
@@ -71,13 +71,13 @@ class DriverRowRenderer:
         """
         self.parent = parent
 
-    def _apply_column_width(self, label: QLabel, column_id: str) -> tuple[int, Optional[int]]:
+    def _apply_column_width(self, widget: QWidget, column_id: str) -> tuple[int, Optional[int]]:
         """Apply the shared min/max width rules for a rendered column."""
         col_def = COLUMN_REGISTRY[column_id]
         min_width, max_width = get_scaled_column_widths(col_def, self.parent.settings.font_size)
-        label.setMinimumWidth(min_width)
+        widget.setMinimumWidth(min_width)
         if max_width is not None:
-            label.setMaximumWidth(max_width)
+            widget.setMaximumWidth(max_width)
         return min_width, max_width
 
     @classmethod
@@ -172,7 +172,7 @@ class DriverRowRenderer:
             elif render_method == 'division_position':
                 self._create_division_position_label(layout, driver, text_color, label_bg, label_border, font_weight, styling, current_col)
             elif render_method == 'driver_name':
-                self._create_driver_name_label(layout, driver, text_color, label_bg, label_border, font_weight, current_col)
+                self._create_driver_name_label(layout, driver, text_color, gap_color, label_bg, label_border, font_weight, current_col)
             elif render_method == 'combined_rating':
                 self._create_combined_rating_label(layout, driver, text_color, label_bg, label_border, font_weight, current_col)
             elif render_method == 'car_number':
@@ -293,28 +293,66 @@ class DriverRowRenderer:
         layout.addWidget(car_label, 0, column)
 
     def _create_driver_name_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
+                                  flash_color: str,
                                   label_bg: str, label_border: str, font_weight: str, column: int = 3) -> None:
         """Create driver name label."""
-        name_label = QLabel(driver.team_name if driver.team_name > "" else driver.driver_name)
-        name_label.setStyleSheet(f"""
-            QLabel {{
-                color: {text_color};
+        name_container = QWidget()
+        name_container.setObjectName("driverNameCell")
+        name_container.setStyleSheet(f"""
+            QWidget#driverNameCell {{
                 background-color: {label_bg};
+                {label_border}
+            }}
+            QLabel#driverNameText {{
+                color: {text_color};
+                background: transparent;
                 font-size: {self.parent.get_font_size('data')};
                 font-weight: {font_weight};
                 padding-left: 0.5px;
-                {label_border}
+            }}
+            QLabel#driverNameLapFlash {{
+                color: {flash_color};
+                background: transparent;
+                font-size: {self.parent.get_font_size('data')};
+                font-weight: bold;
+                padding-right: 1px;
             }}
         """)
+        name_container.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+
+        container_layout = QHBoxLayout(name_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(4)
+
+        name_label = QLabel(driver.team_name if driver.team_name > "" else driver.driver_name)
+        name_label.setObjectName("driverNameText")
         name_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         name_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        self._apply_column_width(name_label, 'driver_name')
         name_label.setWordWrap(False)
-        name_label.setContextMenuPolicy(Qt.CustomContextMenu)
-        name_label.customContextMenuRequested.connect(
-            lambda pos, d=driver: self.parent.show_context_menu(d)
-        )
-        layout.addWidget(name_label, 0, column)
+        container_layout.addWidget(name_label, 1)
+
+        flash_label = None
+        if driver.recent_lap_flash:
+            flash_label = QLabel(driver.recent_lap_flash)
+            flash_label.setObjectName("driverNameLapFlash")
+            flash_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            flash_label.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+            container_layout.addWidget(flash_label, 0)
+
+        self._apply_column_width(name_container, 'driver_name')
+
+        def bind_context_menu(widget: QWidget) -> None:
+            widget.setContextMenuPolicy(Qt.CustomContextMenu)
+            widget.customContextMenuRequested.connect(
+                lambda pos, d=driver: self.parent.show_context_menu(d)
+            )
+
+        bind_context_menu(name_container)
+        bind_context_menu(name_label)
+        if flash_label is not None:
+            bind_context_menu(flash_label)
+
+        layout.addWidget(name_container, 0, column)
 
     def _create_gap_label(self, layout: QGridLayout, driver: DriverState, gap_color: str,
                          label_bg: str, label_border: str, font_weight: str, column: int = 4) -> None:

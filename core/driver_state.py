@@ -122,6 +122,9 @@ class DriverState:
     last_lap: str = ""
     """Formatted last lap time for display (e.g., "1:24.5", "--")"""
 
+    recent_lap_flash: str = ""
+    """Temporary last-lap flash text shown in the name cell for recent lap completions"""
+
     best_lap: str = ""
     """Formatted best lap time for display (e.g., "1:24.5", "--")"""
 

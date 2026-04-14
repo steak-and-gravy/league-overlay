@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 import pytest
+from PySide6.QtWidgets import QLabel
 
 from config.constants import COLUMN_REGISTRY, get_scaled_column_widths
 from core.driver_state import DriverState
@@ -253,6 +254,38 @@ def test_create_row_scales_column_widths_with_font_size(qapp):
     assert scaled_max > medium_max
     assert pos_label.minimumWidth() == scaled_min
     assert pos_label.maximumWidth() == scaled_max
+    row.deleteLater()
+
+
+def test_create_row_renders_recent_lap_flash_inside_driver_name_cell(qapp):
+    parent = _make_parent()
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver("porsche 911 gt3 r", recent_lap_flash="1:31.2")
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    name_container = layout.itemAtPosition(0, _column_index(parent, "driver_name")).widget()
+    name_text = name_container.findChild(QLabel, "driverNameText")
+    flash_text = name_container.findChild(QLabel, "driverNameLapFlash")
+
+    assert name_text is not None
+    assert name_text.text() == "Logo Driver"
+    assert flash_text is not None
+    assert flash_text.text() == "1:31.2"
+    row.deleteLater()
+
+
+def test_create_row_omits_recent_lap_flash_when_empty(qapp):
+    parent = _make_parent()
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver("porsche 911 gt3 r")
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    name_container = layout.itemAtPosition(0, _column_index(parent, "driver_name")).widget()
+
+    assert name_container.findChild(QLabel, "driverNameText") is not None
+    assert name_container.findChild(QLabel, "driverNameLapFlash") is None
     row.deleteLater()
 
 

@@ -44,6 +44,8 @@ logger = get_logger(__name__)
 class TelemetryProcessor:
     """Processes iRacing telemetry data and calculates race positions, gaps, and state."""
 
+    RECENT_LAP_FLASH_DURATION_SECONDS = 5.0
+
     def __init__(
         self,
         ir: irsdk.IRSDK,
@@ -76,6 +78,9 @@ class TelemetryProcessor:
         # Lap time cache - preserves lap times even when drivers go inactive
         # Maps car_idx -> (best_lap, last_lap)
         self.lap_time_cache: Dict[int, Tuple[float, float]] = {}
+        self.recent_lap_flashes: Dict[int, Dict[str, Any]] = {}
+        self.last_lap_observations: Dict[int, Tuple[int, float]] = {}
+        self.pending_lap_completions: Dict[int, int] = {}
 
         # Pit stop tracking - maps car_idx to last pit lap number
         self.pit_tracking: Dict[int, int] = {}
@@ -109,6 +114,9 @@ class TelemetryProcessor:
 
         # Clear lap time cache on session change
         self.lap_time_cache.clear()
+        self.recent_lap_flashes.clear()
+        self.last_lap_observations.clear()
+        self.pending_lap_completions.clear()
 
         # Clear pit tracking on session change
         self.pit_tracking.clear()
@@ -265,6 +273,96 @@ class TelemetryProcessor:
                 valid_best = best_lap if (best_lap > 0 and best_lap < 999) else 0.0
                 valid_last = last_lap if (last_lap > 0 and last_lap < 999) else 0.0
                 self.lap_time_cache[car_idx] = (valid_best, valid_last)
+
+    @staticmethod
+    def _coerce_lap_time(lap_time: Any) -> float:
+        """Return a numeric lap time or 0.0 when telemetry data is missing."""
+        return float(lap_time) if isinstance(lap_time, (int, float)) else 0.0
+
+    @staticmethod
+    def _is_valid_display_lap_time(lap_time: float) -> bool:
+        """Return True when the lap time is valid for display and flash behavior."""
+        return 0 < lap_time < 999
+
+    def _prune_recent_lap_flashes(self, now: float) -> None:
+        """Drop expired last-lap flash entries."""
+        expired_car_idxs = [
+            car_idx for car_idx, flash_state in self.recent_lap_flashes.items()
+            if flash_state['expires_at'] <= now
+        ]
+        for car_idx in expired_car_idxs:
+            self.recent_lap_flashes.pop(car_idx, None)
+
+    def _activate_recent_lap_flash(self, car_idx: int, lap_time: float, now: float) -> None:
+        """Store a temporary flash entry for a newly completed lap."""
+        if not self._is_valid_display_lap_time(lap_time):
+            return
+
+        flash_text = GapCalculator.format_lap_time(lap_time)
+        if flash_text in ("", "--"):
+            return
+
+        self.recent_lap_flashes[car_idx] = {
+            'text': flash_text,
+            'expires_at': now + self.RECENT_LAP_FLASH_DURATION_SECONDS
+        }
+
+    def _get_recent_lap_flash_text(self, car_idx: int, now: Optional[float] = None) -> str:
+        """Return active recent-lap flash text for a car or an empty string."""
+        current_time = time.monotonic() if now is None else now
+        flash_state = self.recent_lap_flashes.get(car_idx)
+        if flash_state is None:
+            return ""
+        if flash_state['expires_at'] <= current_time:
+            self.recent_lap_flashes.pop(car_idx, None)
+            return ""
+        return flash_state['text']
+
+    def _update_recent_lap_flashes(self, car_idx_lap: Any, car_idx_last_lap: Any) -> None:
+        """Track newly completed laps and expose a 5-second flash string per car."""
+        now = time.monotonic()
+        self._prune_recent_lap_flashes(now)
+
+        if not car_idx_lap or not car_idx_last_lap:
+            return
+
+        max_len = min(len(car_idx_lap), len(car_idx_last_lap))
+        for car_idx in range(max_len):
+            current_lap = car_idx_lap[car_idx]
+            current_last_lap = self._coerce_lap_time(car_idx_last_lap[car_idx])
+            previous_observation = self.last_lap_observations.get(car_idx)
+
+            if previous_observation is None:
+                self.last_lap_observations[car_idx] = (current_lap, current_last_lap)
+                continue
+
+            previous_lap, previous_last_lap = previous_observation
+
+            if current_lap < 0:
+                self.pending_lap_completions.pop(car_idx, None)
+                self.last_lap_observations[car_idx] = (current_lap, current_last_lap)
+                continue
+
+            if previous_lap < 0 <= current_lap:
+                self.pending_lap_completions.pop(car_idx, None)
+                self.last_lap_observations[car_idx] = (current_lap, current_last_lap)
+                continue
+
+            if current_lap < previous_lap:
+                self.pending_lap_completions.pop(car_idx, None)
+            elif current_lap > previous_lap:
+                self.pending_lap_completions[car_idx] = current_lap - 1
+
+            last_lap_changed = (
+                self._is_valid_display_lap_time(current_last_lap)
+                and abs(current_last_lap - previous_last_lap) > 1e-6
+            )
+
+            if self.pending_lap_completions.get(car_idx) is not None and last_lap_changed:
+                self._activate_recent_lap_flash(car_idx, current_last_lap, now)
+                self.pending_lap_completions.pop(car_idx, None)
+
+            self.last_lap_observations[car_idx] = (current_lap, current_last_lap)
 
     def _update_pit_tracking(self) -> None:
         """Update pit tracking by monitoring pit-road enter/exit transitions.
@@ -910,6 +1008,8 @@ class TelemetryProcessor:
         # Format last lap time for display
         last_lap_display = GapCalculator.format_lap_time(last_lap_time)
 
+        recent_lap_flash = self._get_recent_lap_flash_text(car_idx)
+
         # Format best lap time for display
         best_lap_display = GapCalculator.format_lap_time(best_lap_time)
 
@@ -947,6 +1047,7 @@ class TelemetryProcessor:
             division_interval=division_interval if not (is_disconnected and not is_finished) else "(DC)",
             delta=delta,
             last_lap=last_lap_display,
+            recent_lap_flash=recent_lap_flash,
             last_lap_time=last_lap_time,
             best_lap=best_lap_display,
             best_lap_time=best_lap_time,
@@ -1994,11 +2095,25 @@ class TelemetryProcessor:
             # Read lap time telemetry data
             try:
                 car_idx_last_lap = self.ir['CarIdxLastLapTime']
+            except (KeyError, TypeError):
+                car_idx_last_lap = [0.0] * TELEMETRY_CONFIG.MAX_CARS
+
+            try:
                 car_idx_best_lap = self.ir['CarIdxBestLapTime']
             except (KeyError, TypeError):
-                # Fallback if telemetry not available (shouldn't happen but be safe)
-                car_idx_last_lap = [0.0] * TELEMETRY_CONFIG.MAX_CARS
                 car_idx_best_lap = [0.0] * TELEMETRY_CONFIG.MAX_CARS
+
+            lap_telemetry_available = True
+            try:
+                car_idx_lap = self.ir['CarIdxLap']
+            except (KeyError, TypeError):
+                # Skip flash-event tracking if lap counters are unavailable, but preserve
+                # any valid last/best lap telemetry for the rest of the row build.
+                lap_telemetry_available = False
+                car_idx_lap = None
+
+            if lap_telemetry_available:
+                self._update_recent_lap_flashes(car_idx_lap, car_idx_last_lap)
 
             race_data = []
 
