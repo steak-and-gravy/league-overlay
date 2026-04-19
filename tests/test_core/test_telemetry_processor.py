@@ -1702,6 +1702,94 @@ class TestRaceResultsRestoreWhenNoActiveDrivers:
         processor._update_recent_lap_flashes.assert_not_called()
         assert processor._calculate_delta.call_args.args[2] == [91.234]
 
+    def test_process_telemetry_passes_best_lap_and_session_type_to_recent_lap_flash_update(self):
+        """Recent-lap tracking should receive best-lap telemetry and session type."""
+        ir = MagicMock()
+        division_manager = MagicMock(spec=DivisionManager)
+        race_state_tracker = MagicMock(spec=RaceStateTracker)
+        gap_calculator = MagicMock(spec=GapCalculator)
+        position_calculator = MagicMock(spec=PositionCalculator)
+
+        processor = TelemetryProcessor(
+            ir=ir,
+            division_manager=division_manager,
+            race_state_tracker=race_state_tracker,
+            gap_calculator=gap_calculator,
+            position_calculator=position_calculator
+        )
+
+        drivers = {
+            7: {
+                'CarIdx': 7,
+                'UserName': 'Driver Seven',
+                'CarNumber': '7',
+                'CarClassID': 4091,
+            }
+        }
+        session_data = {
+            'session_id': 123,
+            'subsession_id': 456,
+            'session_type': 'Qualify',
+            'current_session': {'SessionType': 'Qualify'},
+            'results_lookup': {7: {'CarIdx': 7, 'ClassPosition': 0}},
+            'fastest_lap_time': 90.0,
+        }
+
+        car_idx_lap = [12]
+        car_idx_last_lap = [91.234]
+        car_idx_best_lap = [90.123]
+
+        processor._get_session_info = Mock(return_value=(drivers, session_data, False))
+        processor._detect_session_change = Mock(return_value=False)
+        processor._populate_lap_time_cache_from_results = Mock()
+        processor._update_recent_lap_flashes = Mock()
+        processor._calculate_division_positions = Mock(return_value=({7: 1}, []))
+        processor._calculate_interval = Mock(return_value="")
+        processor._calculate_gap_to_leader = Mock(return_value="")
+        processor._calculate_delta = Mock(return_value="--")
+        processor._build_race_data_entry = Mock(return_value=DriverState(
+            car_idx=7,
+            driver_info=drivers[7],
+            position=1,
+        ))
+
+        position_calculator.identify_player = Mock()
+        position_calculator.update_spectated_car = Mock()
+        position_calculator.player_car_class_id = None
+        position_calculator.player_car_idx = None
+        position_calculator.spectated_car_idx = None
+        position_calculator.get_official_positions = Mock(return_value=[{
+            'car_idx': 7,
+            'driver_info': drivers[7],
+            'position': 1,
+            'current_lap': 12,
+        }])
+
+        race_state_tracker.set_player_class_id = Mock()
+        race_state_tracker.is_driver_finished = Mock(return_value=False)
+        race_state_tracker.get_starting_position = Mock(return_value=0)
+
+        def getitem(key):
+            if key == 'CarIdxLap':
+                return car_idx_lap
+            if key == 'CarIdxLastLapTime':
+                return car_idx_last_lap
+            if key == 'CarIdxBestLapTime':
+                return car_idx_best_lap
+            raise KeyError(key)
+
+        ir.__getitem__.side_effect = getitem
+
+        result = processor.process_telemetry(get_driver_color_fn=lambda _driver_info: '#FFFFFF')
+
+        assert result == [processor._build_race_data_entry.return_value]
+        processor._update_recent_lap_flashes.assert_called_once_with(
+            car_idx_lap,
+            car_idx_last_lap,
+            car_idx_best_lap,
+            'Qualify'
+        )
+
 
 class TestDisconnectedFinishersLeaderBug:
     """Unit tests for the disconnected finishers showing "Leader" bug fix.
@@ -2916,8 +3004,8 @@ class TestFinishingGapCalculation:
         assert processor._get_recent_lap_flash_text(0, now=104.9) == "1:31.2"
         assert processor._get_recent_lap_flash_text(0, now=105.0) == ""
 
-    def test_recent_lap_flash_uses_first_lap_state_without_prior_lap(self, processor):
-        """The first comparable completed lap should keep a distinct first-lap state."""
+    def test_recent_lap_flash_suppresses_first_lap_without_prior_lap(self, processor):
+        """The first completed lap should seed tracking without flashing."""
         with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
             processor._update_recent_lap_flashes([0], [0.0])
 
@@ -2927,7 +3015,22 @@ class TestFinishingGapCalculation:
         with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
             processor._update_recent_lap_flashes([1], [91.234])
 
-        assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_FIRST_LAP
+        assert processor._get_recent_lap_flash_text(0, now=102.0) == ""
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == ""
+
+    def test_recent_lap_flash_suppresses_qualifying_first_lap_without_prior_lap(self, processor):
+        """Qualifying should not flash a driver's first completed lap."""
+        with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
+            processor._update_recent_lap_flashes([0], [0.0], [0.0], "Qualifying")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=101.0):
+            processor._update_recent_lap_flashes([1], [0.0], [0.0], "Qualifying")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
+            processor._update_recent_lap_flashes([1], [91.234], [91.234], "Qualifying")
+
+        assert processor._get_recent_lap_flash_text(0, now=102.0) == ""
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == ""
 
     def test_recent_lap_flash_uses_faster_state_for_quicker_lap(self, processor):
         """Improved laps should use the faster state."""
@@ -2939,6 +3042,92 @@ class TestFinishingGapCalculation:
 
         with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
             processor._update_recent_lap_flashes([11], [91.234])
+
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_FASTER
+
+    def test_recent_lap_flash_qualifying_requires_new_fastest_for_faster_state(self, processor):
+        """Qualifying laps should be green only when they beat the previous best."""
+        with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
+            processor._update_recent_lap_flashes([10], [89.0], [88.0], "Qualify")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=101.0):
+            processor._update_recent_lap_flashes([11], [89.0], [88.0], "Qualify")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
+            processor._update_recent_lap_flashes([11], [88.5], [88.0], "Qualify")
+
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_SLOWER
+
+    def test_recent_lap_flash_qualifying_uses_faster_state_for_new_fastest(self, processor):
+        """Qualifying laps that improve the driver's best lap should be green."""
+        with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
+            processor._update_recent_lap_flashes([10], [89.0], [88.0], "Qualifying")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=101.0):
+            processor._update_recent_lap_flashes([11], [89.0], [88.0], "Qualifying")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
+            processor._update_recent_lap_flashes([11], [87.9], [87.9], "Qualifying")
+
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_FASTER
+
+    def test_recent_lap_flash_qualifying_handles_lagging_best_lap_telemetry(self, processor):
+        """A new fastest lap should become the comparison point even if best-lap telemetry lags."""
+        with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
+            processor._update_recent_lap_flashes([10], [89.0], [88.0], "Qualifying")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=101.0):
+            processor._update_recent_lap_flashes([11], [89.0], [88.0], "Qualifying")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
+            processor._update_recent_lap_flashes([11], [87.9], [88.0], "Qualifying")
+
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_FASTER
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=103.0):
+            processor._update_recent_lap_flashes([12], [87.9], [88.0], "Qualifying")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=104.0):
+            processor._update_recent_lap_flashes([12], [87.95], [88.0], "Qualifying")
+
+        assert processor._get_recent_lap_flash_state(0, now=104.0) == TelemetryProcessor.RECENT_LAP_FLASH_SLOWER
+
+    def test_recent_lap_flash_qualifying_normalizes_initial_best_lap_observation(self, processor):
+        """Initial observations should still seed the best lap from last-lap telemetry."""
+        with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
+            processor._update_recent_lap_flashes([10], [87.9], [88.0], "Qualifying")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=101.0):
+            processor._update_recent_lap_flashes([11], [87.9], [88.0], "Qualifying")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
+            processor._update_recent_lap_flashes([11], [87.95], [88.0], "Qualifying")
+
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_SLOWER
+
+    def test_recent_lap_flash_qualifying_handles_leading_best_lap_telemetry(self, processor):
+        """A new fastest lap should stay green if best-lap telemetry updates first."""
+        with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
+            processor._update_recent_lap_flashes([10], [89.0], [88.0], "Qualifying")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=101.0):
+            processor._update_recent_lap_flashes([11], [89.0], [87.9], "Qualifying")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
+            processor._update_recent_lap_flashes([11], [87.9], [87.9], "Qualifying")
+
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_FASTER
+
+    def test_recent_lap_flash_race_keeps_previous_lap_comparison_with_best_lap_data(self, processor):
+        """Race laps should stay green when faster than the previous lap, even if not a best lap."""
+        with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
+            processor._update_recent_lap_flashes([10], [89.0], [88.0], "Race")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=101.0):
+            processor._update_recent_lap_flashes([11], [89.0], [88.0], "Race")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
+            processor._update_recent_lap_flashes([11], [88.5], [88.0], "Race")
 
         assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_FASTER
 
