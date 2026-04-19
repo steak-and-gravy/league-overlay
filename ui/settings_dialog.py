@@ -655,7 +655,7 @@ class SettingsDialog(QDialog):
         checkbox_row4 = QHBoxLayout()
         checkbox_row4.setSpacing(10)
 
-        self.show_recent_lap_flash_cb = QCheckBox("Recent lap flash")
+        self.show_recent_lap_flash_cb = QCheckBox("Recent lap update")
         self.show_recent_lap_flash_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.show_recent_lap_flash_cb.setChecked(self.parent_overlay.settings.show_recent_lap_flash)
         self.show_recent_lap_flash_cb.setToolTip(

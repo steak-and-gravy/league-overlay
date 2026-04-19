@@ -1460,8 +1460,17 @@ class LeagueOverlay(QMainWindow):
             # During active session, show remaining time
             total_seconds = int(session_time_remain)
             class_leader_lap = getattr(self, "class_leader_lap", None)
-            lap_suffix = f" (Lap {class_leader_lap})" if state_name == "Race" and class_leader_lap is not None else ""
+            lap_suffix = (
+                f" (Lap {class_leader_lap})"
+                if state_name == "Race" and class_leader_lap is not None
+                else ""
+            )
             return f"{state_name} - {self._format_time_duration(total_seconds)}{lap_suffix}"
+        elif state_name == "Race":
+            class_leader_lap = getattr(self, "class_leader_lap", None)
+            if class_leader_lap is not None:
+                return f"Race - Lap {class_leader_lap}"
+            return "Race"
         else:
             return state_name
 

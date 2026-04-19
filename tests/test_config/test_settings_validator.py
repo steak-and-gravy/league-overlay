@@ -442,7 +442,7 @@ class TestValidateAndCoerce:
         assert result['x'] == 100  # Default
         assert result['width'] == 320  # Default
         assert result['opacity'] == 0.8  # Default
-        assert result['font_size'] == 'Medium'  # Default
+        assert result['font_size'] == 'Slim Large'  # Default
         assert result['hide_headers'] is False  # Default
 
     def test_empty_dict_uses_all_defaults(self):
@@ -779,11 +779,11 @@ class TestPerformanceIndicatorColors:
         assert result['faster_color'] == "#00FF00"
 
     def test_slower_color_default(self):
-        """Test slower_color defaults to red (#FF0000)."""
+        """Test slower_color defaults to red (#FF3A3D)."""
         validator = SettingsValidator()
         data = {}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF0000"
+        assert result['slower_color'] == "#FF3A3D"
 
     def test_faster_color_valid_hex(self):
         """Test faster_color accepts valid hex color."""
@@ -811,7 +811,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': 'invalid'}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF0000"
+        assert result['slower_color'] == "#FF3A3D"
 
     def test_faster_color_missing_hash_returns_default(self):
         """Test faster_color without # returns default."""
@@ -825,7 +825,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': '#FF00'}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF0000"
+        assert result['slower_color'] == "#FF3A3D"
 
     def test_faster_color_invalid_type_returns_default(self):
         """Test faster_color with invalid type returns default."""
@@ -839,7 +839,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': None}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF0000"
+        assert result['slower_color'] == "#FF3A3D"
 
     def test_both_colors_custom(self):
         """Test both performance colors can be customized together."""

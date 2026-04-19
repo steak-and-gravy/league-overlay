@@ -232,6 +232,14 @@ class TestSessionStatusFormatting:
         result = mock_app._format_time_based_status("Race", 4, current_session)
         assert result == "Race - 1:30:00"
 
+    def test_format_time_based_status_expired_race_time_keeps_lap(self, mock_app):
+        """Expired race time should keep the leader lap display."""
+        mock_app.ir.__getitem__ = Mock(return_value=0)
+        mock_app.class_leader_lap = 12
+        current_session = {'SessionTime': '1800 sec'}
+        result = mock_app._format_time_based_status("Race", 4, current_session)
+        assert result == "Race - Lap 12"
+
     def test_format_time_based_status_caution_keeps_lap_number(self, mock_app):
         """Lap suffix is only shown for 'Race' state in time-based sessions."""
         mock_app.ir.__getitem__ = Mock(return_value=600)
@@ -243,6 +251,7 @@ class TestSessionStatusFormatting:
     def test_format_time_based_status_time_expired(self, mock_app):
         """When time expires, show state name only."""
         mock_app.ir.__getitem__ = Mock(return_value=0)
+        mock_app.class_leader_lap = 12
         current_session = {'SessionTime': '1800 sec'}
         result = mock_app._format_time_based_status("Checkered", 5, current_session)
         assert result == "Checkered"

@@ -121,6 +121,7 @@ def test_apply_settings_updates_recent_lap_flash_checkbox(qapp):
     """Applying the dialog should persist the recent-lap flash toggle."""
     overlay, dialog = _build_dialog()
 
+    assert dialog.show_recent_lap_flash_cb.text() == "Recent lap update"
     dialog.show_recent_lap_flash_cb.setChecked(False)
     dialog.apply_settings()
 

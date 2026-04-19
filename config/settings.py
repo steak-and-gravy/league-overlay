@@ -24,8 +24,8 @@ class AppSettings:
 
     # Appearance
     opacity: float = 0.8
-    font_size: str = "Medium"
-    row_color_style: str = "Default"
+    font_size: str = "Slim Large"
+    row_color_style: str = "Banding"
     highlight: float = 0.25
 
     # Behavior
@@ -55,7 +55,7 @@ class AppSettings:
 
     # Performance indicator colors
     faster_color: str = "#00FF00"  # Green - for faster lap times and positions gained
-    slower_color: str = "#FF4242"  # Red - for slower lap times and positions lost
+    slower_color: str = "#FF3A3D"  # Red - for slower lap times and positions lost
 
     # Configuration files
     league_config: Optional[str] = None

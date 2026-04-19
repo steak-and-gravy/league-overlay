@@ -33,8 +33,8 @@ class TestAppSettingsDefaults:
         """Test default appearance settings."""
         settings = AppSettings()
         assert settings.opacity == 0.8
-        assert settings.font_size == "Medium"
-        assert settings.row_color_style == "Default"
+        assert settings.font_size == "Slim Large"
+        assert settings.row_color_style == "Banding"
 
     def test_default_behavior(self):
         """Test default behavior settings."""
@@ -366,14 +366,14 @@ class TestValidateSettings:
         assert validated.refresh_rate <= 5.0
 
     def test_validate_invalid_font_size(self, tmp_path):
-        """Test invalid font size resets to Medium."""
+        """Test invalid font size resets to the default."""
         settings_file = tmp_path / "settings.config"
         manager = SettingsManager(str(settings_file))
 
         settings = AppSettings(font_size='InvalidSize')
         validated = manager.validate(settings)
 
-        assert validated.font_size == 'Medium'
+        assert validated.font_size == 'Slim Large'
 
     def test_validate_valid_font_sizes(self, tmp_path):
         """Test all valid font sizes pass validation."""
@@ -388,14 +388,14 @@ class TestValidateSettings:
             assert validated.font_size == size
 
     def test_validate_invalid_row_color_style(self, tmp_path):
-        """Test invalid row color style resets to Default."""
+        """Test invalid row color style resets to the default."""
         settings_file = tmp_path / "settings.config"
         manager = SettingsManager(str(settings_file))
 
         settings = AppSettings(row_color_style='InvalidStyle')
         validated = manager.validate(settings)
 
-        assert validated.row_color_style == 'Default'
+        assert validated.row_color_style == 'Banding'
 
     def test_validate_valid_row_color_styles(self, tmp_path):
         """Test all valid row color styles pass validation."""
@@ -478,8 +478,8 @@ class TestLoadWithValidation:
         manager = SettingsManager(str(settings_file))
         settings = manager.load()
 
-        # Should reset to Medium
-        assert settings.font_size == 'Medium'
+        # Should reset to default
+        assert settings.font_size == 'Slim Large'
 
     def test_load_validates_dimensions(self, tmp_path):
         """Test loaded settings have dimensions validated."""
