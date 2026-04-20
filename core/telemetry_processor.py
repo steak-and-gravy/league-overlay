@@ -292,6 +292,14 @@ class TelemetryProcessor:
         """Return True when session behavior should use qualifying lap rules."""
         return bool(session_type and "qual" in session_type.lower())
 
+    def _is_recent_lap_flash_session(self, session_type: Optional[str]) -> bool:
+        """Return True when recent-lap flashes are enabled for this session type."""
+        if session_type is None:
+            return True
+
+        normalized_session_type = session_type.lower()
+        return "practice" in normalized_session_type or "qual" in normalized_session_type
+
     def _resolve_observed_best_lap(
         self,
         last_lap_time: float,
@@ -397,6 +405,8 @@ class TelemetryProcessor:
         now = time.monotonic()
         self._prune_recent_lap_flashes(now)
 
+        flash_session_enabled = self._is_recent_lap_flash_session(session_type)
+
         if not car_idx_lap or not car_idx_last_lap:
             return
 
@@ -453,7 +463,7 @@ class TelemetryProcessor:
                     previous_best_lap,
                     session_type=session_type,
                 )
-                if flash_state != self.RECENT_LAP_FLASH_FIRST_LAP:
+                if flash_session_enabled and flash_state != self.RECENT_LAP_FLASH_FIRST_LAP:
                     self._activate_recent_lap_flash(car_idx, current_last_lap, now, flash_state)
                 self.pending_lap_completions.pop(car_idx, None)
 

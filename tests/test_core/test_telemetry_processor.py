@@ -3118,8 +3118,8 @@ class TestFinishingGapCalculation:
 
         assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_FASTER
 
-    def test_recent_lap_flash_race_keeps_previous_lap_comparison_with_best_lap_data(self, processor):
-        """Race laps should stay green when faster than the previous lap, even if not a best lap."""
+    def test_recent_lap_flash_race_suppresses_update(self, processor):
+        """Race sessions should not show recent-lap flash updates."""
         with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
             processor._update_recent_lap_flashes([10], [89.0], [88.0], "Race")
 
@@ -3128,6 +3128,20 @@ class TestFinishingGapCalculation:
 
         with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
             processor._update_recent_lap_flashes([11], [88.5], [88.0], "Race")
+
+        assert processor._get_recent_lap_flash_text(0, now=102.0) == ""
+        assert processor._get_recent_lap_flash_state(0, now=102.0) == ""
+
+    def test_recent_lap_flash_practice_keeps_previous_lap_comparison_with_best_lap_data(self, processor):
+        """Practice laps should stay green when faster than the previous lap."""
+        with patch('core.telemetry_processor.time.monotonic', return_value=100.0):
+            processor._update_recent_lap_flashes([10], [89.0], [88.0], "Practice")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=101.0):
+            processor._update_recent_lap_flashes([11], [89.0], [88.0], "Practice")
+
+        with patch('core.telemetry_processor.time.monotonic', return_value=102.0):
+            processor._update_recent_lap_flashes([11], [88.5], [88.0], "Practice")
 
         assert processor._get_recent_lap_flash_state(0, now=102.0) == TelemetryProcessor.RECENT_LAP_FLASH_FASTER
 
