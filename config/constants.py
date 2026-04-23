@@ -63,7 +63,7 @@ class ColumnDef(NamedTuple):
 # Both create_headers() and create_row() iterate this registry.
 COLUMN_DEFS: List[ColumnDef] = [
     ColumnDef('pos',              'Overall',  7,  35,  35, '',                       '',                                              'position'),
-    ColumnDef('positions_gained', '+/-',      5,  28,  28, 'show_positions_gained',  '',                                              'positions_gained'),
+    ColumnDef('positions_gained', '+/-',      5,  30,  30, 'show_positions_gained',  '',                                              'positions_gained'),
     ColumnDef('div_pos',          'Class',    6,  27,  27, '',                       '',                                              'division_position'),
     ColumnDef('driver_name',      'Driver',  25,  60, None, '',                       '',                                              'driver_name'),
     ColumnDef('car_manufacturer', 'Mfr',      4,  28,  28, 'show_car_manufacturer',  '',                                              'manufacturer'),

@@ -491,7 +491,7 @@ class TestFormatPositionsGained:
             current_position=5,
             starting_position=10
         )
-        assert result == "↑5"
+        assert result == "▲ 5"
 
     def test_positions_gained_single(self):
         """Test single position gained."""
@@ -499,7 +499,7 @@ class TestFormatPositionsGained:
             current_position=9,
             starting_position=10
         )
-        assert result == "↑1"
+        assert result == "▲ 1"
 
     def test_positions_lost_negative(self):
         """Test positions lost shows down arrow."""
@@ -507,7 +507,7 @@ class TestFormatPositionsGained:
             current_position=10,
             starting_position=5
         )
-        assert result == "↓5"
+        assert result == "▼ 5"
 
     def test_positions_lost_single(self):
         """Test single position lost."""
@@ -515,7 +515,7 @@ class TestFormatPositionsGained:
             current_position=10,
             starting_position=9
         )
-        assert result == "↓1"
+        assert result == "▼ 1"
 
     def test_no_change_returns_dash(self):
         """Test no position change returns em dash."""
@@ -571,7 +571,7 @@ class TestFormatPositionsGained:
             current_position=1,
             starting_position=20
         )
-        assert result == "↑19"
+        assert result == "▲ 19"
 
     def test_large_losses(self):
         """Test large position losses."""
@@ -579,4 +579,4 @@ class TestFormatPositionsGained:
             current_position=20,
             starting_position=1
         )
-        assert result == "↓19"
+        assert result == "▼ 19"

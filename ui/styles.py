@@ -227,7 +227,7 @@ class DefaultColorStyle(ColorStyleStrategy):
         car_number_border = (
             ""
             if pit_stop_indicator_enabled and not driver.show_car_number_outline
-            else f"border: 1px solid {driver.division_color};"
+            else f"border: 2px solid {driver.division_color};"
         )
         car_number_color = "white"
 

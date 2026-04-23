@@ -80,6 +80,17 @@ class DriverRowRenderer:
             widget.setMaximumWidth(max_width)
         return min_width, max_width
 
+    @staticmethod
+    def _font_size_to_points(font_size: str) -> Optional[float]:
+        """Return numeric point size for strings like '9pt'."""
+        normalized = font_size.strip().lower()
+        if not normalized.endswith("pt"):
+            return None
+        try:
+            return float(normalized[:-2])
+        except ValueError:
+            return None
+
     @classmethod
     def _get_manufacturer_logo_path(cls, driver: DriverState) -> Optional[Path]:
         """Return the configured logo path for the driver's car manufacturer."""
@@ -599,25 +610,30 @@ class DriverRowRenderer:
         """
         positions_text = driver.positions_gained
 
+        is_position_change = False
+
         # Determine color based on positions gained/lost
-        if positions_text.startswith("↑"):
+        if positions_text.startswith("▲"):
             # Gained positions - use faster_color (green by default)
             positions_color = self.parent.settings.faster_color
-            positions_text = positions_text.replace("↑", "▲ ", 1)
-        elif positions_text.startswith("↓"):
-            # Lost positions - use slower_color (red by default)
+        elif positions_text.startswith("▼"):
+            # Lost positions - use slower_color (warm red by default)
             positions_color = self.parent.settings.slower_color
-            positions_text = positions_text.replace("↓", "▼ ", 1)
         else:
             # No change or invalid - use default color
             positions_color = text_color
 
         positions_gained_label = QLabel(positions_text)
+        font = positions_gained_label.font()
+        font_size = self._font_size_to_points(self.parent.get_font_size('data'))
+        if font_size is not None:
+            font.setPointSizeF(font_size + 0.5)
+        positions_gained_label.setFont(font)
+
         positions_gained_label.setStyleSheet(f"""
             QLabel {{
                 color: {positions_color};
                 background-color: {label_bg};
-                font-size: calc({self.parent.get_font_size('data')} + 2pt);
                 font-weight: {font_weight};
                 {label_border}
             }}

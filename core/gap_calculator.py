@@ -126,8 +126,8 @@ class GapCalculator:
 
         Returns:
             Formatted positions gained string:
-            - "↑5" if gained 5 positions (positive change)
-            - "↓3" if lost 3 positions (negative change)
+            - "▲ 5" if gained 5 positions (positive change)
+            - "▼ 3" if lost 3 positions (negative change)
             - "—" if no change or invalid data
         """
         # Check for invalid positions
@@ -138,9 +138,9 @@ class GapCalculator:
         gained = starting_position - current_position
 
         if gained > 0:
-            return f"↑{gained}"
+            return f"▲ {gained}"
         elif gained < 0:
-            return f"↓{abs(gained)}"
+            return f"▼ {abs(gained)}"
         else:
             return "—"
 

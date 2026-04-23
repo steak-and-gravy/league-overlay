@@ -641,7 +641,7 @@ class SettingsDialog(QDialog):
         self.pit_stop_indicator_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.pit_stop_indicator_cb.setChecked(self.parent_overlay.settings.pit_stop_indicator)
         self.pit_stop_indicator_cb.setToolTip(
-            "In races, shows a 1px Car# outline until a valid pit stop is completed."
+            "In races, shows a 2px Car# outline until a valid pit stop is completed."
         )
         checkbox_row3.addWidget(self.pit_stop_indicator_cb)
 

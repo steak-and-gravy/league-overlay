@@ -779,11 +779,11 @@ class TestPerformanceIndicatorColors:
         assert result['faster_color'] == "#00FF00"
 
     def test_slower_color_default(self):
-        """Test slower_color defaults to red (#FF3A3D)."""
+        """Test slower_color defaults to warm red (#FF2F18)."""
         validator = SettingsValidator()
         data = {}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF3A3D"
+        assert result['slower_color'] == "#FF2F18"
 
     def test_faster_color_valid_hex(self):
         """Test faster_color accepts valid hex color."""
@@ -807,11 +807,11 @@ class TestPerformanceIndicatorColors:
         assert result['faster_color'] == "#00FF00"
 
     def test_slower_color_invalid_hex_returns_default(self):
-        """Test invalid slower_color returns default red."""
+        """Test invalid slower_color returns default warm red."""
         validator = SettingsValidator()
         data = {'slower_color': 'invalid'}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF3A3D"
+        assert result['slower_color'] == "#FF2F18"
 
     def test_faster_color_missing_hash_returns_default(self):
         """Test faster_color without # returns default."""
@@ -825,7 +825,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': '#FF00'}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF3A3D"
+        assert result['slower_color'] == "#FF2F18"
 
     def test_faster_color_invalid_type_returns_default(self):
         """Test faster_color with invalid type returns default."""
@@ -839,7 +839,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': None}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF3A3D"
+        assert result['slower_color'] == "#FF2F18"
 
     def test_both_colors_custom(self):
         """Test both performance colors can be customized together."""

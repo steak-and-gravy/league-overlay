@@ -205,14 +205,32 @@ def test_create_row_uses_triangle_symbol_for_positions_gained(qapp):
     parent = _make_parent()
     parent.settings.show_positions_gained = True
     renderer = DriverRowRenderer(parent)
-    driver = _make_driver("porsche 911 gt3 r", manufacturer="POR", positions_gained="↑3")
+    driver = _make_driver("porsche 911 gt3 r", manufacturer="POR", positions_gained="▲ 3")
 
     row = renderer.create_row(driver)
     layout = row.layout()
     positions_label = layout.itemAtPosition(0, 1).widget()
 
     assert positions_label.text() == "▲ 3"
-    assert "font-size: calc(9pt + 2pt);" in positions_label.styleSheet()
+    assert positions_label.font().pointSizeF() == pytest.approx(9.5)
+    row.deleteLater()
+
+
+def test_create_row_colors_positions_lost_indicator(qapp):
+    parent = _make_parent()
+    parent.settings.show_positions_gained = True
+    parent.settings.slower_color = "#FF2F18"
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver("porsche 911 gt3 r", manufacturer="POR", positions_gained="▼ 2")
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    positions_label = layout.itemAtPosition(0, _column_index(parent, "positions_gained")).widget()
+
+    assert isinstance(positions_label, QLabel)
+    assert positions_label.text() == "▼ 2"
+    assert parent.settings.slower_color in positions_label.styleSheet()
+    assert positions_label.font().pointSizeF() == pytest.approx(9.5)
     row.deleteLater()
 
 
