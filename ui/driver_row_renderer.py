@@ -2,8 +2,10 @@
 
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
-from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QWidget, QLabel, QGridLayout, QHBoxLayout, QSizePolicy
+from PySide6.QtGui import QPainter, QPixmap
+from PySide6.QtWidgets import (
+    QWidget, QLabel, QGridLayout, QHBoxLayout, QSizePolicy, QStyle, QStyleOption
+)
 from PySide6.QtCore import Qt
 
 from config.constants import COLUMN_REGISTRY, get_scaled_column_widths
@@ -17,10 +19,52 @@ if TYPE_CHECKING:
     from league_overlay import LeagueOverlay
 
 
+class ScaledTextLabel(QLabel):
+    """QLabel variant that scales painted text without changing layout font metrics."""
+
+    def __init__(
+        self,
+        text: str = "",
+        parent: Optional[QWidget] = None,
+        text_scale: float = 1.0,
+    ):
+        super().__init__(text, parent)
+        self._text_scale = text_scale
+
+    def set_text_scale(self, text_scale: float) -> None:
+        self._text_scale = text_scale
+        self.update()
+
+    def text_scale(self) -> float:
+        return self._text_scale
+
+    def paintEvent(self, event) -> None:
+        if self._text_scale == 1.0 or not self.text():
+            super().paintEvent(event)
+            return
+
+        style_option = QStyleOption()
+        style_option.initFrom(self)
+
+        painter = QPainter(self)
+        self.style().drawPrimitive(QStyle.PE_Widget, style_option, painter, self)
+        painter.setRenderHint(QPainter.TextAntialiasing, True)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        painter.setFont(self.font())
+
+        rect = self.contentsRect()
+        center = rect.center()
+        painter.translate(center)
+        painter.scale(self._text_scale, self._text_scale)
+        painter.translate(-center)
+        painter.drawText(rect, self.alignment(), self.text())
+
+
 class DriverRowRenderer:
     """Handles driver row creation with pluggable color styles."""
 
     LOGO_DIRECTORY = Path(__file__).resolve().parent.parent / "assets" / "manufacturer_logos"
+    POSITIONS_GAINED_FONT_POINT_ADJUSTMENT = 0.2
     MANUFACTURER_LOGO_FILES = {
         "ACU": "acura.png",
         "ALP": "alpine.png",
@@ -622,11 +666,15 @@ class DriverRowRenderer:
             # No change or invalid - use default color
             positions_color = text_color
 
-        positions_gained_label = QLabel(positions_text)
+        positions_gained_label = ScaledTextLabel(positions_text)
         font = positions_gained_label.font()
         font_size = self._font_size_to_points(self.parent.get_font_size('data'))
-        if font_size is not None:
-            font.setPointSizeF(font_size + 0.5)
+        if font_size is not None and font_size > 0:
+            font.setPointSizeF(font_size)
+            positions_gained_label.set_text_scale(
+                (font_size + self.POSITIONS_GAINED_FONT_POINT_ADJUSTMENT) / font_size
+            )
+        font.setBold(font_weight == "bold")
         positions_gained_label.setFont(font)
 
         positions_gained_label.setStyleSheet(f"""

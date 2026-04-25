@@ -211,7 +211,8 @@ def test_create_row_uses_triangle_symbol_for_positions_gained(qapp):
     positions_label = layout.itemAtPosition(0, 1).widget()
 
     assert positions_label.text() == "▲ 3"
-    assert positions_label.font().pointSizeF() == pytest.approx(9.5)
+    assert positions_label.font().pointSizeF() == pytest.approx(9.0)
+    assert positions_label.text_scale() == pytest.approx(9.25 / 9.0)
     row.deleteLater()
 
 
@@ -229,7 +230,8 @@ def test_create_row_colors_positions_lost_indicator(qapp):
     assert isinstance(positions_label, QLabel)
     assert positions_label.text() == "▼ 2"
     assert parent.settings.slower_color in positions_label.styleSheet()
-    assert positions_label.font().pointSizeF() == pytest.approx(9.5)
+    assert positions_label.font().pointSizeF() == pytest.approx(9.0)
+    assert positions_label.text_scale() == pytest.approx(9.25 / 9.0)
     row.deleteLater()
 
 
