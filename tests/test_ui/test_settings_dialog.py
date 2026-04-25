@@ -134,6 +134,42 @@ def test_apply_settings_updates_recent_lap_flash_checkbox(qapp):
     overlay.deleteLater()
 
 
+def test_apply_settings_preserves_existing_quarter_step_refresh_rate(qapp):
+    """Applying without changing refresh should not rewrite legacy quarter-step values."""
+    overlay, dialog = _build_dialog()
+    overlay.settings.refresh_rate = 1.25
+
+    dialog.deleteLater()
+    dialog = SettingsDialog(overlay)
+
+    assert dialog.refresh_slider.minimum() == 2
+    assert dialog.refresh_slider.value() == 5
+    assert dialog.refresh_value_label.text() == "1.25"
+
+    dialog.apply_settings()
+
+    assert overlay.settings.refresh_rate == 1.25
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
+def test_refresh_rate_label_matches_clamped_slider_value(qapp):
+    """Dialog label should reflect the clamped slider value for out-of-range settings."""
+    overlay, dialog = _build_dialog()
+    overlay.settings.refresh_rate = 0.25
+
+    dialog.deleteLater()
+    dialog = SettingsDialog(overlay)
+
+    assert dialog.refresh_slider.minimum() == 2
+    assert dialog.refresh_slider.value() == 2
+    assert dialog.refresh_value_label.text() == "0.50"
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
 def test_apply_settings_updates_local_website_controls(qapp):
     """Applying the dialog should persist local-network browser-source settings."""
     with patch("ui.settings_dialog.get_local_network_url", return_value="http://192.168.1.211:8765/"):

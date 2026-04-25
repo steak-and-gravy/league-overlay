@@ -485,7 +485,7 @@ class TestValidateAndCoerce:
         result = validator.validate_and_coerce(data)
         assert result['width'] == 2000  # Clamped
         assert result['opacity'] == 1.0  # Clamped
-        assert result['refresh_rate'] == 0.25  # Clamped to MIN_REFRESH_RATE
+        assert result['refresh_rate'] == 0.5  # Clamped to MIN_REFRESH_RATE
 
 
 class TestCoerceString:

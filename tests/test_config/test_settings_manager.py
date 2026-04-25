@@ -115,6 +115,18 @@ class TestLoadSettings:
         assert settings.league_config == '/path/to/config.json'
         assert settings.recent_local_configs == ['/path/to/file1.json', '/path/to/file2.json']
 
+    def test_load_legacy_refresh_rate_below_new_min_clamps_up(self, tmp_path):
+        """Test older persisted refresh rates are clamped to the new minimum."""
+        settings_file = tmp_path / "settings.config"
+
+        with open(settings_file, 'w') as f:
+            json.dump({'refresh_rate': 0.25}, f)
+
+        manager = SettingsManager(str(settings_file))
+        settings = manager.load()
+
+        assert settings.refresh_rate == 0.5
+
     def test_load_partial_settings(self, tmp_path):
         """Test loading file with only some settings (others use defaults)."""
         settings_file = tmp_path / "settings.config"
@@ -365,8 +377,8 @@ class TestValidateSettings:
         settings = AppSettings(refresh_rate=0.1)
         validated = manager.validate(settings)
 
-        # Should be clamped to MIN_REFRESH_RATE (0.25)
-        assert validated.refresh_rate >= 0.25
+        # Should be clamped to MIN_REFRESH_RATE (0.5)
+        assert validated.refresh_rate >= 0.5
 
     def test_validate_refresh_rate_clamped_high(self, tmp_path):
         """Test refresh rate clamped to maximum."""
@@ -376,8 +388,8 @@ class TestValidateSettings:
         settings = AppSettings(refresh_rate=10.0)
         validated = manager.validate(settings)
 
-        # Should be clamped to MAX_REFRESH_RATE (5.0)
-        assert validated.refresh_rate <= 5.0
+        # Should be clamped to MAX_REFRESH_RATE (3.0)
+        assert validated.refresh_rate <= 3.0
 
     def test_validate_invalid_font_size(self, tmp_path):
         """Test invalid font size resets to the default."""
@@ -562,7 +574,7 @@ class TestEdgeCases:
         settings = AppSettings(refresh_rate=0.0)
         validated = manager.validate(settings)
 
-        assert validated.refresh_rate >= 0.25
+        assert validated.refresh_rate >= 0.5
 
     def test_recent_local_configs_validation(self, tmp_path):
         """Test recent_local_configs list validation."""

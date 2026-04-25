@@ -533,14 +533,16 @@ class SettingsDialog(QDialog):
         refresh_row.addWidget(refresh_label)
         
         self.refresh_slider = QSlider(Qt.Horizontal)
-        self.refresh_slider.setMinimum(1) 
-        self.refresh_slider.setMaximum(TelemetryConfig.MAX_REFRESH_RATE/TelemetryConfig.MIN_REFRESH_RATE)
-        self.refresh_slider.setSingleStep(1)  # 0.25 increment
+        self.refresh_slider.setMinimum(int(TelemetryConfig.MIN_REFRESH_RATE * 4))
+        self.refresh_slider.setMaximum(int(TelemetryConfig.MAX_REFRESH_RATE * 4))
+        self.refresh_slider.setSingleStep(1)  # 0.25 second increment
         self.refresh_slider.setPageStep(1)
-        self.refresh_slider.setValue(int(self.parent_overlay.settings.refresh_rate * 4))
+        refresh_slider_value = int(round(self.parent_overlay.settings.refresh_rate * 4))
+        refresh_slider_value = max(self.refresh_slider.minimum(), min(refresh_slider_value, self.refresh_slider.maximum()))
+        self.refresh_slider.setValue(refresh_slider_value)
         refresh_row.addWidget(self.refresh_slider)
 
-        self.refresh_value_label = QLabel(f"{self.parent_overlay.settings.refresh_rate:.2f}")
+        self.refresh_value_label = QLabel(f"{self.refresh_slider.value()/4:.2f}")
         self.refresh_value_label.setStyleSheet("border: none; color: white; font-size: 9pt; min-width: 35px;")
         self.refresh_slider.valueChanged.connect(
             lambda v: self.refresh_value_label.setText(f"{v/4:.2f}")
@@ -1374,7 +1376,7 @@ class SettingsDialog(QDialog):
 
             # Reset UI controls to defaults
             self.opacity_slider.setValue(int(defaults.opacity * 20))  # Convert 0.5 -> 10
-            self.refresh_slider.setValue(int(defaults.refresh_rate * 4))  # Convert to slider value
+            self.refresh_slider.setValue(int(round(defaults.refresh_rate * 4)))
             self.hide_headers_cb.setChecked(defaults.hide_headers)
             self.pit_stop_indicator_cb.setChecked(defaults.pit_stop_indicator)
             self.bold_drivers_cb.setChecked(defaults.bold_drivers)
