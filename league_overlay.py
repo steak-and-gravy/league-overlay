@@ -765,7 +765,7 @@ class LeagueOverlay(QMainWindow):
         if result.get('update_available'):
             self.latest_version = result['latest_version']
             msg = f"Update available: v{result['latest_version']}"
-            self.signals.update_status.emit(msg, '#00FF00')
+            self.signals.update_status.emit(msg, 'white')
 
     def toggle_division_filter(self):
         """Toggle division filter - cycles through different division views.
@@ -1570,13 +1570,13 @@ class LeagueOverlay(QMainWindow):
 
             # Show initial connection message for a few seconds
             if self._should_show_connection_message():
-                self.signals.update_status.emit("Connected - Live Race Data", 'green')
+                self.signals.update_status.emit("Connected - Live Race Data", 'white')
                 return
 
             # Show detailed session status
             status_text = self._get_session_status_text()
-            # Use yellow color for CAUTION state, green otherwise
-            status_color = 'yellow' if 'CAUTION' in status_text else 'green'
+            # Use yellow color for CAUTION state, white otherwise
+            status_color = 'yellow' if 'CAUTION' in status_text else 'white'
             self.signals.update_status.emit(status_text, status_color)
 
         except Exception as e:

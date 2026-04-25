@@ -356,6 +356,45 @@ class TestSessionStatusFormatting:
         mock_app.signals.update_status.emit.assert_called_once_with("CAUTION - Lap 5/20", "yellow")
         mock_app.signals.update_session_metadata.emit.assert_not_called()
 
+    def test_update_gui_non_caution_status_white_without_broadcast_mode(self, mock_app):
+        """Non-caution session status should render white when broadcast mode is disabled."""
+        import time
+        mock_app.startup_time = time.time() - 10.0
+        mock_app.is_connected = True
+        mock_app.settings = Mock(show_broadcast_header=False)
+        mock_app.signals = Mock()
+        mock_app.signals.update_status = Mock()
+        mock_app.signals.update_status.emit = Mock()
+        mock_app.signals.update_session_metadata = Mock()
+        mock_app.signals.update_session_metadata.emit = Mock()
+        mock_app._should_show_connection_message = Mock(return_value=False)
+        mock_app._get_session_status_text = Mock(return_value="Race - Lap 5/20")
+        mock_app.update_gui = LeagueOverlay.update_gui.__get__(mock_app)
+
+        mock_app.update_gui()
+
+        mock_app.signals.update_status.emit.assert_called_once_with("Race - Lap 5/20", "white")
+        mock_app.signals.update_session_metadata.emit.assert_not_called()
+
+    def test_update_gui_connected_message_white(self, mock_app):
+        """The initial connected status should render white."""
+        import time
+        mock_app.startup_time = time.time() - 10.0
+        mock_app.is_connected = True
+        mock_app.settings = Mock(show_broadcast_header=False)
+        mock_app.signals = Mock()
+        mock_app.signals.update_status = Mock()
+        mock_app.signals.update_status.emit = Mock()
+        mock_app.signals.update_session_metadata = Mock()
+        mock_app.signals.update_session_metadata.emit = Mock()
+        mock_app._should_show_connection_message = Mock(return_value=True)
+        mock_app.update_gui = LeagueOverlay.update_gui.__get__(mock_app)
+
+        mock_app.update_gui()
+
+        mock_app.signals.update_status.emit.assert_called_once_with("Connected - Live Race Data", "white")
+        mock_app.signals.update_session_metadata.emit.assert_not_called()
+
     def test_update_gui_caution_yellow_with_broadcast_mode(self, mock_app):
         """CAUTION styling is yellow; update_gui does not emit session metadata."""
         import time
