@@ -6,7 +6,7 @@ from core.driver_state import DriverState
 from ui.styles import DefaultColorStyle
 
 
-def _make_parent(row_color_style: str = "Default"):
+def _make_parent(row_color_style: str = "Default", opacity: float = 0.8):
     """Create a minimal parent object for style strategy tests."""
     highlight = 0.25
 
@@ -17,6 +17,7 @@ def _make_parent(row_color_style: str = "Default"):
             faster_color="#00FF00",
             slower_color="#FF0000",
             pit_stop_indicator=True,
+            opacity=opacity,
         ),
         get_bg_color=lambda color: color,
         blend_color_with_black=lambda color, amount: "#112233",
@@ -91,6 +92,29 @@ def test_default_style_uses_black_car_number_background_with_2px_outline_by_defa
     assert styling["car_number_color"] == "white"
     assert styling["division_position_bg"] == "#00AAFF"
     assert styling["position_bg"] == "#FFFFFF"
+    assert styling["position_color"] == "#000000"
+
+
+def test_default_style_uses_white_position_text_at_50_percent_opacity(qapp):
+    """Default style keeps the overall position readable on very transparent cells."""
+    style = DefaultColorStyle()
+    parent = _make_parent(opacity=0.5)
+    driver = _make_driver()
+
+    styling = style.get_styling(driver, parent)
+
+    assert styling["position_bg"] == "#FFFFFF"
+    assert styling["position_color"] == "white"
+
+
+def test_default_style_keeps_black_position_text_above_50_percent_opacity(qapp):
+    """The readability switch applies only at or below 50% opacity."""
+    style = DefaultColorStyle()
+    parent = _make_parent(opacity=0.51)
+    driver = _make_driver()
+
+    styling = style.get_styling(driver, parent)
+
     assert styling["position_color"] == "#000000"
 
 

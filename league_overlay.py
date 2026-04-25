@@ -286,6 +286,8 @@ class LeagueOverlay(QMainWindow):
             self.header_frame.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.HEADER_DARK_GRAY)};")
             # Update header text when column visibility changes
             self._update_header_labels()
+        if hasattr(self, 'footer_frame'):
+            self.footer_frame.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.HEADER_DARK_GRAY)};")
         if hasattr(self, 'scroll_area'):
             self._update_broadcast_roll_mode()
             self.update_scroll_area_style()

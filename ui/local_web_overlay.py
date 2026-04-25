@@ -17,6 +17,7 @@ from config.logging_config import get_logger
 from core.driver_state import DriverState
 from core.gap_calculator import GapCalculator
 from ui.driver_row_renderer import DriverRowRenderer
+from ui.styles import get_overall_position_text_color
 
 logger = get_logger(__name__)
 
@@ -265,7 +266,7 @@ def _cell_style(driver: DriverState, settings: Any, column_id: str,
     division_color = driver.division_color or "#FFFFFF"
 
     if column_id == "pos" and style_name == "Default":
-        style["color"] = "#000000"
+        style["color"] = get_overall_position_text_color(opacity)
         style["backgroundColor"] = _bg_color("#FFFFFF", opacity)
     elif column_id == "div_pos" and style_name == "Default":
         style["color"] = "white"
@@ -883,6 +884,7 @@ def _render_html() -> str:
       }}
 
       const footerData = data.footer || {{}};
+      footer.style.background = data.headerColor;
       footer.classList.toggle('visible', Boolean(data.showFooter));
       document.getElementById('sof').textContent = footerData.sof == null ? 'SoF: ----' : 'SoF: ' + (footerData.sof / 1000).toFixed(1) + 'k';
       document.getElementById('incidents').textContent = footerData.incidents == null ? '--x' : String(footerData.incidents) + 'x';

@@ -137,6 +137,30 @@ def test_build_local_web_snapshot_matches_default_style_cells_and_rows():
     assert odd_cells["positions_gained"]["style"]["color"] == settings.faster_color
 
 
+def test_build_local_web_snapshot_uses_white_position_text_at_50_percent_opacity():
+    settings = AppSettings(opacity=0.5)
+    driver = DriverState(
+        car_idx=1,
+        driver_info={"UserName": "Transparent Driver", "CarNumber": "11"},
+        position=1,
+        division_position=1,
+        division_color="#FF8C00",
+    )
+    overlay = SimpleNamespace(
+        settings=settings,
+        displayed_data=[driver],
+        _last_status_text="Race - Lap 4",
+        _last_status_color="green",
+        _last_footer_data={},
+    )
+
+    snapshot = build_local_web_snapshot(overlay)
+
+    cells = {cell["id"]: cell for cell in snapshot["drivers"][0]["cells"]}
+    assert cells["pos"]["style"]["color"] == "white"
+    assert cells["pos"]["style"]["backgroundColor"] == "rgba(255, 255, 255, 0.5)"
+
+
 def test_build_local_web_snapshot_default_player_uses_player_highlight():
     settings = AppSettings()
     driver = DriverState(
@@ -445,6 +469,7 @@ def test_local_web_overlay_server_serves_html_and_state():
         assert "function centerTargetRow()" in html
         assert "rows.querySelector('tr.spectated') || rows.querySelector('tr.player')" in html
         assert "requestAnimationFrame(centerTargetRow);" in html
+        assert "footer.style.background = data.headerColor;" in html
         assert payload == snapshot
     finally:
         server.stop()

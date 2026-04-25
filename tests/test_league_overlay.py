@@ -16,6 +16,23 @@ from league_overlay import LeagueOverlay
 from core.driver_state import DriverState
 
 
+def test_update_all_backgrounds_refreshes_footer_opacity():
+    app = LeagueOverlay.__new__(LeagueOverlay)
+    app.settings = SimpleNamespace(
+        opacity=0.35,
+        font_size="Medium",
+        show_broadcast_header=False,
+    )
+    app.footer_frame = Mock()
+    app.sync_local_web_overlay = Mock(return_value=None)
+
+    LeagueOverlay.update_all_backgrounds(app)
+
+    app.footer_frame.setStyleSheet.assert_called_once_with(
+        "background-color: rgba(51, 51, 51, 0.35);"
+    )
+
+
 class TestHandleTelemetryUpdate:
     """Test cases for LeagueOverlay._handle_telemetry_update method."""
 
