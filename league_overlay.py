@@ -660,8 +660,29 @@ class LeagueOverlay(QMainWindow):
         self.settings_btn.clicked.connect(self.open_settings)
         title_layout.addWidget(self.settings_btn)
 
+        # Minimize button
+        minimize_btn = QPushButton("-")
+        minimize_btn.setObjectName("minimizeButton")
+        minimize_btn.setFixedWidth(UI_DIMENSIONS.CLOSE_BUTTON_WIDTH)
+        minimize_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {UI_COLORS.BUTTON_GRAY};
+                color: white;
+                border: none;
+                padding: 5px;
+                font-size: 12pt;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {UI_COLORS.BUTTON_HOVER_GRAY};
+            }}
+        """)
+        minimize_btn.clicked.connect(self.minimize_application)
+        title_layout.addWidget(minimize_btn)
+
         # Close button
         close_btn = QPushButton("×")
+        close_btn.setObjectName("closeButton")
         close_btn.setFixedWidth(UI_DIMENSIONS.CLOSE_BUTTON_WIDTH)
         close_btn.setStyleSheet(f"""
             QPushButton {{
@@ -1109,6 +1130,10 @@ class LeagueOverlay(QMainWindow):
         if hasattr(self, 'local_web_overlay'):
             self.local_web_overlay.stop()
         QApplication.quit()
+
+    def minimize_application(self):
+        """Minimize the overlay window."""
+        self.showMinimized()
         
     def telemetry_loop(self):
         """Background thread that continuously reads data from iRacing SDK."""
