@@ -2,7 +2,7 @@
 Division Filter - Manages division-based filtering of race data
 
 This module handles filtering race data by division, supporting three modes:
-1. Player mode: Toggle between "My Division" and "All Divisions"
+1. Player mode: Toggle between "My Class" and "All Classes"
 2. Spectator mode: Cycle through individual divisions (Pro, ProAm, Am, Rookie, All)
 3. No filter: Show all drivers
 
@@ -46,7 +46,7 @@ class DivisionFilter:
         """Cycle to the next division filter mode.
 
         Two modes:
-        1. Player is on track: Toggle between "All Divisions" and "My Division"
+        1. Player is on track: Toggle between "All Classes" and "My Class"
         2. Player spectating: Cycle through each division (Pro -> ProAm -> Am -> Rookie -> All)
 
         Args:
@@ -144,7 +144,7 @@ class DivisionFilter:
         """
         if self.show_only_my_division:
             return {
-                'text': "My Division",
+                'text': "My Class",
                 'color': UI_COLORS.DIVISION_HIGHLIGHT_GREEN
             }
         elif self.current_division_filter is not None:
@@ -154,7 +154,7 @@ class DivisionFilter:
             }
         else:
             return {
-                'text': "All Divisions",
+                'text': "All Classes",
                 'color': UI_COLORS.BUTTON_GRAY
             }
 

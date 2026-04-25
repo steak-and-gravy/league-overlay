@@ -52,6 +52,8 @@ class AppSettings:
     broadcast_roll_enabled: bool = False  # Lock top rows and roll lower standings in broadcast mode
     broadcast_roll_rows: int = TIMING.BROADCAST_ROLL_ROWS  # Number of rows in the rotating standings window
     broadcast_roll_interval_seconds: int = TIMING.BROADCAST_ROLL_INTERVAL_SECONDS  # Seconds between rolling page advances
+    local_website_enabled: bool = False  # Serve the overlay to this machine and trusted local-network devices
+    local_website_port: int = 8765  # Local browser-source port for the web overlay
 
     # Performance indicator colors
     faster_color: str = "#00FF00"  # Green - for faster lap times and positions gained
@@ -196,6 +198,8 @@ class SettingsManager:
                 'broadcast_roll_enabled': settings.broadcast_roll_enabled,
                 'broadcast_roll_rows': settings.broadcast_roll_rows,
                 'broadcast_roll_interval_seconds': settings.broadcast_roll_interval_seconds,
+                'local_website_enabled': settings.local_website_enabled,
+                'local_website_port': settings.local_website_port,
                 'font_size': settings.font_size,
                 'row_color_style': settings.row_color_style,
                 'log_level': settings.log_level,
@@ -260,6 +264,8 @@ class SettingsManager:
             'broadcast_roll_enabled': settings.broadcast_roll_enabled,
             'broadcast_roll_rows': settings.broadcast_roll_rows,
             'broadcast_roll_interval_seconds': settings.broadcast_roll_interval_seconds,
+            'local_website_enabled': settings.local_website_enabled,
+            'local_website_port': settings.local_website_port,
             'font_size': settings.font_size,
             'row_color_style': settings.row_color_style,
             'log_level': settings.log_level,

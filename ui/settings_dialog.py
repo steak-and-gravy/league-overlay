@@ -16,6 +16,7 @@ from PySide6.QtGui import QColor
 
 from config.constants import VERSION, UI_DIMENSIONS, TelemetryConfig, COLUMN_REGISTRY, DEFAULT_COLUMN_ORDER
 from config.logging_config import set_log_level, get_logger
+from ui.local_web_overlay import get_local_network_url
 
 logger = get_logger(__name__)
 
@@ -430,6 +431,61 @@ class SettingsDialog(QDialog):
         self._sync_broadcast_roll_control_state()
 
         left_column.addWidget(broadcast_group)
+
+        # Local website section
+        local_web_group = QFrame()
+        local_web_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
+        local_web_group.setMinimumWidth(300)
+        local_web_group.setMaximumWidth(300)
+        local_web_layout = QVBoxLayout(local_web_group)
+        local_web_layout.setSpacing(8)
+
+        self.local_website_section_title = QLabel("Local Website")
+        self.local_website_section_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
+        local_web_layout.addWidget(self.local_website_section_title)
+
+        local_web_controls_row = QHBoxLayout()
+        local_web_controls_row.setSpacing(10)
+
+        self.local_website_enabled_cb = QCheckBox("Enable local website")
+        self.local_website_enabled_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.local_website_enabled_cb.setChecked(self.parent_overlay.settings.local_website_enabled)
+        self.local_website_enabled_cb.setToolTip(
+            "Serve a browser-source version to this computer and trusted local-network devices."
+        )
+        local_web_controls_row.addWidget(self.local_website_enabled_cb)
+
+        local_web_port_label = QLabel("Port:")
+        local_web_port_label.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        local_web_controls_row.addWidget(local_web_port_label)
+
+        self.local_website_port_spin = QSpinBox()
+        self.local_website_port_spin.setRange(1024, 65535)
+        self.local_website_port_spin.setValue(self.parent_overlay.settings.local_website_port)
+        self.local_website_port_spin.setFixedWidth(80)
+        self.local_website_port_spin.setStyleSheet("""
+            QSpinBox {
+                background-color: #404040;
+                color: white;
+                border: 1px solid #555555;
+                padding: 2px 6px;
+                font-size: 9pt;
+            }
+        """)
+        local_web_controls_row.addWidget(self.local_website_port_spin)
+        local_web_controls_row.addStretch()
+        local_web_layout.addLayout(local_web_controls_row)
+
+        self.local_website_link = QLabel()
+        self.local_website_link.setTextFormat(Qt.RichText)
+        self.local_website_link.setStyleSheet("border: none; color: #aaaaaa; font-size: 9pt;")
+        local_web_layout.addWidget(self.local_website_link)
+
+        self.local_website_enabled_cb.toggled.connect(self._update_local_website_link)
+        self.local_website_port_spin.valueChanged.connect(self._update_local_website_link)
+        self._update_local_website_link()
+
+        left_column.addWidget(local_web_group)
         left_column.addStretch()
 
         # RIGHT COLUMN
@@ -1292,7 +1348,7 @@ class SettingsDialog(QDialog):
         """Load different config file"""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Division Color Config File",
+            "Select Class Color Config File",
             ".",
             "JSON files (*.json);;All files (*.*)"
         )
@@ -1323,6 +1379,8 @@ class SettingsDialog(QDialog):
             self.pit_stop_indicator_cb.setChecked(defaults.pit_stop_indicator)
             self.bold_drivers_cb.setChecked(defaults.bold_drivers)
             self.show_recent_lap_flash_cb.setChecked(defaults.show_recent_lap_flash)
+            self.local_website_enabled_cb.setChecked(defaults.local_website_enabled)
+            self.local_website_port_spin.setValue(defaults.local_website_port)
             self.show_footer_cb.setChecked(defaults.show_footer)
             self.broadcast_header_cb.setChecked(defaults.show_broadcast_header)
             self.broadcast_roll_enabled_cb.setChecked(defaults.broadcast_roll_enabled)
@@ -1382,12 +1440,17 @@ class SettingsDialog(QDialog):
     def apply_settings(self):
         """Apply all settings"""
         try:
+            previous_local_website_enabled = self.parent_overlay.settings.local_website_enabled
+            previous_local_website_port = self.parent_overlay.settings.local_website_port
+
             self.parent_overlay.settings.opacity = self.opacity_slider.value() / 20.0
             self.parent_overlay.settings.refresh_rate = self.refresh_slider.value() / 4.0
             self.parent_overlay.settings.hide_headers = self.hide_headers_cb.isChecked()
             self.parent_overlay.settings.pit_stop_indicator = self.pit_stop_indicator_cb.isChecked()
             self.parent_overlay.settings.bold_drivers = self.bold_drivers_cb.isChecked()
             self.parent_overlay.settings.show_recent_lap_flash = self.show_recent_lap_flash_cb.isChecked()
+            self.parent_overlay.settings.local_website_enabled = self.local_website_enabled_cb.isChecked()
+            self.parent_overlay.settings.local_website_port = self.local_website_port_spin.value()
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()
             self.parent_overlay.settings.show_broadcast_header = self.broadcast_header_cb.isChecked()
             self.parent_overlay.settings.broadcast_roll_enabled = self.broadcast_roll_enabled_cb.isChecked()
@@ -1410,7 +1473,21 @@ class SettingsDialog(QDialog):
                 set_log_level(new_log_level)
             self.parent_overlay.settings.log_level = new_log_level
 
-            self.parent_overlay.update_all_backgrounds()
+            local_web_synced = self.parent_overlay.update_all_backgrounds()
+            if self.parent_overlay.settings.local_website_enabled and local_web_synced is False:
+                failed_port = self.parent_overlay.settings.local_website_port
+                self.parent_overlay.settings.local_website_enabled = previous_local_website_enabled
+                self.parent_overlay.settings.local_website_port = previous_local_website_port
+                self.local_website_enabled_cb.setChecked(previous_local_website_enabled)
+                self.local_website_port_spin.setValue(previous_local_website_port)
+                self.parent_overlay.update_all_backgrounds()
+                QMessageBox.critical(
+                    self,
+                    "Local Website Error",
+                    f"Failed to start the local website on port {failed_port}. "
+                    "Choose another port or close the app using it.",
+                )
+                return
 
             # Save and refresh
             self.parent_overlay.save_settings()
@@ -1419,6 +1496,27 @@ class SettingsDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to apply settings: {e}")
+
+    def _update_local_website_link(self, *_args):
+        """Update the local website label: clickable link when enabled, plain text when disabled."""
+        if not hasattr(self, 'local_website_link'):
+            return
+        port = self.local_website_port_spin.value() if hasattr(self, 'local_website_port_spin') else self.parent_overlay.settings.local_website_port
+        url = get_local_network_url(port)
+        checked = self.local_website_enabled_cb.isChecked() if hasattr(self, 'local_website_enabled_cb') else self.parent_overlay.settings.local_website_enabled
+        if checked:
+            self.local_website_link.setText(
+                f'<a href="{url}" style="color: white; text-decoration: underline;">{url}</a>'
+            )
+            self.local_website_link.setTextInteractionFlags(Qt.TextBrowserInteraction)
+            self.local_website_link.setOpenExternalLinks(True)
+            self.local_website_link.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        else:
+            self.local_website_link.setText(url)
+            self.local_website_link.setTextInteractionFlags(Qt.NoTextInteraction)
+            self.local_website_link.setOpenExternalLinks(False)
+            self.local_website_link.setStyleSheet("border: none; color: #aaaaaa; font-size: 9pt;")
+        self.local_website_link.setToolTip(f"Open {url}" if checked else "Enable local website to open this link.")
 
     def _sync_broadcast_roll_control_state(self):
         """Enable rolling standings only when broadcast header is enabled."""

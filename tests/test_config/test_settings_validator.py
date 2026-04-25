@@ -398,6 +398,8 @@ class TestValidateAndCoerce:
             'hide_headers': True,
             'pit_stop_indicator': False,
             'bold_drivers': True,
+            'local_website_enabled': True,
+            'local_website_port': 8766,
             'font_size': 'Slim Large',
             'row_color_style': 'Alternate',
             'league_config': 'custom.json',
@@ -413,6 +415,8 @@ class TestValidateAndCoerce:
         assert result['width'] == 500
         assert result['opacity'] == 0.75
         assert result['font_size'] == 'Slim Large'
+        assert result['local_website_enabled'] is True
+        assert result['local_website_port'] == 8766
 
     def test_partial_fields_uses_defaults(self):
         """Test partial fields fills in defaults."""
@@ -1138,3 +1142,29 @@ class TestBroadcastRollingSettings:
         })
         assert result['broadcast_roll_rows'] == 1
         assert result['broadcast_roll_interval_seconds'] == 60
+
+
+class TestLocalWebsiteSettings:
+    """Tests for local website settings coercion and defaults."""
+
+    def test_local_website_settings_default_when_missing(self):
+        validator = SettingsValidator()
+        result = validator.validate_and_coerce({})
+        assert result['local_website_enabled'] is False
+        assert result['local_website_port'] == 8765
+
+    def test_local_website_settings_accept_valid_values(self):
+        validator = SettingsValidator()
+        result = validator.validate_and_coerce({
+            'local_website_enabled': True,
+            'local_website_port': 8766,
+        })
+        assert result['local_website_enabled'] is True
+        assert result['local_website_port'] == 8766
+
+    def test_local_website_port_clamped_to_range(self):
+        validator = SettingsValidator()
+        low_result = validator.validate_and_coerce({'local_website_port': 80})
+        high_result = validator.validate_and_coerce({'local_website_port': 70000})
+        assert low_result['local_website_port'] == 1024
+        assert high_result['local_website_port'] == 65535

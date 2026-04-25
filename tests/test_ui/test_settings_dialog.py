@@ -26,15 +26,17 @@ class DummyOverlay(QWidget):
         self.settings_manager = Mock()
         self.signals = SimpleNamespace(refresh_colors=SimpleNamespace(emit=Mock()))
         self.latest_version = None
+        self.update_all_backgrounds_result = None
+        self.save_settings_called = False
 
     def apply_official_league_broadcast_metadata(self):
         pass
 
     def update_all_backgrounds(self):
-        pass
+        return self.update_all_backgrounds_result
 
     def save_settings(self):
-        pass
+        self.save_settings_called = True
 
     def add_to_recent_files(self, file_path):
         pass
@@ -127,6 +129,81 @@ def test_apply_settings_updates_recent_lap_flash_checkbox(qapp):
 
     assert overlay.settings.show_recent_lap_flash is False
     assert overlay.signals.refresh_colors.emit.called
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
+def test_apply_settings_updates_local_website_controls(qapp):
+    """Applying the dialog should persist local-network browser-source settings."""
+    with patch("ui.settings_dialog.get_local_network_url", return_value="http://192.168.1.211:8765/"):
+        overlay, dialog = _build_dialog()
+
+        assert dialog.local_website_section_title.text() == "Local Website"
+        assert dialog.local_website_enabled_cb.text() == "Enable local website"
+        assert dialog.local_website_link.text() == "http://192.168.1.211:8765/"
+        assert dialog.local_website_link.openExternalLinks() is False
+        assert dialog.local_website_link.textInteractionFlags() == Qt.NoTextInteraction
+        dialog.local_website_enabled_cb.setChecked(True)
+        assert dialog.local_website_link.openExternalLinks() is True
+        assert dialog.local_website_link.textInteractionFlags() == Qt.TextBrowserInteraction
+        assert 'href="http://192.168.1.211:8765/"' in dialog.local_website_link.text()
+        dialog.local_website_port_spin.setValue(8766)
+        dialog.apply_settings()
+
+    assert overlay.settings.local_website_enabled is True
+    assert overlay.settings.local_website_port == 8766
+    assert overlay.signals.refresh_colors.emit.called
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
+def test_local_website_link_updates_port_and_respects_enabled_state(qapp):
+    """Local website URL should be shown below controls and only clickable when enabled."""
+    with patch("ui.settings_dialog.get_local_network_url") as get_url:
+        get_url.side_effect = lambda port: f"http://192.168.1.211:{port}/"
+        overlay, dialog = _build_dialog()
+
+        assert dialog.local_website_link.text() == "http://192.168.1.211:8765/"
+        assert dialog.local_website_link.openExternalLinks() is False
+
+        dialog.local_website_port_spin.setValue(8777)
+        assert dialog.local_website_link.text() == "http://192.168.1.211:8777/"
+        assert dialog.local_website_link.openExternalLinks() is False
+
+        dialog.local_website_enabled_cb.setChecked(True)
+        assert 'href="http://192.168.1.211:8777/"' in dialog.local_website_link.text()
+        assert ">http://192.168.1.211:8777/</a>" in dialog.local_website_link.text()
+        assert dialog.local_website_link.openExternalLinks() is True
+
+        dialog.local_website_enabled_cb.setChecked(False)
+        assert dialog.local_website_link.text() == "http://192.168.1.211:8777/"
+        assert dialog.local_website_link.openExternalLinks() is False
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
+def test_apply_settings_reverts_local_website_when_startup_fails(qapp):
+    """Failed local website startup should be visible and should not save the bad port."""
+    overlay, dialog = _build_dialog()
+    original_enabled = overlay.settings.local_website_enabled
+    original_port = overlay.settings.local_website_port
+    overlay.update_all_backgrounds_result = False
+
+    dialog.local_website_enabled_cb.setChecked(True)
+    dialog.local_website_port_spin.setValue(8766)
+    with patch("ui.settings_dialog.QMessageBox.critical") as critical:
+        dialog.apply_settings()
+
+    assert overlay.settings.local_website_enabled is original_enabled
+    assert overlay.settings.local_website_port == original_port
+    assert dialog.local_website_enabled_cb.isChecked() is original_enabled
+    assert dialog.local_website_port_spin.value() == original_port
+    assert overlay.save_settings_called is False
+    assert overlay.signals.refresh_colors.emit.called is False
+    critical.assert_called_once()
 
     dialog.deleteLater()
     overlay.deleteLater()

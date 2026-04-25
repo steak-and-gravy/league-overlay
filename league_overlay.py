@@ -43,6 +43,7 @@ from ui.driver_row_renderer import DriverRowRenderer
 from ui.settings_dialog import SettingsDialog
 from ui.auto_center_controller import AutoCenterController
 from ui.broadcast_header import BroadcastHeaderWidget
+from ui.local_web_overlay import LocalWebOverlayServer, build_local_web_snapshot
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -188,11 +189,17 @@ class LeagueOverlay(QMainWindow):
         self.displayed_data = []  # Filtered - what's currently shown in UI
         self._last_emitted_data = []  # Track last data sent to UI to avoid redundant updates
         self.broadcast_roll_page_index = 0
+        self._last_status_text = "Connecting to iRacing..."
+        self._last_status_color = "orange"
+        self._last_footer_data: Dict[str, Any] = {}
+        self._local_web_render_data: List[DriverState] = []
+        self.local_web_overlay = LocalWebOverlayServer()
 
         self.startup_time = time.time()
         
         # Setup UI
         self.setup_ui()
+        self.sync_local_web_overlay()
         
         # Start telemetry thread
         self.telemetry_thread = threading.Thread(target=self.telemetry_loop, daemon=True)
@@ -364,6 +371,7 @@ class LeagueOverlay(QMainWindow):
         # Refresh displayed data to update driver rows
         if hasattr(self, 'displayed_data') and self.displayed_data:
             self.display_race_data(self.displayed_data.copy())
+        return self.sync_local_web_overlay()
 
     def setup_ui(self):
         """Setup the main user interface"""
@@ -531,6 +539,8 @@ class LeagueOverlay(QMainWindow):
         """Display connection status and session type at top of overlay.
         Examples: "Connecting...", "Connected - Live Data (Race)", "Update available"
         """
+        self._last_status_text = text
+        self._last_status_color = color
         self.status_label.setText(text)
         self.update_status_style(color)
         if self.settings.show_broadcast_header and hasattr(self, 'broadcast_header'):
@@ -546,6 +556,7 @@ class LeagueOverlay(QMainWindow):
                 'session_status': text,
                 'status_color': normalized_color,
             })
+        self.update_local_web_overlay()
 
     def update_footer_display(self, footer_data: Dict[str, Any]):
         """Update footer display with track temp, incidents, and SoF.
@@ -557,6 +568,8 @@ class LeagueOverlay(QMainWindow):
                 - incident_limit: Session incident limit (int or None, None = unlimited)
                 - sof: Strength of Field (average iRating, int or None)
         """
+        self._last_footer_data = footer_data.copy()
+        self.update_local_web_overlay()
         if not self.settings.show_footer:
             return
 
@@ -612,7 +625,7 @@ class LeagueOverlay(QMainWindow):
         title_layout.addStretch()
         
         # Division filter button
-        self.division_btn = QPushButton("All Divisions")
+        self.division_btn = QPushButton("All Classes")
         # Calculate hover color for initial state
         initial_hover = lighten_hex_color(UI_COLORS.BUTTON_GRAY, factor=0.15)
         self.division_btn.setStyleSheet(f"""
@@ -729,13 +742,16 @@ class LeagueOverlay(QMainWindow):
 
     def show_version_on_startup(self):
         """Show version on startup"""
-        self.status_label.setText(f"BB's League Overlay v{VERSION}")
+        self._last_status_text = f"BB's League Overlay v{VERSION}"
+        self._last_status_color = "orange"
+        self.status_label.setText(self._last_status_text)
         self.update_status_style("orange")
         if self.settings.show_broadcast_header and hasattr(self, 'broadcast_header'):
             self.broadcast_header.update_session_info({
-                'session_status': f"BB's League Overlay v{VERSION}",
+                'session_status': self._last_status_text,
                 'status_color': 'orange',
             })
+        self.update_local_web_overlay()
         threading.Thread(target=self.check_and_notify_updates, daemon=True).start()
         
     def check_and_notify_updates(self):
@@ -754,7 +770,7 @@ class LeagueOverlay(QMainWindow):
     def toggle_division_filter(self):
         """Toggle division filter - cycles through different division views.
         Two modes:
-        1. Player is on track: Toggle between "All Divisions" and "My Division"
+        1. Player is on track: Toggle between "All Classes" and "My Class"
         2. Player spectating: Cycle through each division (Pro -> ProAm -> Am -> Rookie -> All)
         """
         # Cycle to next filter state
@@ -851,6 +867,29 @@ class LeagueOverlay(QMainWindow):
         # Delegate to settings manager (all other settings already in self.settings)
         self.settings_manager.save(self.settings)
 
+    def sync_local_web_overlay(self):
+        """Start, stop, or refresh the local-network browser-source overlay."""
+        if not hasattr(self, 'local_web_overlay'):
+            return True
+
+        if self.settings.local_website_enabled:
+            try:
+                self.local_web_overlay.start(self.settings.local_website_port)
+                self.update_local_web_overlay()
+                return True
+            except OSError as e:
+                logger.error(f"Failed to start local web overlay: {e}", exc_info=True)
+                return False
+        else:
+            self.local_web_overlay.stop()
+            return True
+
+    def update_local_web_overlay(self):
+        """Publish the current display snapshot to the local web server."""
+        if not hasattr(self, 'local_web_overlay') or not self.local_web_overlay.is_running:
+            return
+        self.local_web_overlay.update(build_local_web_snapshot(self))
+
     def apply_official_league_broadcast_metadata(self):
         """Apply broadcast branding rules based on selected league source.
 
@@ -880,6 +919,7 @@ class LeagueOverlay(QMainWindow):
         # Keep header widget in sync if UI already exists.
         if hasattr(self, 'broadcast_header'):
             self.broadcast_header.refresh_styles()
+        self.update_local_web_overlay()
             
 
     def set_driver_division(self, driver_info: Dict[str, str], division_name: str) -> None:
@@ -1066,6 +1106,8 @@ class LeagueOverlay(QMainWindow):
         """Close application"""
         self.save_settings()
         self.running = False
+        if hasattr(self, 'local_web_overlay'):
+            self.local_web_overlay.stop()
         QApplication.quit()
         
     def telemetry_loop(self):
@@ -1579,7 +1621,9 @@ class LeagueOverlay(QMainWindow):
             self.center_on_player(data)
 
         self.displayed_data = data.copy()
+        self._local_web_render_data = render_data.copy()
         self._update_broadcast_roll_mode()
+        self.update_local_web_overlay()
 
         # Adjust header margins to match scroll area width (accounting for scrollbar)
         self.adjust_header_margins()
@@ -1901,7 +1945,7 @@ class LeagueOverlay(QMainWindow):
             }}
         """)
 
-        menu.addAction("Change Division").setEnabled(False)
+        menu.addAction("Change Class").setEnabled(False)
         menu.addSeparator()
 
         driver_info = driver.driver_info

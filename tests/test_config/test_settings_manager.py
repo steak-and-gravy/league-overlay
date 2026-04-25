@@ -46,6 +46,8 @@ class TestAppSettingsDefaults:
         assert settings.show_recent_lap_flash is True
         assert settings.broadcast_roll_rows == 5
         assert settings.broadcast_roll_interval_seconds == 5
+        assert settings.local_website_enabled is False
+        assert settings.local_website_port == 8765
 
     def test_default_config_files(self):
         """Test default config file paths."""
@@ -201,7 +203,9 @@ class TestSaveSettings:
             y=400,
             opacity=0.75,
             broadcast_roll_rows=7,
-            broadcast_roll_interval_seconds=9
+            broadcast_roll_interval_seconds=9,
+            local_website_enabled=True,
+            local_website_port=8766,
         )
 
         manager.save(settings)
@@ -215,6 +219,8 @@ class TestSaveSettings:
             assert data['opacity'] == 0.75
             assert data['broadcast_roll_rows'] == 7
             assert data['broadcast_roll_interval_seconds'] == 9
+            assert data['local_website_enabled'] is True
+            assert data['local_website_port'] == 8766
 
     def test_save_all_fields(self, tmp_path):
         """Test saving all settings fields."""
@@ -234,6 +240,8 @@ class TestSaveSettings:
             pit_stop_indicator=False,
             bold_drivers=False,
             show_recent_lap_flash=False,
+            local_website_enabled=True,
+            local_website_port=8766,
             league_config='/path/to/config.json',
             division_colors={'Pro': '#FF0000'}
         )
@@ -247,6 +255,8 @@ class TestSaveSettings:
             assert data['font_size'] == 'Slim Large'
             assert data['pit_stop_indicator'] is False
             assert data['show_recent_lap_flash'] is False
+            assert data['local_website_enabled'] is True
+            assert data['local_website_port'] == 8766
             assert data['division_colors'] == {'Pro': '#FF0000'}
 
     def test_load_legacy_center_drivers_config_uses_pit_stop_indicator_default(self, tmp_path):
@@ -297,6 +307,8 @@ class TestSaveSettings:
             font_size='Large',
             hide_headers=True,
             show_recent_lap_flash=False,
+            local_website_enabled=True,
+            local_website_port=8766,
         )
 
         manager.save(original)
@@ -308,6 +320,8 @@ class TestSaveSettings:
         assert loaded.font_size == original.font_size
         assert loaded.hide_headers == original.hide_headers
         assert loaded.show_recent_lap_flash == original.show_recent_lap_flash
+        assert loaded.local_website_enabled == original.local_website_enabled
+        assert loaded.local_website_port == original.local_website_port
 
 
 class TestValidateSettings:

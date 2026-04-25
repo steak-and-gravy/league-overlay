@@ -240,6 +240,18 @@ class SettingsValidator:
             max_val=60,
             field_name='broadcast_roll_interval_seconds'
         )
+        validated['local_website_enabled'] = self.coerce_bool(
+            data.get('local_website_enabled'),
+            default=self.defaults['local_website_enabled'],
+            field_name='local_website_enabled'
+        )
+        validated['local_website_port'] = self.coerce_int(
+            data.get('local_website_port'),
+            default=self.defaults['local_website_port'],
+            min_val=1024,
+            max_val=65535,
+            field_name='local_website_port'
+        )
 
         # Enum fields (limited valid values)
         validated['font_size'] = self.coerce_enum(
