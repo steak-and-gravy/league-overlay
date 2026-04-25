@@ -205,12 +205,12 @@ def _web_style_context(driver: DriverState, settings: Any, row_index: int) -> Di
     gap_color = "white"
     label_border = ""
 
-    if style_name == "Banding" and driver.is_player:
+    if style_name == "Default" and driver.is_player:
         row_style["background"] = _gradient_background(division_color, settings)
         label_bg = _blend_color_with_black(division_color, getattr(settings, "highlight", 0.25))
-    elif style_name == "Banding":
-        banded_bg = "#000000" if row_index % 2 == 0 else UI_COLORS.HEADER_DARK_GRAY
-        label_bg = _bg_color(banded_bg, opacity)
+    elif style_name == "Default":
+        row_bg = "#000000" if row_index % 2 == 0 else UI_COLORS.HEADER_DARK_GRAY
+        label_bg = _bg_color(row_bg, opacity)
         row_style["background"] = label_bg
     elif style_name == "Dark":
         text_color = division_color
@@ -235,11 +235,7 @@ def _web_style_context(driver: DriverState, settings: Any, row_index: int) -> Di
         else:
             row_style["background"] = _bg_color("#000000", opacity)
             row_style["border"] = f"1px solid {division_color}"
-    elif driver.is_player:
-        row_style["background"] = _gradient_background(division_color, settings)
-        label_bg = _blend_color_with_black(division_color, getattr(settings, "highlight", 0.25))
-
-    if style_name in ("Default", "Banding") and driver.is_spectated and not driver.is_player:
+    if style_name == "Default" and driver.is_spectated and not driver.is_player:
         row_style["border"] = "2px solid yellow"
 
     return {
@@ -268,14 +264,14 @@ def _cell_style(driver: DriverState, settings: Any, column_id: str,
     opacity = style_context["opacity"]
     division_color = driver.division_color or "#FFFFFF"
 
-    if column_id == "pos" and style_name in ("Default", "Banding"):
+    if column_id == "pos" and style_name == "Default":
         style["color"] = "#000000"
         style["backgroundColor"] = _bg_color("#FFFFFF", opacity)
-    elif column_id == "div_pos" and style_name in ("Default", "Banding"):
+    elif column_id == "div_pos" and style_name == "Default":
         style["color"] = "white"
         style["backgroundColor"] = _bg_color(division_color, opacity)
         style["border"] = f"2px solid {division_color}"
-    elif column_id == "car_number" and style_name in ("Default", "Banding"):
+    elif column_id == "car_number" and style_name == "Default":
         style["color"] = "white"
         style["backgroundColor"] = _bg_color("#000000", opacity)
         pit_indicator_enabled = getattr(settings, "pit_stop_indicator", True)

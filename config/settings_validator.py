@@ -262,7 +262,7 @@ class SettingsValidator:
         )
         validated['row_color_style'] = self.coerce_enum(
             data.get('row_color_style'),
-            valid_values=["Default", "Banding", "Dark", "Alternate", "Outline"],
+            valid_values=["Default", "Dark", "Alternate", "Outline"],
             default=self.defaults['row_color_style'],
             field_name='row_color_style'
         )

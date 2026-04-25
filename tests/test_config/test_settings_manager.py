@@ -34,7 +34,7 @@ class TestAppSettingsDefaults:
         settings = AppSettings()
         assert settings.opacity == 0.8
         assert settings.font_size == "Slim Large"
-        assert settings.row_color_style == "Banding"
+        assert settings.row_color_style == "Default"
 
     def test_default_behavior(self):
         """Test default behavior settings."""
@@ -421,14 +421,14 @@ class TestValidateSettings:
         settings = AppSettings(row_color_style='InvalidStyle')
         validated = manager.validate(settings)
 
-        assert validated.row_color_style == 'Banding'
+        assert validated.row_color_style == 'Default'
 
     def test_validate_valid_row_color_styles(self, tmp_path):
         """Test all valid row color styles pass validation."""
         settings_file = tmp_path / "settings.config"
         manager = SettingsManager(str(settings_file))
 
-        valid_styles = ["Default", "Banding", "Dark", "Alternate", "Outline"]
+        valid_styles = ["Default", "Dark", "Alternate", "Outline"]
 
         for style in valid_styles:
             settings = AppSettings(row_color_style=style)

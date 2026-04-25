@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt
 from config.constants import COLUMN_REGISTRY, get_scaled_column_widths
 from config.logging_config import get_logger
 from core.driver_state import DriverState
-from .styles import BandingColorStyle, DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, DarkColorStyle
+from .styles import DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, DarkColorStyle
 
 logger = get_logger(__name__)
 
@@ -57,7 +57,6 @@ class DriverRowRenderer:
 
     STYLES = {
         "Default": DefaultColorStyle(),
-        "Banding": BandingColorStyle(),
         "Dark": DarkColorStyle(),
         "Alternate": AlternateColorStyle(),
         "Outline": OutlineColorStyle()

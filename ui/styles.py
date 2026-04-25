@@ -45,7 +45,7 @@ def is_light_color(hex_color: str) -> bool:
         return False
 
 
-def get_banded_background(base_color: str, row_index: int) -> str:
+def get_default_row_background(base_color: str, row_index: int) -> str:
     """Return the header background color for every other rendered row."""
     if row_index % 2 == 0:
         return base_color
@@ -207,7 +207,7 @@ class OutlineColorStyle(ColorStyleStrategy):
 
 
 class DefaultColorStyle(ColorStyleStrategy):
-    """Default color style: Red position background, division color car number and driver name, white gap."""
+    """Default color style with alternating row backgrounds."""
 
     def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay',
                     row_index: int = 0) -> Dict[str, Any]:
@@ -235,7 +235,9 @@ class DefaultColorStyle(ColorStyleStrategy):
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
             label_bg = parent.blend_color_with_black(driver.division_color, parent.settings.highlight)
         else:
-            bg_style = f"background-color: {parent.get_bg_color('#000000')};"
+            row_bg = get_default_row_background("#000000", row_index)
+            label_bg = parent.get_bg_color(row_bg)
+            bg_style = f"background-color: {parent.get_bg_color(row_bg)};"
 
         border_style = "border: 2px solid yellow;" if driver.is_spectated and not driver.is_player else ""
 
@@ -264,24 +266,3 @@ class DefaultColorStyle(ColorStyleStrategy):
             'car_number_border': car_number_border,  # Division color outline for car number
             'car_number_color': car_number_color
         }
-
-
-class BandingColorStyle(DefaultColorStyle):
-    """Default-style row colors with subtle alternating background banding."""
-
-    def get_styling(self, driver: 'DriverState', parent: 'LeagueOverlay',
-                    row_index: int = 0) -> Dict[str, Any]:
-        styling = super().get_styling(driver, parent, row_index=row_index)
-
-        if driver.is_player:
-            return styling
-
-        banded_bg = get_banded_background("#000000", row_index)
-        styling['label_bg'] = parent.get_bg_color(banded_bg)
-        row_widget = styling['row_widget']
-        row_widget.setStyleSheet(
-            f"#driverRow {{ background-color: {parent.get_bg_color(banded_bg)}; "
-            f"{'border: 2px solid yellow;' if driver.is_spectated else ''} }}"
-        )
-
-        return styling

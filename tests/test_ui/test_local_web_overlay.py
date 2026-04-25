@@ -92,9 +92,8 @@ def test_get_local_network_ip_falls_back_to_loopback(monkeypatch):
     assert get_local_network_ip() == LOCAL_MACHINE_HOST
 
 
-def test_build_local_web_snapshot_matches_banding_style_cells_and_rows():
+def test_build_local_web_snapshot_matches_default_style_cells_and_rows():
     settings = AppSettings(
-        row_color_style="Banding",
         show_positions_gained=True,
         show_car_number=True,
     )
@@ -138,8 +137,8 @@ def test_build_local_web_snapshot_matches_banding_style_cells_and_rows():
     assert odd_cells["positions_gained"]["style"]["color"] == settings.faster_color
 
 
-def test_build_local_web_snapshot_banding_player_uses_default_player_highlight():
-    settings = AppSettings(row_color_style="Banding")
+def test_build_local_web_snapshot_default_player_uses_player_highlight():
+    settings = AppSettings()
     driver = DriverState(
         car_idx=1,
         driver_info={"UserName": "Player Driver", "CarNumber": "11"},

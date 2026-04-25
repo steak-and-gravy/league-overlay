@@ -2,7 +2,6 @@
 
 from .widgets import DataUpdateSignal, CustomSizeGrip
 from .styles import (
-    BandingColorStyle,
     ColorStyleStrategy,
     DarkColorStyle,
     AlternateColorStyle,
@@ -15,7 +14,6 @@ from .settings_dialog import SettingsDialog
 __all__ = [
     'DataUpdateSignal',
     'CustomSizeGrip',
-    'BandingColorStyle',
     'ColorStyleStrategy',
     'DefaultColorStyle',
     'AlternateColorStyle',

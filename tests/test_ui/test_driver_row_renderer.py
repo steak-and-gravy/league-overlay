@@ -156,9 +156,8 @@ def test_create_row_uses_logo_when_asset_exists(qapp):
     row.deleteLater()
 
 
-def test_create_row_applies_subtle_banding_to_alternate_rows(qapp):
+def test_create_row_applies_alternating_default_backgrounds(qapp):
     parent = _make_parent()
-    parent.settings.row_color_style = "Banding"
     renderer = DriverRowRenderer(parent)
     driver = _make_driver("porsche 911 gt3 r", manufacturer="POR")
 

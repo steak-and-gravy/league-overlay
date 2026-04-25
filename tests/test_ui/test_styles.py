@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 from core.driver_state import DriverState
-from ui.styles import BandingColorStyle, DefaultColorStyle
+from ui.styles import DefaultColorStyle
 
 
 def _make_parent(row_color_style: str = "Default"):
@@ -145,9 +145,9 @@ def test_default_style_uses_black_division_position_with_division_outline():
     assert styling["division_position_color"] == "white"
 
 
-def test_banding_style_applies_alternating_row_backgrounds(qapp):
-    style = BandingColorStyle()
-    parent = _make_parent(row_color_style="Banding")
+def test_default_style_applies_alternating_row_backgrounds(qapp):
+    style = DefaultColorStyle()
+    parent = _make_parent()
     driver = _make_driver()
 
     even_styling = style.get_styling(driver, parent, row_index=0)
