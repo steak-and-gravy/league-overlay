@@ -95,26 +95,16 @@ def test_default_style_uses_black_car_number_background_with_2px_outline_by_defa
     assert styling["position_color"] == "#000000"
 
 
-def test_default_style_uses_white_position_text_at_50_percent_opacity(qapp):
-    """Default style keeps the overall position readable on very transparent cells."""
+def test_default_style_keeps_overall_and_class_position_backgrounds_opaque(qapp):
+    """Overall/Class position backgrounds ignore the opacity setting."""
     style = DefaultColorStyle()
-    parent = _make_parent(opacity=0.5)
+    parent = _make_parent(opacity=0.25)
     driver = _make_driver()
 
     styling = style.get_styling(driver, parent)
 
     assert styling["position_bg"] == "#FFFFFF"
-    assert styling["position_color"] == "white"
-
-
-def test_default_style_keeps_black_position_text_above_50_percent_opacity(qapp):
-    """The readability switch applies only at or below 50% opacity."""
-    style = DefaultColorStyle()
-    parent = _make_parent(opacity=0.51)
-    driver = _make_driver()
-
-    styling = style.get_styling(driver, parent)
-
+    assert styling["division_position_bg"] == "#00AAFF"
     assert styling["position_color"] == "#000000"
 
 

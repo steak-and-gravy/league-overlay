@@ -131,14 +131,14 @@ def test_build_local_web_snapshot_matches_default_style_cells_and_rows():
     assert snapshot["drivers"][0]["rowStyle"]["background"] == "rgba(0, 0, 0, 0.8)"
     assert snapshot["drivers"][1]["rowStyle"]["background"] == "rgba(51, 51, 51, 0.8)"
     assert even_cells["pos"]["style"]["color"] == "#000000"
-    assert even_cells["pos"]["style"]["backgroundColor"] == "rgba(255, 255, 255, 0.8)"
-    assert odd_cells["div_pos"]["style"]["backgroundColor"] == "rgba(69, 179, 224, 0.8)"
+    assert even_cells["pos"]["style"]["backgroundColor"] == "#FFFFFF"
+    assert odd_cells["div_pos"]["style"]["backgroundColor"] == "#45B3E0"
     assert odd_cells["positions_gained"]["style"]["backgroundColor"] == "rgba(51, 51, 51, 0.8)"
     assert odd_cells["positions_gained"]["style"]["color"] == settings.faster_color
 
 
-def test_build_local_web_snapshot_uses_white_position_text_at_50_percent_opacity():
-    settings = AppSettings(opacity=0.5)
+def test_build_local_web_snapshot_keeps_overall_and_class_position_backgrounds_opaque():
+    settings = AppSettings(opacity=0.25)
     driver = DriverState(
         car_idx=1,
         driver_info={"UserName": "Transparent Driver", "CarNumber": "11"},
@@ -157,8 +157,9 @@ def test_build_local_web_snapshot_uses_white_position_text_at_50_percent_opacity
     snapshot = build_local_web_snapshot(overlay)
 
     cells = {cell["id"]: cell for cell in snapshot["drivers"][0]["cells"]}
-    assert cells["pos"]["style"]["color"] == "white"
-    assert cells["pos"]["style"]["backgroundColor"] == "rgba(255, 255, 255, 0.5)"
+    assert cells["pos"]["style"]["color"] == "#000000"
+    assert cells["pos"]["style"]["backgroundColor"] == "#FFFFFF"
+    assert cells["div_pos"]["style"]["backgroundColor"] == "#FF8C00"
 
 
 def test_build_local_web_snapshot_default_player_uses_player_highlight():

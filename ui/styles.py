@@ -52,11 +52,6 @@ def get_default_row_background(base_color: str, row_index: int) -> str:
     return UI_COLORS.HEADER_DARK_GRAY
 
 
-def get_overall_position_text_color(opacity: float) -> str:
-    """Use light text when the white position cell becomes too transparent."""
-    return "white" if opacity <= 0.5 else "#000000"
-
-
 class ColorStyleStrategy(ABC):
     """Abstract base class for driver row color styles."""
 
@@ -222,11 +217,9 @@ class DefaultColorStyle(ColorStyleStrategy):
         delta_slower_color = parent.settings.slower_color
         label_bg = parent.get_bg_color('#000000')
         label_border = ''
-        position_bg = parent.get_bg_color('#FFFFFF')
-        position_color = get_overall_position_text_color(
-            getattr(parent.settings, 'opacity', 0.8)
-        )
-        division_position_bg = parent.get_bg_color(driver.division_color)
+        position_bg = '#FFFFFF'
+        position_color = "#000000"
+        division_position_bg = driver.division_color
         division_position_color = "white"
         division_position_border = f"border: 2px solid {driver.division_color};"
         car_number_bg = parent.get_bg_color('#000000')
