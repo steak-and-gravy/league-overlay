@@ -292,6 +292,14 @@ class TelemetryProcessor:
         """Return True when session behavior should use qualifying lap rules."""
         return bool(session_type and "qual" in session_type.lower())
 
+    def _is_best_lap_flash_session(self, session_type: Optional[str]) -> bool:
+        """Return True when recent-lap color should compare against session best."""
+        if session_type is None:
+            return False
+
+        normalized_session_type = session_type.lower()
+        return "practice" in normalized_session_type or "qual" in normalized_session_type
+
     def _is_recent_lap_flash_session(self, session_type: Optional[str]) -> bool:
         """Return True when recent-lap flashes are enabled for this session type."""
         if session_type is None:
@@ -340,15 +348,17 @@ class TelemetryProcessor:
         session_type: Optional[str] = None,
     ) -> str:
         """Return the semantic state for a newly completed lap flash."""
-        if not self._is_valid_display_lap_time(previous_lap_time):
-            return self.RECENT_LAP_FLASH_FIRST_LAP
-
-        if self._is_qualifying_session(session_type):
+        if self._is_best_lap_flash_session(session_type):
             if not self._is_valid_display_lap_time(previous_best_lap_time):
-                return self.RECENT_LAP_FLASH_FASTER
+                if self._is_qualifying_session(session_type):
+                    return self.RECENT_LAP_FLASH_FASTER
+                return self.RECENT_LAP_FLASH_FIRST_LAP
             if lap_time < previous_best_lap_time - 1e-6:
                 return self.RECENT_LAP_FLASH_FASTER
             return self.RECENT_LAP_FLASH_SLOWER
+
+        if not self._is_valid_display_lap_time(previous_lap_time):
+            return self.RECENT_LAP_FLASH_FIRST_LAP
 
         if lap_time > previous_lap_time + 1e-6:
             return self.RECENT_LAP_FLASH_SLOWER
