@@ -44,6 +44,7 @@ class TestAppSettingsDefaults:
         assert settings.pit_stop_indicator is True
         assert settings.bold_drivers is True
         assert settings.show_recent_lap_flash is True
+        assert settings.show_car_manufacturer is True
         assert settings.broadcast_roll_rows == 5
         assert settings.broadcast_roll_interval_seconds == 5
         assert settings.local_website_enabled is False

@@ -792,11 +792,11 @@ class TestPerformanceIndicatorColors:
         assert result['faster_color'] == "#00FF00"
 
     def test_slower_color_default(self):
-        """Test slower_color defaults to warm red (#FF2F18)."""
+        """Test slower_color defaults to magenta-red (#FF004D)."""
         validator = SettingsValidator()
         data = {}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF2F18"
+        assert result['slower_color'] == "#FF004D"
 
     def test_faster_color_valid_hex(self):
         """Test faster_color accepts valid hex color."""
@@ -820,11 +820,11 @@ class TestPerformanceIndicatorColors:
         assert result['faster_color'] == "#00FF00"
 
     def test_slower_color_invalid_hex_returns_default(self):
-        """Test invalid slower_color returns default warm red."""
+        """Test invalid slower_color returns default magenta-red."""
         validator = SettingsValidator()
         data = {'slower_color': 'invalid'}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF2F18"
+        assert result['slower_color'] == "#FF004D"
 
     def test_faster_color_missing_hash_returns_default(self):
         """Test faster_color without # returns default."""
@@ -838,7 +838,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': '#FF00'}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF2F18"
+        assert result['slower_color'] == "#FF004D"
 
     def test_faster_color_invalid_type_returns_default(self):
         """Test faster_color with invalid type returns default."""
@@ -852,7 +852,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': None}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF2F18"
+        assert result['slower_color'] == "#FF004D"
 
     def test_both_colors_custom(self):
         """Test both performance colors can be customized together."""
@@ -907,6 +907,13 @@ class TestNewDriverInfoColumns:
         data = {}
         result = validator.validate_and_coerce(data)
         assert result['show_car_number'] is True
+
+    def test_show_car_manufacturer_default_true(self):
+        """Test show_car_manufacturer defaults to True."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['show_car_manufacturer'] is True
 
     def test_show_car_number_false(self):
         """Test show_car_number can be set to False."""
@@ -1077,7 +1084,7 @@ class TestNewDriverInfoColumns:
         """Test backward compatibility - old config files without new columns.
 
         This test simulates loading a config file that was created before the
-        new columns were added. All new settings should default to False.
+        new columns were added. New settings should receive their intended defaults.
         This is the CRITICAL test that would have caught the original bug.
         """
         validator = SettingsValidator()
@@ -1105,6 +1112,7 @@ class TestNewDriverInfoColumns:
         # Without the fix in settings_validator.py, these would be missing
         # from the validated dict, causing KeyError when constructing AppSettings
         assert result['show_rating'] is False
+        assert result['show_car_manufacturer'] is True
         assert result['show_car_number'] is True
         assert result['show_pit_lap'] is False
         assert result['pit_stop_indicator'] is True

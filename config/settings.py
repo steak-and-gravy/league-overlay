@@ -42,7 +42,7 @@ class AppSettings:
     show_recent_lap_flash: bool = True
     show_best_lap: bool = False
     show_positions_gained: bool = True
-    show_car_manufacturer: bool = False  # Show car manufacturer badge column
+    show_car_manufacturer: bool = True  # Show car manufacturer badge column
     show_rating: bool = False  # Combined iRating + Safety Rating column
     show_car_number: bool = True  # Show car number column
     show_pit_lap: bool = False  # Combined Last Pit + Out Lap column
@@ -57,7 +57,7 @@ class AppSettings:
 
     # Performance indicator colors
     faster_color: str = "#00FF00"  # Green - for faster lap times and positions gained
-    slower_color: str = "#FF2F18"  # Warm red - for slower lap times and positions lost
+    slower_color: str = "#FF004D"  # Magenta-red - for slower lap times and positions lost
 
     # Configuration files
     league_config: Optional[str] = None

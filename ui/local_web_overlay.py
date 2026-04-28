@@ -538,7 +538,7 @@ def _empty_snapshot() -> Dict[str, Any]:
         "backgroundColor": "rgba(0, 0, 0, 0.8)",
         "headerColor": "rgba(51, 51, 51, 0.8)",
         "fasterColor": "#00FF00",
-        "slowerColor": "#FF2F18",
+        "slowerColor": "#FF004D",
         "columns": [],
         "drivers": [],
         "footer": {},

@@ -254,7 +254,7 @@ class TestGetButtonState:
         """Test button state when showing all divisions."""
         state = division_filter.get_button_state()
 
-        assert state['text'] == "All Divisions"
+        assert state['text'] == "All Classes"
         assert state['color'] == "#555555"  # UI_COLORS.BUTTON_GRAY
 
     def test_my_division_state(self, division_filter):
@@ -263,7 +263,7 @@ class TestGetButtonState:
 
         state = division_filter.get_button_state()
 
-        assert state['text'] == "My Division"
+        assert state['text'] == "My Class"
         assert state['color'] == "#0FC436"  # UI_COLORS.DIVISION_HIGHLIGHT_GREEN
 
     def test_specific_division_state(self, division_filter):
