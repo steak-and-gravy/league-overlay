@@ -52,6 +52,30 @@ def get_default_row_background(base_color: str, row_index: int) -> str:
     return UI_COLORS.HEADER_DARK_GRAY
 
 
+def get_half_effect_opacity(opacity: float) -> float:
+    """Return the alpha halfway between fully opaque and the configured opacity."""
+    try:
+        normalized_opacity = float(opacity)
+    except (TypeError, ValueError):
+        normalized_opacity = 1.0
+    normalized_opacity = max(0.0, min(1.0, normalized_opacity))
+    return 1.0 - ((1.0 - normalized_opacity) / 2)
+
+
+def get_half_effect_bg_color(hex_color: str, opacity: float) -> str:
+    """Apply half-strength opacity to a hex color."""
+    if not hex_color.startswith('#') or len(hex_color) not in (7, 9):
+        return hex_color
+    try:
+        red = int(hex_color[1:3], 16)
+        green = int(hex_color[3:5], 16)
+        blue = int(hex_color[5:7], 16)
+        base_alpha = int(hex_color[7:9], 16) / 255 if len(hex_color) == 9 else 1.0
+    except ValueError:
+        return hex_color
+    return f"rgba({red}, {green}, {blue}, {base_alpha * get_half_effect_opacity(opacity)})"
+
+
 class ColorStyleStrategy(ABC):
     """Abstract base class for driver row color styles."""
 
@@ -217,9 +241,15 @@ class DefaultColorStyle(ColorStyleStrategy):
         delta_slower_color = parent.settings.slower_color
         label_bg = parent.get_bg_color('#000000')
         label_border = ''
-        position_bg = '#FFFFFF'
+        position_bg = get_half_effect_bg_color(
+            '#FFFFFF',
+            getattr(parent.settings, 'opacity', 0.8),
+        )
         position_color = "#000000"
-        division_position_bg = driver.division_color
+        division_position_bg = get_half_effect_bg_color(
+            driver.division_color,
+            getattr(parent.settings, 'opacity', 0.8),
+        )
         division_position_color = "white"
         division_position_border = f"border: 2px solid {driver.division_color};"
         car_number_bg = parent.get_bg_color('#000000')

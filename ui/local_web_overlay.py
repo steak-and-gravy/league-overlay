@@ -17,6 +17,7 @@ from config.logging_config import get_logger
 from core.driver_state import DriverState
 from core.gap_calculator import GapCalculator
 from ui.driver_row_renderer import DriverRowRenderer
+from ui.styles import get_half_effect_bg_color
 
 logger = get_logger(__name__)
 
@@ -266,10 +267,10 @@ def _cell_style(driver: DriverState, settings: Any, column_id: str,
 
     if column_id == "pos" and style_name == "Default":
         style["color"] = "#000000"
-        style["backgroundColor"] = "#FFFFFF"
+        style["backgroundColor"] = get_half_effect_bg_color("#FFFFFF", opacity)
     elif column_id == "div_pos" and style_name == "Default":
         style["color"] = "white"
-        style["backgroundColor"] = division_color
+        style["backgroundColor"] = get_half_effect_bg_color(division_color, opacity)
         style["border"] = f"2px solid {division_color}"
     elif column_id == "car_number" and style_name == "Default":
         style["color"] = "white"

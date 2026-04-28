@@ -33,6 +33,13 @@ def test_update_all_backgrounds_refreshes_footer_opacity():
     )
 
 
+def test_get_bg_color_keeps_zero_opacity_interactive():
+    app = LeagueOverlay.__new__(LeagueOverlay)
+    app.settings = SimpleNamespace(opacity=0.0)
+
+    assert LeagueOverlay.get_bg_color(app, "#333333") == "rgba(51, 51, 51, 0.01)"
+
+
 class TestHandleTelemetryUpdate:
     """Test cases for LeagueOverlay._handle_telemetry_update method."""
 

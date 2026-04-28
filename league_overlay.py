@@ -58,6 +58,7 @@ logger = get_logger(__name__)
 DEFAULT_BROADCAST_ACCENT_COLOR = "#FF8C00"
 DEFAULT_BROADCAST_TITLE = "BB's League Overlay"
 DEFAULT_BROADCAST_LOGO_URL = "https://leagueoverlay.com/assets/img/BBLeagueOverlay96.png"
+MIN_QT_INTERACTIVE_OPACITY = 0.01
 
 
 def lighten_hex_color(hex_color: str, factor: float = 0.2) -> str:
@@ -234,12 +235,13 @@ class LeagueOverlay(QMainWindow):
 
     def get_bg_color(self, base_color):
         """Convert a hex color to RGBA format with current window opacity."""
+        opacity = max(MIN_QT_INTERACTIVE_OPACITY, self.settings.opacity)
         # Parse hex color
         if base_color.startswith('#'):
             r = int(base_color[1:3], 16)
             g = int(base_color[3:5], 16)
             b = int(base_color[5:7], 16)
-            return f"rgba({r}, {g}, {b}, {self.settings.opacity})"
+            return f"rgba({r}, {g}, {b}, {opacity})"
         return base_color
 
     def get_font_size(self, element_type):

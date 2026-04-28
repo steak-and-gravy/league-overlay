@@ -19,7 +19,7 @@ class SettingsValidator:
     """Validates and coerces settings data from JSON.
 
     This class handles type coercion (e.g., "500" string -> 500 int),
-    range validation (e.g., clamping opacity to 0.1-1.0), and enum
+    range validation (e.g., clamping opacity to 0.0-1.0), and enum
     validation (e.g., ensuring font_size is one of valid values).
 
     All validation errors are logged but don't crash the application.
@@ -111,7 +111,7 @@ class SettingsValidator:
         validated['opacity'] = self.coerce_float(
             data.get('opacity'),
             default=self.defaults['opacity'],
-            min_val=0.1,
+            min_val=0.0,
             max_val=1.0,
             field_name='opacity'
         )

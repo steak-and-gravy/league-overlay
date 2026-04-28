@@ -131,13 +131,13 @@ def test_build_local_web_snapshot_matches_default_style_cells_and_rows():
     assert snapshot["drivers"][0]["rowStyle"]["background"] == "rgba(0, 0, 0, 0.8)"
     assert snapshot["drivers"][1]["rowStyle"]["background"] == "rgba(51, 51, 51, 0.8)"
     assert even_cells["pos"]["style"]["color"] == "#000000"
-    assert even_cells["pos"]["style"]["backgroundColor"] == "#FFFFFF"
-    assert odd_cells["div_pos"]["style"]["backgroundColor"] == "#45B3E0"
+    assert even_cells["pos"]["style"]["backgroundColor"] == "rgba(255, 255, 255, 0.9)"
+    assert odd_cells["div_pos"]["style"]["backgroundColor"] == "rgba(69, 179, 224, 0.9)"
     assert odd_cells["positions_gained"]["style"]["backgroundColor"] == "rgba(51, 51, 51, 0.8)"
     assert odd_cells["positions_gained"]["style"]["color"] == settings.faster_color
 
 
-def test_build_local_web_snapshot_keeps_overall_and_class_position_backgrounds_opaque():
+def test_build_local_web_snapshot_applies_half_opacity_to_overall_and_class_position_backgrounds():
     settings = AppSettings(opacity=0.25)
     driver = DriverState(
         car_idx=1,
@@ -158,8 +158,55 @@ def test_build_local_web_snapshot_keeps_overall_and_class_position_backgrounds_o
 
     cells = {cell["id"]: cell for cell in snapshot["drivers"][0]["cells"]}
     assert cells["pos"]["style"]["color"] == "#000000"
-    assert cells["pos"]["style"]["backgroundColor"] == "#FFFFFF"
-    assert cells["div_pos"]["style"]["backgroundColor"] == "#FF8C00"
+    assert cells["pos"]["style"]["backgroundColor"] == "rgba(255, 255, 255, 0.625)"
+    assert cells["div_pos"]["style"]["backgroundColor"] == "rgba(255, 140, 0, 0.625)"
+
+
+def test_build_local_web_snapshot_keeps_half_visible_position_backgrounds_at_zero_opacity():
+    settings = AppSettings(opacity=0.0)
+    driver = DriverState(
+        car_idx=1,
+        driver_info={"UserName": "Transparent Driver", "CarNumber": "11"},
+        position=1,
+        division_position=1,
+        division_color="#FF8C0080",
+    )
+    overlay = SimpleNamespace(
+        settings=settings,
+        displayed_data=[driver],
+        _last_status_text="Race - Lap 4",
+        _last_status_color="green",
+        _last_footer_data={},
+    )
+
+    snapshot = build_local_web_snapshot(overlay)
+
+    cells = {cell["id"]: cell for cell in snapshot["drivers"][0]["cells"]}
+    assert cells["pos"]["style"]["backgroundColor"] == "rgba(255, 255, 255, 0.5)"
+    assert cells["div_pos"]["style"]["backgroundColor"] == "rgba(255, 140, 0, 0.25098039215686274)"
+
+
+def test_build_local_web_snapshot_preserves_division_color_alpha_for_class_position_background():
+    settings = AppSettings(opacity=0.25)
+    driver = DriverState(
+        car_idx=1,
+        driver_info={"UserName": "Transparent Driver", "CarNumber": "11"},
+        position=1,
+        division_position=1,
+        division_color="#FF8C0080",
+    )
+    overlay = SimpleNamespace(
+        settings=settings,
+        displayed_data=[driver],
+        _last_status_text="Race - Lap 4",
+        _last_status_color="green",
+        _last_footer_data={},
+    )
+
+    snapshot = build_local_web_snapshot(overlay)
+
+    cells = {cell["id"]: cell for cell in snapshot["drivers"][0]["cells"]}
+    assert cells["div_pos"]["style"]["backgroundColor"] == "rgba(255, 140, 0, 0.3137254901960784)"
 
 
 def test_build_local_web_snapshot_default_player_uses_player_highlight():

@@ -432,6 +432,15 @@ class TestValidateAndCoerce:
         assert result['height'] == 350  # Default
         assert result['refresh_rate'] == 1.0  # Default from AppSettings
 
+    def test_zero_opacity_is_allowed(self):
+        """Test full transparency is a valid opacity setting."""
+        validator = SettingsValidator()
+        data = {'opacity': 0.0}
+
+        result = validator.validate_and_coerce(data)
+
+        assert result['opacity'] == 0.0
+
     def test_all_invalid_fields_uses_defaults(self):
         """Test all invalid fields uses all defaults."""
         validator = SettingsValidator()

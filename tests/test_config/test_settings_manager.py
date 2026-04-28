@@ -340,14 +340,24 @@ class TestValidateSettings:
     """Test cases for settings validation."""
 
     def test_validate_opacity_clamped_low(self, tmp_path):
-        """Test opacity clamped to minimum 0.1."""
+        """Test opacity clamped to minimum 0.0."""
         settings_file = tmp_path / "settings.config"
         manager = SettingsManager(str(settings_file))
 
         settings = AppSettings(opacity=-0.5)
         validated = manager.validate(settings)
 
-        assert validated.opacity == 0.1
+        assert validated.opacity == 0.0
+
+    def test_validate_zero_opacity_allowed(self, tmp_path):
+        """Test opacity can be fully transparent."""
+        settings_file = tmp_path / "settings.config"
+        manager = SettingsManager(str(settings_file))
+
+        settings = AppSettings(opacity=0.0)
+        validated = manager.validate(settings)
+
+        assert validated.opacity == 0.0
 
     def test_validate_opacity_clamped_high(self, tmp_path):
         """Test opacity clamped to maximum 1.0."""

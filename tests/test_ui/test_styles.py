@@ -90,22 +90,45 @@ def test_default_style_uses_black_car_number_background_with_2px_outline_by_defa
     assert styling["car_number_bg"] == "#000000"
     assert styling["car_number_border"] == "border: 2px solid #00AAFF;"
     assert styling["car_number_color"] == "white"
-    assert styling["division_position_bg"] == "#00AAFF"
-    assert styling["position_bg"] == "#FFFFFF"
+    assert styling["division_position_bg"] == "rgba(0, 170, 255, 0.9)"
+    assert styling["position_bg"] == "rgba(255, 255, 255, 0.9)"
     assert styling["position_color"] == "#000000"
 
 
-def test_default_style_keeps_overall_and_class_position_backgrounds_opaque(qapp):
-    """Overall/Class position backgrounds ignore the opacity setting."""
+def test_default_style_applies_half_opacity_to_overall_and_class_position_backgrounds(qapp):
+    """Overall/Class position backgrounds get a softer version of the opacity setting."""
     style = DefaultColorStyle()
     parent = _make_parent(opacity=0.25)
     driver = _make_driver()
 
     styling = style.get_styling(driver, parent)
 
-    assert styling["position_bg"] == "#FFFFFF"
-    assert styling["division_position_bg"] == "#00AAFF"
+    assert styling["position_bg"] == "rgba(255, 255, 255, 0.625)"
+    assert styling["division_position_bg"] == "rgba(0, 170, 255, 0.625)"
     assert styling["position_color"] == "#000000"
+
+
+def test_default_style_keeps_half_visible_overall_and_class_backgrounds_at_zero_opacity(qapp):
+    """Overall/Class half-opacity backgrounds keep the same formula at zero opacity."""
+    style = DefaultColorStyle()
+    parent = _make_parent(opacity=0.0)
+    driver = _make_driver()
+
+    styling = style.get_styling(driver, parent)
+
+    assert styling["position_bg"] == "rgba(255, 255, 255, 0.5)"
+    assert styling["division_position_bg"] == "rgba(0, 170, 255, 0.5)"
+
+
+def test_default_style_preserves_division_color_alpha_for_class_position_background(qapp):
+    """Half-opacity class backgrounds should keep any alpha embedded in the color."""
+    style = DefaultColorStyle()
+    parent = _make_parent(opacity=0.25)
+    driver = _make_driver(division_color="#00AAFF80")
+
+    styling = style.get_styling(driver, parent)
+
+    assert styling["division_position_bg"] == "rgba(0, 170, 255, 0.3137254901960784)"
 
 
 def test_default_style_keeps_2px_outline_for_pending_mandatory_stop():
@@ -154,7 +177,7 @@ def test_default_style_uses_black_division_position_with_division_outline():
 
     styling = style.get_styling(driver, parent)
 
-    assert styling["division_position_bg"] == "#00AAFF"
+    assert styling["division_position_bg"] == "rgba(0, 170, 255, 0.9)"
     assert styling["division_position_border"] == "border: 2px solid #00AAFF;"
     assert styling["division_position_color"] == "white"
 

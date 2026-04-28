@@ -511,7 +511,7 @@ class SettingsDialog(QDialog):
         opacity_row.addWidget(opacity_label)
         
         self.opacity_slider = QSlider(Qt.Horizontal)
-        self.opacity_slider.setMinimum(2)  # 0.10
+        self.opacity_slider.setMinimum(0)  # 0.00
         self.opacity_slider.setMaximum(20)  # 1.00
         self.opacity_slider.setSingleStep(1)  # 0.05 increment
         self.opacity_slider.setPageStep(1)

@@ -170,6 +170,22 @@ def test_refresh_rate_label_matches_clamped_slider_value(qapp):
     overlay.deleteLater()
 
 
+def test_opacity_slider_allows_zero(qapp):
+    """Settings dialog should allow fully transparent backgrounds."""
+    overlay, dialog = _build_dialog()
+
+    assert dialog.opacity_slider.minimum() == 0
+    dialog.opacity_slider.setValue(0)
+    assert dialog.opacity_value_label.text() == "0.00"
+
+    dialog.apply_settings()
+
+    assert overlay.settings.opacity == 0.0
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
 def test_apply_settings_updates_local_website_controls(qapp):
     """Applying the dialog should persist local-network browser-source settings."""
     with patch("ui.settings_dialog.get_local_network_url", return_value="http://192.168.1.211:8765/"):
