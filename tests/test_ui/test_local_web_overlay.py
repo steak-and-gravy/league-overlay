@@ -18,7 +18,7 @@ from ui.local_web_overlay import (
 
 
 def test_build_local_web_snapshot_uses_visible_columns_and_driver_values():
-    settings = AppSettings(show_car_number=True, show_interval=True)
+    settings = AppSettings(show_car_number=True, show_interval=True, local_website_scale="Large")
     driver = DriverState(
         car_idx=12,
         driver_info={"UserName": "Test Driver", "CarNumber": "42"},
@@ -48,6 +48,7 @@ def test_build_local_web_snapshot_uses_visible_columns_and_driver_values():
     assert snapshot["statusText"] == "Race - Lap 4"
     assert snapshot["statusColor"] == "yellow"
     assert snapshot["broadcastSessionColor"] == "white"
+    assert snapshot["localWebsiteScale"] == "Large"
     assert any(column["id"] == "interval" for column in snapshot["columns"])
     cells = {cell["id"]: cell["value"] for cell in snapshot["drivers"][0]["cells"]}
     driver_name_cell = next(cell for cell in snapshot["drivers"][0]["cells"] if cell["id"] == "driver_name")
@@ -57,6 +58,20 @@ def test_build_local_web_snapshot_uses_visible_columns_and_driver_values():
     assert cells["car_number"] == "42"
     assert cells["interval"] == "1.2s"
     assert snapshot["drivers"][0]["recentLapFlashState"] == "faster"
+
+
+def test_local_web_html_uses_responsive_browser_source_sizing():
+    html = local_web_overlay._render_html()
+
+    assert "--web-data-font-size" in html
+    assert "function applyWebSizing(data)" in html
+    assert "function autoSizing" not in html
+    assert "presets[scaleName] || presets['Large']" in html
+    assert "'Medium': sizingFromDataSize(18)" in html
+    assert "'Large': sizingFromDataSize(21)" in html
+    assert "'Extra Large': sizingFromDataSize(24)" in html
+    assert "font-size: var(--web-data-font-size)" in html
+    assert "width: var(--web-narrow-col-width)" in html
 
 
 def test_build_local_web_snapshot_matches_broadcast_session_status_colors():
@@ -516,7 +531,8 @@ def test_local_web_overlay_server_serves_html_and_state():
         assert "const AUTO_CENTER_PAUSE_MS = 5000;" in html
         assert "function centerTargetRow()" in html
         assert "rows.querySelector('tr.spectated') || rows.querySelector('tr.player')" in html
-        assert "requestAnimationFrame(centerTargetRow);" in html
+        assert "requestAnimationFrame(() =>" in html
+        assert "centerTargetRow();" in html
         assert "footer.style.background = data.headerColor;" in html
         assert payload == snapshot
     finally:

@@ -49,6 +49,7 @@ class TestAppSettingsDefaults:
         assert settings.broadcast_roll_interval_seconds == 5
         assert settings.local_website_enabled is False
         assert settings.local_website_port == 8765
+        assert settings.local_website_scale == "Large"
 
     def test_default_config_files(self):
         """Test default config file paths."""
@@ -219,6 +220,7 @@ class TestSaveSettings:
             broadcast_roll_interval_seconds=9,
             local_website_enabled=True,
             local_website_port=8766,
+            local_website_scale="Large",
         )
 
         manager.save(settings)
@@ -234,6 +236,7 @@ class TestSaveSettings:
             assert data['broadcast_roll_interval_seconds'] == 9
             assert data['local_website_enabled'] is True
             assert data['local_website_port'] == 8766
+            assert data['local_website_scale'] == "Large"
 
     def test_save_all_fields(self, tmp_path):
         """Test saving all settings fields."""
@@ -255,6 +258,7 @@ class TestSaveSettings:
             show_recent_lap_flash=False,
             local_website_enabled=True,
             local_website_port=8766,
+            local_website_scale="Extra Large",
             league_config='/path/to/config.json',
             division_colors={'Pro': '#FF0000'}
         )
@@ -270,6 +274,7 @@ class TestSaveSettings:
             assert data['show_recent_lap_flash'] is False
             assert data['local_website_enabled'] is True
             assert data['local_website_port'] == 8766
+            assert data['local_website_scale'] == "Extra Large"
             assert data['division_colors'] == {'Pro': '#FF0000'}
 
     def test_load_legacy_center_drivers_config_uses_pit_stop_indicator_default(self, tmp_path):
@@ -322,6 +327,7 @@ class TestSaveSettings:
             show_recent_lap_flash=False,
             local_website_enabled=True,
             local_website_port=8766,
+            local_website_scale="Compact",
         )
 
         manager.save(original)
@@ -335,6 +341,7 @@ class TestSaveSettings:
         assert loaded.show_recent_lap_flash == original.show_recent_lap_flash
         assert loaded.local_website_enabled == original.local_website_enabled
         assert loaded.local_website_port == original.local_website_port
+        assert loaded.local_website_scale == original.local_website_scale
 
 
 class TestValidateSettings:
@@ -423,6 +430,14 @@ class TestValidateSettings:
             settings = AppSettings(font_size=size)
             validated = manager.validate(settings)
             assert validated.font_size == size
+
+    def test_validate_local_website_scale(self, tmp_path):
+        """Test browser-source scale uses the allowed preset names."""
+        settings_file = tmp_path / "settings.config"
+        manager = SettingsManager(str(settings_file))
+
+        assert manager.validate(AppSettings(local_website_scale="Medium")).local_website_scale == "Medium"
+        assert manager.validate(AppSettings(local_website_scale="TooBig")).local_website_scale == "Large"
 
     def test_validate_invalid_row_color_style(self, tmp_path):
         """Test invalid row color style resets to the default."""

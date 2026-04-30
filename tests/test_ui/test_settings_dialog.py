@@ -193,6 +193,12 @@ def test_apply_settings_updates_local_website_controls(qapp):
 
         assert dialog.local_website_section_title.text() == "Local Website"
         assert dialog.local_website_enabled_cb.text() == "Enable local website"
+        assert dialog.local_website_scale_combo.currentText() == "Large"
+        scale_options = [
+            dialog.local_website_scale_combo.itemText(index)
+            for index in range(dialog.local_website_scale_combo.count())
+        ]
+        assert scale_options == ["Compact", "Medium", "Large", "Extra Large"]
         assert dialog.local_website_link.text() == "http://192.168.1.211:8765/"
         assert dialog.local_website_link.openExternalLinks() is False
         assert dialog.local_website_link.textInteractionFlags() == Qt.NoTextInteraction
@@ -201,10 +207,12 @@ def test_apply_settings_updates_local_website_controls(qapp):
         assert dialog.local_website_link.textInteractionFlags() == Qt.TextBrowserInteraction
         assert 'href="http://192.168.1.211:8765/"' in dialog.local_website_link.text()
         dialog.local_website_port_spin.setValue(8766)
+        dialog.local_website_scale_combo.setCurrentText("Large")
         dialog.apply_settings()
 
     assert overlay.settings.local_website_enabled is True
     assert overlay.settings.local_website_port == 8766
+    assert overlay.settings.local_website_scale == "Large"
     assert overlay.signals.refresh_colors.emit.called
 
     dialog.deleteLater()
@@ -246,13 +254,16 @@ def test_apply_settings_reverts_local_website_when_startup_fails(qapp):
 
     dialog.local_website_enabled_cb.setChecked(True)
     dialog.local_website_port_spin.setValue(8766)
+    dialog.local_website_scale_combo.setCurrentText("Extra Large")
     with patch("ui.settings_dialog.QMessageBox.critical") as critical:
         dialog.apply_settings()
 
     assert overlay.settings.local_website_enabled is original_enabled
     assert overlay.settings.local_website_port == original_port
+    assert overlay.settings.local_website_scale == "Extra Large"
     assert dialog.local_website_enabled_cb.isChecked() is original_enabled
     assert dialog.local_website_port_spin.value() == original_port
+    assert dialog.local_website_scale_combo.currentText() == "Extra Large"
     assert overlay.save_settings_called is False
     assert overlay.signals.refresh_colors.emit.called is False
     critical.assert_called_once()

@@ -9,7 +9,12 @@ Defaults are extracted from the AppSettings dataclass to ensure a single source 
 
 from dataclasses import fields, MISSING
 from typing import Optional, Any, List, Dict
-from config.constants import TELEMETRY_CONFIG, VALID_COLUMN_IDS, DEFAULT_COLUMN_ORDER
+from config.constants import (
+    LOCAL_WEBSITE_SCALE_OPTIONS,
+    TELEMETRY_CONFIG,
+    VALID_COLUMN_IDS,
+    DEFAULT_COLUMN_ORDER,
+)
 from config.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -251,6 +256,12 @@ class SettingsValidator:
             min_val=1024,
             max_val=65535,
             field_name='local_website_port'
+        )
+        validated['local_website_scale'] = self.coerce_enum(
+            data.get('local_website_scale'),
+            valid_values=LOCAL_WEBSITE_SCALE_OPTIONS,
+            default=self.defaults['local_website_scale'],
+            field_name='local_website_scale'
         )
 
         # Enum fields (limited valid values)

@@ -88,6 +88,9 @@ DEFAULT_COLUMN_ORDER: List[str] = [c.id for c in COLUMN_DEFS]
 # Set of all valid column IDs
 VALID_COLUMN_IDS: frozenset = frozenset(DEFAULT_COLUMN_ORDER)
 
+# Browser-source display scale options for the local web overlay.
+LOCAL_WEBSITE_SCALE_OPTIONS: List[str] = ["Compact", "Medium", "Large", "Extra Large"]
+
 
 @dataclass(frozen=True)
 class Timing:

@@ -126,6 +126,7 @@ def build_local_web_snapshot(overlay: Any) -> Dict[str, Any]:
         "broadcastSessionColor": _broadcast_session_text_color(status_text),
         "showBroadcastHeader": settings.show_broadcast_header,
         "showFooter": settings.show_footer,
+        "localWebsiteScale": getattr(settings, "local_website_scale", "Large"),
         "opacity": settings.opacity,
         "backgroundColor": _rgba(UI_COLORS.BACKGROUND_BLACK, settings.opacity),
         "headerColor": _rgba(UI_COLORS.HEADER_DARK_GRAY, settings.opacity),
@@ -534,11 +535,12 @@ def _empty_snapshot() -> Dict[str, Any]:
         "broadcastSessionColor": "white",
         "showBroadcastHeader": False,
         "showFooter": False,
+        "localWebsiteScale": "Large",
         "opacity": 0.8,
         "backgroundColor": "rgba(0, 0, 0, 0.8)",
         "headerColor": "rgba(51, 51, 51, 0.8)",
         "fasterColor": "#00FF00",
-        "slowerColor": "#FF004D",
+        "slowerColor": "#FF0033",
         "columns": [],
         "drivers": [],
         "footer": {},
@@ -564,6 +566,17 @@ def _render_html() -> str:
       overflow: hidden;
     }}
     #overlay {{
+      --web-data-font-size: 16px;
+      --web-header-font-size: 14px;
+      --web-status-font-size: 16px;
+      --web-broadcast-title-font-size: 20px;
+      --web-broadcast-status-font-size: 15px;
+      --web-row-padding-y: 3px;
+      --web-cell-padding-x: 6px;
+      --web-narrow-col-width: 46px;
+      --web-logo-width: 28px;
+      --web-logo-height: 20px;
+      --web-broadcast-logo-size: 54px;
       min-width: 320px;
       height: var(--viewport-height, 100vh);
       height: var(--viewport-height, 100dvh);
@@ -577,30 +590,30 @@ def _render_html() -> str:
       display: none;
       align-items: center;
       gap: 12px;
-      padding: 8px 10px;
+      padding: calc(var(--web-row-padding-y) + 5px) 10px;
       background: rgba(51, 51, 51, 0.8);
       border-bottom: 3px solid #FF8C00;
     }}
     .broadcast.visible {{ display: flex; }}
     .broadcast img {{
-      width: 44px;
-      height: 44px;
+      width: var(--web-broadcast-logo-size);
+      height: var(--web-broadcast-logo-size);
       object-fit: contain;
     }}
     .broadcast-title {{
-      font-size: 12pt;
+      font-size: var(--web-broadcast-title-font-size);
       font-weight: 700;
       line-height: 1.1;
     }}
     .broadcast-status {{
       margin-top: 2px;
       color: #ddd;
-      font-size: 9pt;
+      font-size: var(--web-broadcast-status-font-size);
     }}
     .status {{
       padding: 5px;
       text-align: center;
-      font-size: 10pt;
+      font-size: var(--web-status-font-size);
       font-weight: 700;
       background: rgba(0, 0, 0, 0.8);
       color: #00FF00;
@@ -625,19 +638,19 @@ def _render_html() -> str:
       flex: 0 0 auto;
     }}
     th {{
-      padding: 2px 4px;
+      padding: max(2px, calc(var(--web-row-padding-y) - 1px)) var(--web-cell-padding-x);
       background: rgba(51, 51, 51, 0.8);
       color: #fff;
-      font-size: 9pt;
+      font-size: var(--web-header-font-size);
       font-weight: 700;
       text-align: center;
       white-space: nowrap;
     }}
     td {{
-      padding: 3px 4px;
+      padding: var(--web-row-padding-y) var(--web-cell-padding-x);
       border-bottom: 1px solid rgba(255,255,255,0.08);
       color: #fff;
-      font-size: 10pt;
+      font-size: var(--web-data-font-size);
       font-weight: 700;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -667,12 +680,12 @@ def _render_html() -> str:
       padding-right: 2px;
     }}
     .col-pos, .col-div-pos, .col-car-manufacturer, .col-car-number, .col-positions-gained {{
-      width: 38px;
+      width: var(--web-narrow-col-width);
     }}
     .manufacturer-logo {{
       display: block;
-      max-width: 22px;
-      max-height: 16px;
+      max-width: var(--web-logo-width);
+      max-height: var(--web-logo-height);
       margin: 0 auto;
       object-fit: contain;
     }}
@@ -685,9 +698,9 @@ def _render_html() -> str:
     .footer {{
       display: none;
       justify-content: space-between;
-      padding: 5px 8px;
+      padding: calc(var(--web-row-padding-y) + 2px) 8px;
       background: rgba(51, 51, 51, 0.8);
-      font-size: 10pt;
+      font-size: var(--web-status-font-size);
       font-weight: 700;
     }}
     .footer.visible {{ display: flex; }}
@@ -785,6 +798,51 @@ def _render_html() -> str:
 
     function text(value) {{
       return value == null ? '' : String(value);
+    }}
+
+    function clamp(value, min, max) {{
+      return Math.min(max, Math.max(min, value));
+    }}
+
+    function sizingFromDataSize(dataSize) {{
+      return {{
+        data: dataSize,
+        header: clamp(dataSize - 2, 12, 20),
+        status: clamp(dataSize, 14, 22),
+        title: clamp(dataSize + 4, 18, 28),
+        broadcastStatus: clamp(dataSize - 1, 13, 21),
+        padY: clamp(Math.round(dataSize / 4.2), 3, 6),
+        padX: clamp(Math.round(dataSize / 2.5), 5, 9),
+        narrow: clamp(Math.round(dataSize * 2.75), 42, 62),
+        logoW: clamp(Math.round(dataSize * 1.55), 24, 38),
+        logoH: clamp(Math.round(dataSize * 1.12), 17, 28),
+        broadcastLogo: clamp(Math.round(dataSize * 3.1), 48, 72),
+      }};
+    }}
+
+    function webSizing(scaleName) {{
+      const presets = {{
+        'Compact': sizingFromDataSize(14),
+        'Medium': sizingFromDataSize(18),
+        'Large': sizingFromDataSize(21),
+        'Extra Large': sizingFromDataSize(24),
+      }};
+      return presets[scaleName] || presets['Large'];
+    }}
+
+    function applyWebSizing(data) {{
+      const sizing = webSizing(text(data.localWebsiteScale));
+      overlay.style.setProperty('--web-data-font-size', sizing.data + 'px');
+      overlay.style.setProperty('--web-header-font-size', sizing.header + 'px');
+      overlay.style.setProperty('--web-status-font-size', sizing.status + 'px');
+      overlay.style.setProperty('--web-broadcast-title-font-size', sizing.title + 'px');
+      overlay.style.setProperty('--web-broadcast-status-font-size', sizing.broadcastStatus + 'px');
+      overlay.style.setProperty('--web-row-padding-y', sizing.padY + 'px');
+      overlay.style.setProperty('--web-cell-padding-x', sizing.padX + 'px');
+      overlay.style.setProperty('--web-narrow-col-width', sizing.narrow + 'px');
+      overlay.style.setProperty('--web-logo-width', sizing.logoW + 'px');
+      overlay.style.setProperty('--web-logo-height', sizing.logoH + 'px');
+      overlay.style.setProperty('--web-broadcast-logo-size', sizing.broadcastLogo + 'px');
     }}
 
     function applyStyle(element, style) {{
@@ -889,7 +947,11 @@ def _render_html() -> str:
       document.getElementById('sof').textContent = footerData.sof == null ? 'SoF: ----' : 'SoF: ' + (footerData.sof / 1000).toFixed(1) + 'k';
       document.getElementById('incidents').textContent = footerData.incidents == null ? '--x' : String(footerData.incidents) + 'x';
       document.getElementById('trackTemp').textContent = footerData.track_temp == null ? '--F / --C' : Math.round(footerData.track_temp * 9 / 5 + 32) + 'F / ' + Math.round(footerData.track_temp) + 'C';
-      requestAnimationFrame(centerTargetRow);
+      applyWebSizing(data);
+      requestAnimationFrame(() => {{
+        applyWebSizing(data);
+        centerTargetRow();
+      }});
     }}
 
     async function refresh() {{

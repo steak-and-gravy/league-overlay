@@ -792,11 +792,11 @@ class TestPerformanceIndicatorColors:
         assert result['faster_color'] == "#00FF00"
 
     def test_slower_color_default(self):
-        """Test slower_color defaults to magenta-red (#FF004D)."""
+        """Test slower_color defaults to bright red (#FF0033)."""
         validator = SettingsValidator()
         data = {}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF004D"
+        assert result['slower_color'] == "#FF0033"
 
     def test_faster_color_valid_hex(self):
         """Test faster_color accepts valid hex color."""
@@ -820,11 +820,11 @@ class TestPerformanceIndicatorColors:
         assert result['faster_color'] == "#00FF00"
 
     def test_slower_color_invalid_hex_returns_default(self):
-        """Test invalid slower_color returns default magenta-red."""
+        """Test invalid slower_color returns default bright red."""
         validator = SettingsValidator()
         data = {'slower_color': 'invalid'}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF004D"
+        assert result['slower_color'] == "#FF0033"
 
     def test_faster_color_missing_hash_returns_default(self):
         """Test faster_color without # returns default."""
@@ -838,7 +838,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': '#FF00'}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF004D"
+        assert result['slower_color'] == "#FF0033"
 
     def test_faster_color_invalid_type_returns_default(self):
         """Test faster_color with invalid type returns default."""
@@ -852,7 +852,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': None}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF004D"
+        assert result['slower_color'] == "#FF0033"
 
     def test_both_colors_custom(self):
         """Test both performance colors can be customized together."""
@@ -1169,15 +1169,18 @@ class TestLocalWebsiteSettings:
         result = validator.validate_and_coerce({})
         assert result['local_website_enabled'] is False
         assert result['local_website_port'] == 8765
+        assert result['local_website_scale'] == "Large"
 
     def test_local_website_settings_accept_valid_values(self):
         validator = SettingsValidator()
         result = validator.validate_and_coerce({
             'local_website_enabled': True,
             'local_website_port': 8766,
+            'local_website_scale': "Medium",
         })
         assert result['local_website_enabled'] is True
         assert result['local_website_port'] == 8766
+        assert result['local_website_scale'] == "Medium"
 
     def test_local_website_port_clamped_to_range(self):
         validator = SettingsValidator()
@@ -1185,3 +1188,8 @@ class TestLocalWebsiteSettings:
         high_result = validator.validate_and_coerce({'local_website_port': 70000})
         assert low_result['local_website_port'] == 1024
         assert high_result['local_website_port'] == 65535
+
+    def test_local_website_scale_rejects_invalid_values(self):
+        validator = SettingsValidator()
+        result = validator.validate_and_coerce({'local_website_scale': "Huge"})
+        assert result['local_website_scale'] == "Large"

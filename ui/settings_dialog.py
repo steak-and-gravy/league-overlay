@@ -14,7 +14,14 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
-from config.constants import VERSION, UI_DIMENSIONS, TelemetryConfig, COLUMN_REGISTRY, DEFAULT_COLUMN_ORDER
+from config.constants import (
+    VERSION,
+    UI_DIMENSIONS,
+    TelemetryConfig,
+    COLUMN_REGISTRY,
+    DEFAULT_COLUMN_ORDER,
+    LOCAL_WEBSITE_SCALE_OPTIONS,
+)
 from config.logging_config import set_log_level, get_logger
 from ui.local_web_overlay import get_local_network_url
 
@@ -475,6 +482,46 @@ class SettingsDialog(QDialog):
         local_web_controls_row.addWidget(self.local_website_port_spin)
         local_web_controls_row.addStretch()
         local_web_layout.addLayout(local_web_controls_row)
+
+        local_web_scale_row = QHBoxLayout()
+        local_web_scale_label = QLabel("Page Scale:")
+        local_web_scale_label.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        local_web_scale_row.addWidget(local_web_scale_label)
+
+        self.local_website_scale_combo = QComboBox()
+        self.local_website_scale_combo.addItems(LOCAL_WEBSITE_SCALE_OPTIONS)
+        self.local_website_scale_combo.setCurrentText(self.parent_overlay.settings.local_website_scale)
+        self.local_website_scale_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #404040;
+                color: white;
+                border: 1px solid #555555;
+                padding: 3px 8px;
+                font-size: 9pt;
+            }
+            QComboBox:hover {
+                background-color: #505050;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 20px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 6px solid white;
+                margin-right: 6px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #404040;
+                color: white;
+                selection-background-color: #505050;
+                border: 1px solid #555555;
+            }
+        """)
+        local_web_scale_row.addWidget(self.local_website_scale_combo)
+        local_web_layout.addLayout(local_web_scale_row)
 
         self.local_website_link = QLabel()
         self.local_website_link.setTextFormat(Qt.RichText)
@@ -1383,6 +1430,7 @@ class SettingsDialog(QDialog):
             self.show_recent_lap_flash_cb.setChecked(defaults.show_recent_lap_flash)
             self.local_website_enabled_cb.setChecked(defaults.local_website_enabled)
             self.local_website_port_spin.setValue(defaults.local_website_port)
+            self.local_website_scale_combo.setCurrentText(defaults.local_website_scale)
             self.show_footer_cb.setChecked(defaults.show_footer)
             self.broadcast_header_cb.setChecked(defaults.show_broadcast_header)
             self.broadcast_roll_enabled_cb.setChecked(defaults.broadcast_roll_enabled)
@@ -1444,7 +1492,6 @@ class SettingsDialog(QDialog):
         try:
             previous_local_website_enabled = self.parent_overlay.settings.local_website_enabled
             previous_local_website_port = self.parent_overlay.settings.local_website_port
-
             self.parent_overlay.settings.opacity = self.opacity_slider.value() / 20.0
             self.parent_overlay.settings.refresh_rate = self.refresh_slider.value() / 4.0
             self.parent_overlay.settings.hide_headers = self.hide_headers_cb.isChecked()
@@ -1453,6 +1500,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_recent_lap_flash = self.show_recent_lap_flash_cb.isChecked()
             self.parent_overlay.settings.local_website_enabled = self.local_website_enabled_cb.isChecked()
             self.parent_overlay.settings.local_website_port = self.local_website_port_spin.value()
+            self.parent_overlay.settings.local_website_scale = self.local_website_scale_combo.currentText()
             self.parent_overlay.settings.show_footer = self.show_footer_cb.isChecked()
             self.parent_overlay.settings.show_broadcast_header = self.broadcast_header_cb.isChecked()
             self.parent_overlay.settings.broadcast_roll_enabled = self.broadcast_roll_enabled_cb.isChecked()
