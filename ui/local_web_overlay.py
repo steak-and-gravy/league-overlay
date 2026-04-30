@@ -238,7 +238,7 @@ def _web_style_context(driver: DriverState, settings: Any, row_index: int) -> Di
             row_style["background"] = _bg_color("#000000", opacity)
             row_style["border"] = f"1px solid {division_color}"
     if style_name == "Default" and driver.is_spectated and not driver.is_player:
-        row_style["border"] = "2px solid yellow"
+        row_style["border"] = "3px solid yellow"
 
     return {
         "styleName": style_name,

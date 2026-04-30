@@ -321,6 +321,29 @@ def test_build_local_web_snapshot_alternate_highlight_rows_get_white_wrapper():
     assert snapshot["drivers"][0]["rowStyle"]["border"] == "2px solid #FFFFFF"
 
 
+def test_build_local_web_snapshot_default_spectated_driver_gets_thicker_yellow_wrapper():
+    settings = AppSettings(row_color_style="Default")
+    driver = DriverState(
+        car_idx=1,
+        driver_info={"UserName": "Selected Driver", "CarNumber": "11"},
+        position=1,
+        division_position=1,
+        division_color="#45B3E0",
+        is_spectated=True,
+    )
+    overlay = SimpleNamespace(
+        settings=settings,
+        displayed_data=[driver],
+        _last_status_text="Race - Lap 4",
+        _last_status_color="green",
+        _last_footer_data={},
+    )
+
+    snapshot = build_local_web_snapshot(overlay)
+
+    assert snapshot["drivers"][0]["rowStyle"]["border"] == "3px solid yellow"
+
+
 def test_build_local_web_snapshot_gap_columns_apply_pit_tow_text_overrides():
     settings = AppSettings(
         show_gap=True,

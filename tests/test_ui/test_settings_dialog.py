@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget, QStyleOptionViewItem
 
+from config.constants import UI_DIMENSIONS
 from config.official_leagues import OfficialLeague
 from config.settings import AppSettings
 from ui.settings_dialog import SettingsDialog, ColumnListItemDelegate, ALWAYS_VISIBLE_ROLE
@@ -191,6 +192,8 @@ def test_apply_settings_updates_local_website_controls(qapp):
     with patch("ui.settings_dialog.get_local_network_url", return_value="http://192.168.1.211:8765/"):
         overlay, dialog = _build_dialog()
 
+        assert dialog.height() == UI_DIMENSIONS.SETTINGS_DIALOG_HEIGHT
+        assert UI_DIMENSIONS.SETTINGS_DIALOG_HEIGHT >= 860
         assert dialog.local_website_section_title.text() == "Local Website"
         assert dialog.local_website_enabled_cb.text() == "Enable local website"
         assert dialog.local_website_scale_combo.currentText() == "Large"
