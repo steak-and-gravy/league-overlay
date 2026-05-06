@@ -395,6 +395,7 @@ class TestValidateAndCoerce:
             'height': 600,
             'opacity': 0.75,
             'refresh_rate': 1.5,
+            'highlight_player_border': True,
             'hide_headers': True,
             'pit_stop_indicator': False,
             'bold_drivers': True,
@@ -415,6 +416,7 @@ class TestValidateAndCoerce:
         assert result['width'] == 500
         assert result['opacity'] == 0.75
         assert result['font_size'] == 'Slim Large'
+        assert result['highlight_player_border'] is True
         assert result['local_website_enabled'] is True
         assert result['local_website_port'] == 8766
 
@@ -549,6 +551,13 @@ class TestNewDisplaySettings:
         result = validator.validate_and_coerce(data)
         assert result['show_recent_lap_flash'] is True
 
+    def test_highlight_player_border_defaults_false(self):
+        """Test highlight_player_border defaults to False."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['highlight_player_border'] is False
+
     def test_show_last_lap_true(self):
         """Test show_last_lap can be set to True."""
         validator = SettingsValidator()
@@ -569,6 +578,13 @@ class TestNewDisplaySettings:
         data = {'show_recent_lap_flash': False}
         result = validator.validate_and_coerce(data)
         assert result['show_recent_lap_flash'] is False
+
+    def test_highlight_player_border_true(self):
+        """Test highlight_player_border can be enabled."""
+        validator = SettingsValidator()
+        data = {'highlight_player_border': True}
+        result = validator.validate_and_coerce(data)
+        assert result['highlight_player_border'] is True
 
     def test_show_last_lap_string_coercion(self):
         """Test show_last_lap string coercion."""
@@ -631,6 +647,13 @@ class TestNewDisplaySettings:
         data = {'show_recent_lap_flash': 'maybe'}
         result = validator.validate_and_coerce(data)
         assert result['show_recent_lap_flash'] is True
+
+    def test_highlight_player_border_invalid_returns_default(self):
+        """Test invalid highlight_player_border value returns default."""
+        validator = SettingsValidator()
+        data = {'highlight_player_border': 'maybe'}
+        result = validator.validate_and_coerce(data)
+        assert result['highlight_player_border'] is False
 
     def test_complete_settings_with_display_columns(self):
         """Test complete settings including new display columns."""
@@ -792,11 +815,11 @@ class TestPerformanceIndicatorColors:
         assert result['faster_color'] == "#00FF00"
 
     def test_slower_color_default(self):
-        """Test slower_color defaults to bright red (#FF0033)."""
+        """Test slower_color defaults to bright red (#FF0100)."""
         validator = SettingsValidator()
         data = {}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF0033"
+        assert result['slower_color'] == "#FF0100"
 
     def test_faster_color_valid_hex(self):
         """Test faster_color accepts valid hex color."""
@@ -824,7 +847,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': 'invalid'}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF0033"
+        assert result['slower_color'] == "#FF0100"
 
     def test_faster_color_missing_hash_returns_default(self):
         """Test faster_color without # returns default."""
@@ -838,7 +861,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': '#FF00'}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF0033"
+        assert result['slower_color'] == "#FF0100"
 
     def test_faster_color_invalid_type_returns_default(self):
         """Test faster_color with invalid type returns default."""
@@ -852,7 +875,7 @@ class TestPerformanceIndicatorColors:
         validator = SettingsValidator()
         data = {'slower_color': None}
         result = validator.validate_and_coerce(data)
-        assert result['slower_color'] == "#FF0033"
+        assert result['slower_color'] == "#FF0100"
 
     def test_both_colors_custom(self):
         """Test both performance colors can be customized together."""

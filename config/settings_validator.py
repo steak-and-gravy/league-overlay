@@ -136,6 +136,11 @@ class SettingsValidator:
         )
 
         # Boolean fields
+        validated['highlight_player_border'] = self.coerce_bool(
+            data.get('highlight_player_border'),
+            default=self.defaults['highlight_player_border'],
+            field_name='highlight_player_border'
+        )
         validated['hide_headers'] = self.coerce_bool(
             data.get('hide_headers'),
             default=self.defaults['hide_headers'],

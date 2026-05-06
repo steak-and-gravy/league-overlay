@@ -27,6 +27,7 @@ class AppSettings:
     font_size: str = "Slim Large"
     row_color_style: str = "Default"
     highlight: float = 0.25
+    highlight_player_border: bool = False
 
     # Behavior
     refresh_rate: float = 1.0
@@ -58,7 +59,7 @@ class AppSettings:
 
     # Performance indicator colors
     faster_color: str = "#00FF00"  # Green - for faster lap times and positions gained
-    slower_color: str = "#FF0033"  # Bright red - for slower lap times and positions lost
+    slower_color: str = "#FF0100"  # Bright red - for slower lap times and positions lost
 
     # Configuration files
     league_config: Optional[str] = None
@@ -178,6 +179,7 @@ class SettingsManager:
                 'opacity': settings.opacity,
                 'refresh_rate': settings.refresh_rate,
                 'highlight': settings.highlight,
+                'highlight_player_border': settings.highlight_player_border,
                 'hide_headers': settings.hide_headers,
                 'pit_stop_indicator': settings.pit_stop_indicator,
                 'bold_drivers': settings.bold_drivers,
@@ -245,6 +247,7 @@ class SettingsManager:
             'opacity': settings.opacity,
             'refresh_rate': settings.refresh_rate,
             'highlight': settings.highlight,
+            'highlight_player_border': settings.highlight_player_border,
             'hide_headers': settings.hide_headers,
             'pit_stop_indicator': settings.pit_stop_indicator,
             'bold_drivers': settings.bold_drivers,

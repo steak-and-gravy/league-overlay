@@ -238,7 +238,9 @@ def _web_style_context(driver: DriverState, settings: Any, row_index: int) -> Di
             row_style["background"] = _bg_color("#000000", opacity)
             row_style["border"] = f"1px solid {division_color}"
     if style_name == "Default" and driver.is_spectated and not driver.is_player:
-        row_style["border"] = "3px solid yellow"
+        row_style["border"] = "4px solid yellow"
+    if driver.is_player and getattr(settings, "highlight_player_border", False):
+        row_style["border"] = "4px solid yellow"
 
     return {
         "styleName": style_name,
@@ -540,7 +542,7 @@ def _empty_snapshot() -> Dict[str, Any]:
         "backgroundColor": "rgba(0, 0, 0, 0.8)",
         "headerColor": "rgba(51, 51, 51, 0.8)",
         "fasterColor": "#00FF00",
-        "slowerColor": "#FF0033",
+        "slowerColor": "#FF0100",
         "columns": [],
         "drivers": [],
         "footer": {},
@@ -824,8 +826,8 @@ def _render_html() -> str:
       const presets = {{
         'Compact': sizingFromDataSize(14),
         'Medium': sizingFromDataSize(18),
-        'Large': sizingFromDataSize(21),
-        'Extra Large': sizingFromDataSize(24),
+        'Large': sizingFromDataSize(24),
+        'Extra Large': sizingFromDataSize(26),
       }};
       return presets[scaleName] || presets['Large'];
     }}

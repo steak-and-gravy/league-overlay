@@ -3,10 +3,14 @@
 from types import SimpleNamespace
 
 from core.driver_state import DriverState
-from ui.styles import DefaultColorStyle
+from ui.styles import AlternateColorStyle, DarkColorStyle, DefaultColorStyle, OutlineColorStyle
 
 
-def _make_parent(row_color_style: str = "Default", opacity: float = 0.8):
+def _make_parent(
+    row_color_style: str = "Default",
+    opacity: float = 0.8,
+    highlight_player_border: bool = False,
+):
     """Create a minimal parent object for style strategy tests."""
     highlight = 0.25
 
@@ -18,6 +22,7 @@ def _make_parent(row_color_style: str = "Default", opacity: float = 0.8):
             slower_color="#FF0000",
             pit_stop_indicator=True,
             opacity=opacity,
+            highlight_player_border=highlight_player_border,
         ),
         get_bg_color=lambda color: color,
         blend_color_with_black=lambda color, amount: "#112233",
@@ -64,6 +69,33 @@ def test_default_style_does_not_add_yellow_outline_for_player_driver(qapp):
     style_sheet = styling["row_widget"].styleSheet()
     assert "background: gradient(#00AAFF);" in style_sheet
     assert "border: 2px solid yellow;" not in style_sheet
+
+
+def test_default_style_adds_yellow_outline_for_player_when_enabled(qapp):
+    """The optional player border uses the same yellow outline as spectated rows."""
+    style = DefaultColorStyle()
+    parent = _make_parent(highlight_player_border=True)
+    driver = _make_driver(is_player=True)
+
+    styling = style.get_styling(driver, parent)
+
+    style_sheet = styling["row_widget"].styleSheet()
+    assert "background: gradient(#00AAFF);" in style_sheet
+    assert "border: 2px solid yellow;" in style_sheet
+
+
+def test_non_default_styles_add_yellow_outline_for_player_when_enabled(qapp):
+    """The optional player border is visible for all row color styles."""
+    parent = _make_parent(highlight_player_border=True)
+    driver = _make_driver(is_player=True)
+
+    dark_styling = DarkColorStyle().get_styling(driver, parent)
+    outline_styling = OutlineColorStyle().get_styling(driver, parent)
+    alternate_styling = AlternateColorStyle().get_styling(driver, parent)
+
+    assert "border: 2px solid yellow;" in dark_styling["row_widget"].styleSheet()
+    assert "border: 2px solid yellow;" in outline_styling["row_widget"].styleSheet()
+    assert "background-color: yellow;" in alternate_styling["container_widget"].styleSheet()
 
 
 def test_default_style_does_not_add_yellow_outline_when_player_is_also_spectated(qapp):

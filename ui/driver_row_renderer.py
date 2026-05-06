@@ -75,6 +75,7 @@ class DriverRowRenderer:
         "CAD": "cadillac.png",
         "CHE": "chevrolet.png",
         "CHV": "chevrolet.png",
+        "C8R": "chevrolet.png",
         "DAL": "dallara.png",
         "FER": "ferrari.png",
         "FOR": "ford.png",

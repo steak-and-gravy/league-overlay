@@ -79,12 +79,40 @@ class RaceStateTracker:
             # Store final position in snapshot and mark as finished
             if car_idx in self.driver_snapshots:
                 driver_state = self.driver_snapshots[car_idx]
-                driver_state.position = official_position
+                driver_state.position = self.constrain_disconnected_tow_position(
+                    driver_state,
+                    official_position
+                )
                 driver_state.is_finished = True
 
     def is_driver_finished(self, car_idx: int) -> bool:
         """Check if a driver has finished their race."""
         return car_idx in self.finished_drivers
+
+    @staticmethod
+    def is_disconnected_tow_state(driver_state: DriverState) -> bool:
+        """Return True for disconnected cars that were still shown as towing."""
+        return (
+            driver_state.is_disconnected
+            and (driver_state.is_towing or driver_state.pit_lap == "TOW")
+        )
+
+    def constrain_disconnected_tow_position(
+        self,
+        driver_state: DriverState,
+        candidate_position: int
+    ) -> int:
+        """Prevent disconnected TOW cars from improving during result reconciliation."""
+        if not self.is_disconnected_tow_state(driver_state):
+            return candidate_position
+
+        last_position = driver_state.position
+        if last_position <= 0:
+            return candidate_position
+        if candidate_position <= 0:
+            return last_position
+
+        return max(last_position, candidate_position)
 
     def get_finish_lap(self, car_idx: int) -> Optional[int]:
         """Get the lap number a driver finished on.
@@ -439,13 +467,21 @@ class RaceStateTracker:
             if driver_state and car_idx not in active_car_indices:
                 # This driver disconnected or retired
                 if self.ir['SessionState'] < 5:
-                    # Still racing - mark as DC, position unknown
-                    driver_state.position = -1
-                    # Mark as disconnected
+                    # Still racing - mark as disconnected. Preserve the last positive
+                    # TOW position as a later no-promotion ceiling.
                     driver_state.is_disconnected = True
+                    if not self.is_disconnected_tow_state(driver_state):
+                        driver_state.position = -1
                 else:
-                    # After checkered - get their final position from results, do this every cycle as things can change
-                    driver_state.position = get_position_from_results_fn(session_data, car_idx)
+                    # After checkered - get their final position from results, do this every cycle as things can change.
+                    # Disconnected TOW cars can receive provisional ResultsPositions that would promote them
+                    # ahead of cars that have not finished yet, so only allow same-or-worse movement.
+                    driver_state.is_disconnected = True
+                    official_position = get_position_from_results_fn(session_data, car_idx)
+                    driver_state.position = self.constrain_disconnected_tow_position(
+                        driver_state,
+                        official_position
+                    )
 
                     # After leader has finished, mark ALL disconnected drivers as finished
                     # This ensures they use ResultsPositions and don't participate in gap-filling

@@ -76,6 +76,11 @@ def get_half_effect_bg_color(hex_color: str, opacity: float) -> str:
     return f"rgba({red}, {green}, {blue}, {base_alpha * get_half_effect_opacity(opacity)})"
 
 
+def _highlight_player_border_enabled(driver: 'DriverState', parent: 'LeagueOverlay') -> bool:
+    """Return whether the optional yellow player row border should be shown."""
+    return driver.is_player and getattr(parent.settings, 'highlight_player_border', False)
+
+
 class ColorStyleStrategy(ABC):
     """Abstract base class for driver row color styles."""
 
@@ -121,8 +126,11 @@ class DarkColorStyle(ColorStyleStrategy):
             bg_style = f"background-color: {parent.get_bg_color('#000000')};"
             label_bg = parent.get_bg_color('#000000')
 
+        border_style = "border: 2px solid yellow;" if _highlight_player_border_enabled(driver, parent) else ""
+
         row_widget = QWidget()
-        row_widget.setStyleSheet(bg_style)
+        row_widget.setObjectName("driverRow")
+        row_widget.setStyleSheet(f"#driverRow {{ {bg_style} {border_style} }}")
 
         return {
             'row_widget': row_widget,
@@ -153,7 +161,8 @@ class AlternateColorStyle(ColorStyleStrategy):
 
         if driver.is_player or driver.is_spectated:
             container_widget = QWidget()
-            container_widget.setStyleSheet("background-color: white; padding: 2px;")
+            border_color = "yellow" if _highlight_player_border_enabled(driver, parent) else "white"
+            container_widget.setStyleSheet(f"background-color: {border_color}; padding: 2px;")
             container_layout = QVBoxLayout(container_widget)
             container_layout.setContentsMargins(0, 0, 0, 0)
             container_layout.setSpacing(0)
@@ -208,13 +217,18 @@ class OutlineColorStyle(ColorStyleStrategy):
 
         if driver.is_player or driver.is_spectated:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
-            border_style = ""
+            border_style = (
+                "border: 2px solid yellow;"
+                if _highlight_player_border_enabled(driver, parent)
+                else ""
+            )
         else:
             bg_style = f"background-color: {parent.get_bg_color('#000000')};"
             border_style = f"border: 1px solid {driver.division_color};"
 
         row_widget = QWidget()
-        row_widget.setStyleSheet(f"{bg_style} {border_style}")
+        row_widget.setObjectName("driverRow")
+        row_widget.setStyleSheet(f"#driverRow {{ {bg_style} {border_style} }}")
 
         return {
             'row_widget': row_widget,
@@ -269,7 +283,11 @@ class DefaultColorStyle(ColorStyleStrategy):
             label_bg = parent.get_bg_color(row_bg)
             bg_style = f"background-color: {parent.get_bg_color(row_bg)};"
 
-        border_style = "border: 2px solid yellow;" if driver.is_spectated and not driver.is_player else ""
+        show_yellow_border = (
+            (driver.is_spectated and not driver.is_player)
+            or _highlight_player_border_enabled(driver, parent)
+        )
+        border_style = "border: 2px solid yellow;" if show_yellow_border else ""
 
         row_widget = QWidget()
         row_widget.setObjectName("driverRow")

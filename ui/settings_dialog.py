@@ -750,15 +750,21 @@ class SettingsDialog(QDialog):
         )
         checkbox_row3.addWidget(self.pit_stop_indicator_cb)
 
-        self.bold_drivers_cb = QCheckBox("Bold all driver rows")
-        self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
-        self.bold_drivers_cb.setChecked(self.parent_overlay.settings.bold_drivers)
-        checkbox_row3.addWidget(self.bold_drivers_cb)
+        self.highlight_player_border_cb = QCheckBox("Highlight yourself")
+        self.highlight_player_border_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.highlight_player_border_cb.setChecked(self.parent_overlay.settings.highlight_player_border)
+        self.highlight_player_border_cb.setToolTip("Add the yellow row border to your own driver row.")
+        checkbox_row3.addWidget(self.highlight_player_border_cb)
 
         window_layout.addLayout(checkbox_row3)
 
         checkbox_row4 = QHBoxLayout()
         checkbox_row4.setSpacing(10)
+
+        self.bold_drivers_cb = QCheckBox("Bold all driver rows")
+        self.bold_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.bold_drivers_cb.setChecked(self.parent_overlay.settings.bold_drivers)
+        checkbox_row4.addWidget(self.bold_drivers_cb)
 
         self.show_recent_lap_flash_cb = QCheckBox("Recent lap update")
         self.show_recent_lap_flash_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
@@ -767,7 +773,6 @@ class SettingsDialog(QDialog):
             "Temporarily show the most recent completed lap inside the driver-name cell."
         )
         checkbox_row4.addWidget(self.show_recent_lap_flash_cb)
-        checkbox_row4.addStretch()
 
         window_layout.addLayout(checkbox_row4)
 
@@ -1426,6 +1431,7 @@ class SettingsDialog(QDialog):
             self.refresh_slider.setValue(int(round(defaults.refresh_rate * 4)))
             self.hide_headers_cb.setChecked(defaults.hide_headers)
             self.pit_stop_indicator_cb.setChecked(defaults.pit_stop_indicator)
+            self.highlight_player_border_cb.setChecked(defaults.highlight_player_border)
             self.bold_drivers_cb.setChecked(defaults.bold_drivers)
             self.show_recent_lap_flash_cb.setChecked(defaults.show_recent_lap_flash)
             self.local_website_enabled_cb.setChecked(defaults.local_website_enabled)
@@ -1496,6 +1502,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.refresh_rate = self.refresh_slider.value() / 4.0
             self.parent_overlay.settings.hide_headers = self.hide_headers_cb.isChecked()
             self.parent_overlay.settings.pit_stop_indicator = self.pit_stop_indicator_cb.isChecked()
+            self.parent_overlay.settings.highlight_player_border = self.highlight_player_border_cb.isChecked()
             self.parent_overlay.settings.bold_drivers = self.bold_drivers_cb.isChecked()
             self.parent_overlay.settings.show_recent_lap_flash = self.show_recent_lap_flash_cb.isChecked()
             self.parent_overlay.settings.local_website_enabled = self.local_website_enabled_cb.isChecked()

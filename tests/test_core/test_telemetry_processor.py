@@ -3399,6 +3399,137 @@ class TestFinishingGapCalculation:
         assert driver_state.is_towing is True
         assert driver_state.pit_lap == "TOW"
 
+    def test_disconnected_tow_does_not_promote_from_provisional_results(self, processor, mock_ir):
+        """A disconnected TOW car may fall in the live order, but must not jump up from provisional results."""
+        processor.position_calculator.player_car_idx = 99  # Not this driver
+
+        car_idx = 2
+        snapshot = DriverState(
+            car_idx=car_idx,
+            driver_info={
+                'UserID': 102,
+                'UserName': 'Driver C',
+                'CarIdx': car_idx,
+                'CarNumber': '2',
+            },
+            current_lap=10,
+            lap_pct=0.30,
+            position=35,
+            is_disconnected=False,
+            pit_lap="TOW",
+            is_towing=True,
+        )
+        processor.race_state_tracker.update_snapshot(car_idx, snapshot)
+
+        mock_ir.__getitem__.side_effect = lambda key: {
+            'SessionState': 4,
+            'RaceLaps': 0,
+        }[key]
+
+        active_drivers = []
+        processor.race_state_tracker.handle_disconnected_drivers(
+            active_drivers,
+            {'results_lookup': {}, 'current_session': {}},
+            processor.get_position_from_results
+        )
+
+        restored_driver = next(driver for driver in active_drivers if driver['car_idx'] == car_idx)
+
+        assert snapshot.is_disconnected is True
+        assert snapshot.position == 35
+        assert restored_driver['position'] == 35
+
+        processor.race_state_tracker.set_checkered_flag()
+        processor.race_state_tracker.set_leader_finished_flag()
+
+        mock_ir.__getitem__.side_effect = lambda key: {
+            'SessionState': 5,
+            'RaceLaps': 0,
+        }[key]
+
+        session_data = {
+            'results_lookup': {
+                car_idx: {'CarIdx': car_idx, 'ClassPosition': 19},
+            },
+            'current_session': {},
+        }
+        active_drivers = []
+        processor.race_state_tracker.handle_disconnected_drivers(
+            active_drivers,
+            session_data,
+            processor.get_position_from_results
+        )
+
+        restored_driver = next(driver for driver in active_drivers if driver['car_idx'] == car_idx)
+
+        assert processor.race_state_tracker.is_driver_finished(car_idx)
+        assert snapshot.is_disconnected is True
+        assert snapshot.position == 35
+        assert restored_driver['position'] == 35
+
+        session_data['results_lookup'][car_idx]['ClassPosition'] = 35
+        active_drivers = []
+
+        processor.race_state_tracker.handle_disconnected_drivers(
+            active_drivers,
+            session_data,
+            processor.get_position_from_results
+        )
+
+        restored_driver = next(driver for driver in active_drivers if driver['car_idx'] == car_idx)
+
+        assert snapshot.position == 36
+        assert restored_driver['position'] == 36
+
+    def test_disconnected_tow_display_position_remembers_worst_position(self, processor):
+        """The live displayed position is the ceiling for later TOW result reconciliation."""
+        car_idx = 2
+        snapshot = DriverState(
+            car_idx=car_idx,
+            driver_info={'UserID': 102, 'UserName': 'Driver C', 'CarIdx': car_idx},
+            position=-1,
+            is_disconnected=True,
+            pit_lap="TOW",
+            is_towing=True,
+        )
+        processor.race_state_tracker.update_snapshot(car_idx, snapshot)
+
+        processor._remember_disconnected_tow_display_position({
+            'car_idx': car_idx,
+            'position': 35,
+            'disconnected': True,
+        })
+        processor._remember_disconnected_tow_display_position({
+            'car_idx': car_idx,
+            'position': 20,
+            'disconnected': True,
+        })
+        processor._remember_disconnected_tow_display_position({
+            'car_idx': car_idx,
+            'position': 36,
+            'disconnected': True,
+        })
+
+        assert snapshot.position == 36
+
+    def test_disconnected_tow_finish_mark_does_not_promote_position(self, processor):
+        """Lap-increment finish detection also cannot move a disconnected TOW row upward."""
+        car_idx = 2
+        snapshot = DriverState(
+            car_idx=car_idx,
+            driver_info={'UserID': 102, 'UserName': 'Driver C', 'CarIdx': car_idx},
+            position=35,
+            is_disconnected=True,
+            pit_lap="TOW",
+            is_towing=True,
+        )
+        processor.race_state_tracker.update_snapshot(car_idx, snapshot)
+
+        processor.race_state_tracker.mark_driver_finished(car_idx, official_position=20)
+
+        assert processor.race_state_tracker.is_driver_finished(car_idx)
+        assert snapshot.position == 35
+
     def test_pending_mandatory_stop_shows_car_number_outline_in_race(self, processor):
         """Race entries keep the outline visible until a valid stop after lap 1 is completed."""
         car_idx = 3

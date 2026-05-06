@@ -135,6 +135,22 @@ def test_apply_settings_updates_recent_lap_flash_checkbox(qapp):
     overlay.deleteLater()
 
 
+def test_apply_settings_updates_highlight_player_border_checkbox(qapp):
+    """Applying the dialog should persist the player border toggle."""
+    overlay, dialog = _build_dialog()
+
+    assert dialog.highlight_player_border_cb.text() == "Highlight yourself"
+    assert dialog.highlight_player_border_cb.isChecked() is False
+    dialog.highlight_player_border_cb.setChecked(True)
+    dialog.apply_settings()
+
+    assert overlay.settings.highlight_player_border is True
+    assert overlay.signals.refresh_colors.emit.called
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
 def test_apply_settings_preserves_existing_quarter_step_refresh_rate(qapp):
     """Applying without changing refresh should not rewrite legacy quarter-step values."""
     overlay, dialog = _build_dialog()

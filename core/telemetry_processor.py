@@ -1250,6 +1250,28 @@ class TelemetryProcessor:
 
                 self.race_state_tracker.update_snapshot(car_idx, driver_state)
 
+    def _remember_disconnected_tow_display_position(self, driver: Dict) -> None:
+        """Record the worst displayed position for disconnected TOW rows."""
+        if not driver.get('disconnected', False):
+            return
+
+        car_idx = driver.get('car_idx')
+        if car_idx is None:
+            return
+
+        snapshot = self.race_state_tracker.get_snapshot(car_idx)
+        if snapshot is None or not self.race_state_tracker.is_disconnected_tow_state(snapshot):
+            return
+
+        position = driver.get('position', 0)
+        if position <= 0:
+            return
+
+        if snapshot.position > 0:
+            snapshot.position = max(snapshot.position, position)
+        else:
+            snapshot.position = position
+
     # ═══════════════════════════════════════════════════════════════════════════
     # DELTA CALCULATION
     # ═══════════════════════════════════════════════════════════════════════════
@@ -2145,7 +2167,10 @@ class TelemetryProcessor:
                             if snapshot:
                                 official_position = self.get_position_from_results(session_data, car_idx)
                                 if official_position > 0:
-                                    snapshot.position = official_position
+                                    snapshot.position = self.race_state_tracker.constrain_disconnected_tow_position(
+                                        snapshot,
+                                        official_position
+                                    )
 
                     # Separate finished and racing drivers to prevent position contamination
                     finished_drivers = [d for d in active_drivers if self.race_state_tracker.is_driver_finished(d['car_idx'])]
@@ -2196,6 +2221,8 @@ class TelemetryProcessor:
                             # Fallback: if we run out of available positions (shouldn't happen)
                             # assign next number after highest
                             driver['position'] = total_drivers + (i - len(available_positions)) + 1
+
+                        self._remember_disconnected_tow_display_position(driver)
 
                     # Merge them back: finished drivers first (in order), then racing drivers
                     active_drivers = finished_drivers + racing_drivers

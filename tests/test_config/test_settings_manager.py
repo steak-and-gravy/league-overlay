@@ -35,6 +35,7 @@ class TestAppSettingsDefaults:
         assert settings.opacity == 0.8
         assert settings.font_size == "Slim Large"
         assert settings.row_color_style == "Default"
+        assert settings.highlight_player_border is False
 
     def test_default_behavior(self):
         """Test default behavior settings."""
@@ -251,6 +252,7 @@ class TestSaveSettings:
             opacity=0.8,
             font_size='Slim Large',
             row_color_style='Alternate',
+            highlight_player_border=True,
             refresh_rate=1.5,
             hide_headers=True,
             pit_stop_indicator=False,
@@ -270,6 +272,7 @@ class TestSaveSettings:
             assert data['x'] == 200
             assert data['opacity'] == 0.8
             assert data['font_size'] == 'Slim Large'
+            assert data['highlight_player_border'] is True
             assert data['pit_stop_indicator'] is False
             assert data['show_recent_lap_flash'] is False
             assert data['local_website_enabled'] is True
@@ -325,6 +328,7 @@ class TestSaveSettings:
             font_size='Large',
             hide_headers=True,
             show_recent_lap_flash=False,
+            highlight_player_border=True,
             local_website_enabled=True,
             local_website_port=8766,
             local_website_scale="Compact",
@@ -339,6 +343,7 @@ class TestSaveSettings:
         assert loaded.font_size == original.font_size
         assert loaded.hide_headers == original.hide_headers
         assert loaded.show_recent_lap_flash == original.show_recent_lap_flash
+        assert loaded.highlight_player_border == original.highlight_player_border
         assert loaded.local_website_enabled == original.local_website_enabled
         assert loaded.local_website_port == original.local_website_port
         assert loaded.local_website_scale == original.local_website_scale

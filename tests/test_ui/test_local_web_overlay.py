@@ -68,8 +68,8 @@ def test_local_web_html_uses_responsive_browser_source_sizing():
     assert "function autoSizing" not in html
     assert "presets[scaleName] || presets['Large']" in html
     assert "'Medium': sizingFromDataSize(18)" in html
-    assert "'Large': sizingFromDataSize(21)" in html
-    assert "'Extra Large': sizingFromDataSize(24)" in html
+    assert "'Large': sizingFromDataSize(24)" in html
+    assert "'Extra Large': sizingFromDataSize(26)" in html
     assert "font-size: var(--web-data-font-size)" in html
     assert "width: var(--web-narrow-col-width)" in html
 
@@ -249,6 +249,54 @@ def test_build_local_web_snapshot_default_player_uses_player_highlight():
         "linear-gradient(90deg, #112c38"
     )
     assert driver_cells["driver_name"]["style"]["backgroundColor"] == "#112c38"
+    assert snapshot["drivers"][0]["rowStyle"]["border"] == ""
+
+
+def test_build_local_web_snapshot_default_player_gets_yellow_wrapper_when_enabled():
+    settings = AppSettings(highlight_player_border=True)
+    driver = DriverState(
+        car_idx=1,
+        driver_info={"UserName": "Player Driver", "CarNumber": "11"},
+        position=1,
+        division_position=1,
+        division_color="#45B3E0",
+        is_player=True,
+    )
+    overlay = SimpleNamespace(
+        settings=settings,
+        displayed_data=[driver],
+        _last_status_text="Race - Lap 4",
+        _last_status_color="green",
+        _last_footer_data={},
+    )
+
+    snapshot = build_local_web_snapshot(overlay)
+
+    assert snapshot["drivers"][0]["rowStyle"]["border"] == "4px solid yellow"
+
+
+def test_build_local_web_snapshot_non_default_player_gets_yellow_wrapper_when_enabled():
+    driver = DriverState(
+        car_idx=1,
+        driver_info={"UserName": "Player Driver", "CarNumber": "11"},
+        position=1,
+        division_position=1,
+        division_color="#45B3E0",
+        is_player=True,
+    )
+
+    for style_name in ("Dark", "Alternate", "Outline"):
+        overlay = SimpleNamespace(
+            settings=AppSettings(row_color_style=style_name, highlight_player_border=True),
+            displayed_data=[driver],
+            _last_status_text="Race - Lap 4",
+            _last_status_color="green",
+            _last_footer_data={},
+        )
+
+        snapshot = build_local_web_snapshot(overlay)
+
+        assert snapshot["drivers"][0]["rowStyle"]["border"] == "4px solid yellow"
 
 
 def test_build_local_web_snapshot_reflects_other_row_color_styles():
@@ -341,7 +389,7 @@ def test_build_local_web_snapshot_default_spectated_driver_gets_thicker_yellow_w
 
     snapshot = build_local_web_snapshot(overlay)
 
-    assert snapshot["drivers"][0]["rowStyle"]["border"] == "3px solid yellow"
+    assert snapshot["drivers"][0]["rowStyle"]["border"] == "4px solid yellow"
 
 
 def test_build_local_web_snapshot_gap_columns_apply_pit_tow_text_overrides():
