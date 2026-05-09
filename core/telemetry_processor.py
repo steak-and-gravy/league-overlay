@@ -743,6 +743,11 @@ class TelemetryProcessor:
                     self.tow_end_time[car_idx] = 0.0
                     if car_idx in self.tow_frozen_track_position:
                         del self.tow_frozen_track_position[car_idx]
+                    self._sync_disconnected_tow_snapshot_after_tow_end(
+                        car_idx,
+                        current_track_position,
+                        current_invalid
+                    )
 
             # Detect tow-like teleport into pit stall.
             entered_stall = (prev_surface is not None
@@ -879,6 +884,40 @@ class TelemetryProcessor:
             )
 
         return driver.get('total_track_position', -1)
+
+    def _sync_disconnected_tow_snapshot_after_tow_end(
+        self,
+        car_idx: int,
+        current_track_position: float,
+        current_invalid: bool
+    ) -> None:
+        """Move a disconnected tow snapshot to its best-known pit position."""
+        snapshot = self.race_state_tracker.get_snapshot(car_idx)
+        if snapshot is None or not snapshot.is_disconnected:
+            return
+
+        if not snapshot.is_towing and snapshot.pit_lap != "TOW":
+            return
+
+        release_position = None
+        last_track_position = self.tow_last_track_position.get(car_idx)
+        if last_track_position is not None and last_track_position >= 0:
+            release_position = last_track_position
+        else:
+            last_valid_position = self.tow_last_valid_track_position.get(car_idx)
+            if last_valid_position is not None and last_valid_position >= 0:
+                release_position = last_valid_position
+            elif not current_invalid and current_track_position >= 0:
+                release_position = current_track_position
+
+        if release_position is not None:
+            snapshot.current_lap = int(release_position)
+            snapshot.lap_pct = release_position - snapshot.current_lap
+            if snapshot.lap_pct < 0 or snapshot.lap_pct > 1:
+                snapshot.lap_pct = 0.0
+
+        snapshot.is_towing = False
+        snapshot.pit_lap = "PIT"
 
     def get_tow_aware_overall_leader_idx(self) -> Optional[int]:
         """Find overall race leader using tow-frozen positions when towing.
