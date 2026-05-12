@@ -158,6 +158,9 @@ class DriverState:
     is_towing: bool = False
     """True if driver appears to be in tow (teleported to pits)"""
 
+    preserve_disconnected_position: bool = False
+    """True when a disconnected row must not improve from live re-ranking"""
+
     show_car_number_outline: bool = False
     """True when the car-number cell should render the division-color outline"""
 

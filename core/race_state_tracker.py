@@ -94,7 +94,11 @@ class RaceStateTracker:
         """Return True for disconnected cars that were still shown as towing."""
         return (
             driver_state.is_disconnected
-            and (driver_state.is_towing or driver_state.pit_lap == "TOW")
+            and (
+                driver_state.is_towing
+                or driver_state.pit_lap == "TOW"
+                or driver_state.preserve_disconnected_position
+            )
         )
 
     def constrain_disconnected_tow_position(

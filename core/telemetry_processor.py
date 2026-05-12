@@ -102,6 +102,7 @@ class TelemetryProcessor:
         self.tow_end_time: Dict[int, float] = {}
         self.tow_frozen_track_position: Dict[int, float] = {}
         self.tow_last_live_track_position: Dict[int, float] = {}
+        self.tow_last_wait_log_time: Dict[int, float] = {}
 
     def reset_fields(self) -> None:
         """Clear all session-specific tracking data.
@@ -138,6 +139,7 @@ class TelemetryProcessor:
         self.tow_end_time.clear()
         self.tow_frozen_track_position.clear()
         self.tow_last_live_track_position.clear()
+        self.tow_last_wait_log_time.clear()
 
         # Reset prepopulation retry tracking
         self.prepopulate_retry_count = 0
@@ -558,6 +560,30 @@ class TelemetryProcessor:
         except (KeyError, TypeError, IndexError) as e:
             logger.debug(f"Error updating pit tracking: {e}")
 
+    @staticmethod
+    def _estimate_tow_duration_to_pit(
+        tow_start_position: Optional[float],
+        current_track_position: float,
+        track_length_m: float
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """Estimate tow duration from an on-track position to the current pit position."""
+        if tow_start_position is None or tow_start_position < 0:
+            return None, None
+        if current_track_position < 0 or track_length_m <= 0:
+            return None, None
+
+        if current_track_position < tow_start_position:
+            # Must continue around track to pit.
+            delta_pos = 1.0 - tow_start_position + current_track_position
+        else:
+            delta_pos = current_track_position - tow_start_position
+
+        tow_length_m = delta_pos * track_length_m
+        tow_speed_ms = 30.0
+        tow_time_fixed_s = 50.0
+        estimated_tow_seconds = (tow_length_m / tow_speed_ms) + tow_time_fixed_s
+        return estimated_tow_seconds, tow_length_m
+
     def _update_tow_tracking(self) -> None:
         """Update tow tracking using pit-stall transitions and tow end timers.
 
@@ -569,11 +595,20 @@ class TelemetryProcessor:
         TOW_VALID_SNAPSHOT_MAX_AGE_SECONDS = 20.0
 
         try:
+            now = float(self.ir['SessionTime'])
+            has_session_time = True
+        except (KeyError, TypeError, ValueError):
+            now = time.monotonic()
+            has_session_time = False
+
+        try:
             car_idx_track_surface = self.ir['CarIdxTrackSurface']
             car_idx_on_pit_road = self.ir['CarIdxOnPitRoad']
             car_idx_lap = self.ir['CarIdxLap']
             car_idx_lap_pct = self.ir['CarIdxLapDistPct']
         except (KeyError, TypeError):
+            if has_session_time:
+                self._sync_disconnected_tow_snapshots_by_timer(now)
             return
 
         try:
@@ -607,13 +642,11 @@ class TelemetryProcessor:
 
         if (not car_idx_track_surface or not car_idx_on_pit_road
                 or not car_idx_lap or not car_idx_lap_pct):
+            if has_session_time:
+                self._sync_disconnected_tow_snapshots_by_timer(now)
             return
 
         player_car_idx = self.position_calculator.player_car_idx
-        try:
-            now = float(self.ir['SessionTime'])
-        except (KeyError, TypeError, ValueError):
-            now = time.monotonic()
 
         max_len = min(
             len(car_idx_track_surface),
@@ -661,7 +694,8 @@ class TelemetryProcessor:
                         else:
                             frozen_position = current_track_position
                     self.tow_frozen_track_position[car_idx] = frozen_position
-                self.tow_end_time[car_idx] = now + player_tow_time
+                if has_session_time:
+                    self.tow_end_time[car_idx] = now + player_tow_time
 
             # A car that was previously restored as disconnected can reappear
             # directly in pit lane or the stall. If the car was on track before
@@ -693,23 +727,51 @@ class TelemetryProcessor:
                 self.tow_tracking[car_idx] = True
                 self.tow_frozen_track_position[car_idx] = snapshot_track_position
                 started_reconnect_tow_this_frame = True
-                # No timer here: keep the freeze until the car begins moving
-                # again or exits the pit/stall, matching the defensive goal of
-                # suppressing reconnect teleports in race ordering.
-                self.tow_end_time[car_idx] = 0.0
-                logger.debug(
+                existing_end_time = self.tow_end_time.get(car_idx, 0.0)
+                timer_source = "existing"
+                estimated_tow_seconds = None
+                tow_length_m = None
+                if has_session_time and existing_end_time > now:
+                    self.tow_end_time[car_idx] = existing_end_time
+                else:
+                    timer_source = "estimated"
+                    estimated_tow_seconds, tow_length_m = self._estimate_tow_duration_to_pit(
+                        snapshot_track_position,
+                        current_track_position,
+                        track_length_m
+                    )
+                    if estimated_tow_seconds is not None and has_session_time:
+                        self.tow_end_time[car_idx] = now + estimated_tow_seconds
+                    else:
+                        timer_source = "missing"
+                        # No estimate available: keep TOW until movement or pit exit clears it.
+                        self.tow_end_time[car_idx] = 0.0
+                logger.info(
                     f"TOW_START reconnect car_idx={car_idx} car_num={car_number} "
                     f"snapshot_track_pos={snapshot_track_position:.4f} "
                     f"current_track_pos={current_track_position:.4f} "
+                    f"existing_end_time={existing_end_time:.1f} "
+                    f"timer_source={timer_source} "
+                    f"tow_length_m={tow_length_m} "
+                    f"estimated_tow_seconds={estimated_tow_seconds} "
+                    f"session_time={now:.1f} "
+                    f"end_time={self.tow_end_time.get(car_idx, 0.0):.1f} "
+                    f"end_time_set={self.tow_end_time.get(car_idx, 0.0) > 0} "
                     f"on_pit={current_on_pit} surface={current_surface} "
-                    f"was_in_pit_before_disconnect={was_in_pit_before_disconnect}"
+                    f"was_in_pit_before_disconnect={was_in_pit_before_disconnect} "
+                    f"has_session_time={has_session_time}"
                 )
 
             # Clear tow state when tow timer expires or car leaves pit road/stall.
             if self.tow_tracking.get(car_idx, False):
                 end_time = self.tow_end_time.get(car_idx, 0.0)
                 player_tow_done = (car_idx == player_car_idx and player_tow_time <= 0)
-                non_player_tow_done = (car_idx != player_car_idx and end_time > 0 and now >= end_time)
+                non_player_tow_done = (
+                    has_session_time
+                    and car_idx != player_car_idx
+                    and end_time > 0
+                    and now >= end_time
+                )
                 moving_forward = False
                 if (not started_reconnect_tow_this_frame
                         and not current_invalid and not prev_invalid and track_length_m > 0):
@@ -794,7 +856,8 @@ class TelemetryProcessor:
 
                 if teleporting_to_pit:
                     self.tow_tracking[car_idx] = True
-                    if car_idx not in self.tow_frozen_track_position:
+                    frozen_position = self.tow_frozen_track_position.get(car_idx)
+                    if frozen_position is None:
                         frozen_position = self.tow_last_live_track_position.get(car_idx)
                         if frozen_position is None:
                             if prev_track_position is not None and prev_track_position >= 0:
@@ -808,29 +871,41 @@ class TelemetryProcessor:
                     # tow_time = tow_length / tow_speed + fixed_offset.
                     estimated_tow_seconds = None
                     tow_length_m = None
-                    if prev_track_position is not None and track_length_m > 0:
-                        if current_track_position < prev_track_position:
-                            # Must continue around track to pit.
-                            delta_pos = 1.0 - prev_track_position + current_track_position
+                    tow_start_position = prev_track_position
+                    if tow_start_position is None or tow_start_position < 0:
+                        if (used_valid_snapshot_fallback
+                                and prev_valid_track_position is not None
+                                and prev_valid_track_position >= 0):
+                            tow_start_position = prev_valid_track_position
                         else:
-                            delta_pos = current_track_position - prev_track_position
+                            tow_start_position = frozen_position
 
-                        tow_length_m = delta_pos * track_length_m
-                        tow_speed_ms = 30.0
-                        tow_time_fixed_s = 50.0
-                        estimated_tow_seconds = (tow_length_m / tow_speed_ms) + tow_time_fixed_s
+                    estimated_tow_seconds, tow_length_m = self._estimate_tow_duration_to_pit(
+                        tow_start_position,
+                        current_track_position,
+                        track_length_m
+                    )
 
-                    if estimated_tow_seconds is not None:
+                    if estimated_tow_seconds is not None and has_session_time:
                         self.tow_end_time[car_idx] = now + estimated_tow_seconds
                     else:
                         # No estimate available: keep TOW until the car exits pit road/stall.
                         self.tow_end_time[car_idx] = 0.0
-                    logger.debug(
+                    logger.info(
                         f"TOW_START non_player car_idx={car_idx} car_num={car_number} "
                         f"avg_speed_kph={avg_speed_kph:.1f} "
                         f"tow_length_m={tow_length_m} "
                         f"estimated_tow_seconds={estimated_tow_seconds} "
-                        f"end_time_set={self.tow_end_time.get(car_idx, 0.0) > 0}"
+                        f"session_time={now:.1f} "
+                        f"end_time={self.tow_end_time.get(car_idx, 0.0):.1f} "
+                        f"end_time_set={self.tow_end_time.get(car_idx, 0.0) > 0} "
+                        f"tow_start_position={tow_start_position} "
+                        f"current_track_position={current_track_position:.4f} "
+                        f"prev_track_position={prev_track_position} "
+                        f"prev_valid_track_position={prev_valid_track_position} "
+                        f"frozen_position={frozen_position} "
+                        f"used_valid_snapshot_fallback={used_valid_snapshot_fallback} "
+                        f"has_session_time={has_session_time}"
                     )
 
             if not self.tow_tracking.get(car_idx, False) and not current_invalid:
@@ -845,6 +920,9 @@ class TelemetryProcessor:
             if not current_invalid:
                 self.tow_last_valid_track_position[car_idx] = current_track_position
                 self.tow_last_valid_time[car_idx] = now
+
+        if has_session_time:
+            self._sync_disconnected_tow_snapshots_by_timer(now)
 
     def _update_tow_sort_freeze_state(self, active_drivers: List[Dict]) -> None:
         """Track frozen sort position for cars while towing.
@@ -917,7 +995,71 @@ class TelemetryProcessor:
                 snapshot.lap_pct = 0.0
 
         snapshot.is_towing = False
+        snapshot.preserve_disconnected_position = True
         snapshot.pit_lap = "PIT"
+
+    def _log_disconnected_tow_timer_wait(
+        self,
+        car_idx: int,
+        snapshot: DriverState,
+        now: float,
+        end_time: float,
+        reason: str
+    ) -> None:
+        """Log a throttled INFO breadcrumb while a disconnected TOW row is waiting."""
+        last_log_time = self.tow_last_wait_log_time.get(car_idx)
+        if last_log_time is not None and (now - last_log_time) < 30.0:
+            return
+
+        self.tow_last_wait_log_time[car_idx] = now
+        remaining = end_time - now if end_time > 0 else None
+        logger.info(
+            f"TOW_WAIT disconnected car_idx={car_idx} car_num={snapshot.car_number} "
+            f"reason={reason} session_time={now:.1f} end_time={end_time:.1f} "
+            f"remaining_seconds={remaining} pit_lap={snapshot.pit_lap} "
+            f"is_towing={snapshot.is_towing} "
+            f"preserve_position={snapshot.preserve_disconnected_position} "
+            f"position={snapshot.position} track_pos={snapshot.total_track_position:.4f}"
+        )
+
+    def _sync_disconnected_tow_snapshots_by_timer(self, now: float) -> None:
+        """Expire disconnected TOW snapshots even if live tow tracking was lost."""
+        snapshots = getattr(self.race_state_tracker, 'driver_snapshots', {})
+        for car_idx, snapshot in list(snapshots.items()):
+            if not self.race_state_tracker.is_disconnected_tow_state(snapshot):
+                continue
+
+            end_time = self.tow_end_time.get(car_idx, 0.0)
+            if end_time <= 0:
+                self._log_disconnected_tow_timer_wait(
+                    car_idx,
+                    snapshot,
+                    now,
+                    end_time,
+                    "missing_end_time"
+                )
+                continue
+            if now < end_time:
+                self._log_disconnected_tow_timer_wait(
+                    car_idx,
+                    snapshot,
+                    now,
+                    end_time,
+                    "timer_pending"
+                )
+                continue
+
+            logger.info(
+                f"TOW_END car_idx={car_idx} car_num={snapshot.car_number} "
+                f"reasons=disconnected_timer_expired session_time={now:.1f} "
+                f"end_time={end_time:.1f}"
+            )
+            self.tow_tracking[car_idx] = False
+            self.tow_end_time[car_idx] = 0.0
+            self.tow_last_wait_log_time.pop(car_idx, None)
+            if car_idx in self.tow_frozen_track_position:
+                del self.tow_frozen_track_position[car_idx]
+            self._sync_disconnected_tow_snapshot_after_tow_end(car_idx, 0.0, True)
 
     def get_tow_aware_overall_leader_idx(self) -> Optional[int]:
         """Find overall race leader using tow-frozen positions when towing.
@@ -1261,6 +1403,7 @@ class TelemetryProcessor:
                 driver_state.is_disconnected = False
                 driver_state.pit_lap = snapshot_pit_lap
                 driver_state.is_towing = snapshot_is_towing
+                driver_state.preserve_disconnected_position = False
                 driver_state.show_car_number_outline = show_car_number_outline
                 # gap is preserved (not overwritten)
             else:
@@ -1310,6 +1453,21 @@ class TelemetryProcessor:
             snapshot.position = max(snapshot.position, position)
         else:
             snapshot.position = position
+
+    def _restore_disconnected_tow_protected_position(self, driver: Dict) -> None:
+        """Keep protected disconnected tow rows from improving during gap filling."""
+        if not driver.get('disconnected', False):
+            return
+
+        car_idx = driver.get('car_idx')
+        if car_idx is None:
+            return
+
+        snapshot = self.race_state_tracker.get_snapshot(car_idx)
+        if (snapshot is not None
+                and self.race_state_tracker.is_disconnected_tow_state(snapshot)
+                and snapshot.position > 0):
+            driver['position'] = snapshot.position
 
     # ═══════════════════════════════════════════════════════════════════════════
     # DELTA CALCULATION
@@ -2262,6 +2420,7 @@ class TelemetryProcessor:
                             driver['position'] = total_drivers + (i - len(available_positions)) + 1
 
                         self._remember_disconnected_tow_display_position(driver)
+                        self._restore_disconnected_tow_protected_position(driver)
 
                     # Merge them back: finished drivers first (in order), then racing drivers
                     active_drivers = finished_drivers + racing_drivers
