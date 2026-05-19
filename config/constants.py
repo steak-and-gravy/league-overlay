@@ -6,6 +6,7 @@ from typing import Dict, Any, List, NamedTuple, Optional
 
 # Application version
 VERSION = "0.9.9.9"
+DOWNLOAD_PAGE_URL = "https://leagueoverlay.com/download.php"
 
 
 @dataclass(frozen=True)

@@ -10,6 +10,7 @@ class DataUpdateSignal(QObject):
     """Signal emitter for thread-safe GUI updates."""
     update_data = Signal(list)
     update_status = Signal(str, str)  # text, color
+    update_available = Signal(dict)  # latest_version, current_version, download_url
     refresh_colors = Signal()
     update_footer = Signal(dict)  # footer_data: track_temp, incidents, incident_limit, sof
     update_session_metadata = Signal(dict)  # session_data: session_status, track_display_name

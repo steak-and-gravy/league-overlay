@@ -23,7 +23,7 @@ import irsdk
 
 # Import from modular structure
 from config.constants import (
-    UI_CONFIG, FILE_CONFIG, VERSION,
+    UI_CONFIG, FILE_CONFIG, VERSION, DOWNLOAD_PAGE_URL,
     UI_COLORS, UI_DIMENSIONS, TIMING, TELEMETRY_CONFIG,
     COLUMN_REGISTRY, get_scaled_column_widths
 )
@@ -48,9 +48,10 @@ from ui.local_web_overlay import LocalWebOverlayServer, build_local_web_snapshot
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QScrollArea, QGridLayout, QMenu,
+    QMessageBox,
 )
-from PySide6.QtCore import Qt, QTimer, QPoint
-from PySide6.QtGui import QColor, QPalette, QCursor
+from PySide6.QtCore import Qt, QTimer, QPoint, QUrl
+from PySide6.QtGui import QColor, QPalette, QCursor, QDesktopServices
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -107,6 +108,7 @@ class LeagueOverlay(QMainWindow):
         self.signals = DataUpdateSignal()
         self.signals.update_data.connect(self.display_race_data)
         self.signals.update_status.connect(self.update_status_label)
+        self.signals.update_available.connect(self.prompt_for_update)
         self.signals.refresh_colors.connect(self.refresh_driver_colors)
         self.signals.update_footer.connect(self.update_footer_display)
 
@@ -791,6 +793,33 @@ class LeagueOverlay(QMainWindow):
             self.latest_version = result['latest_version']
             msg = f"Update available: v{result['latest_version']}"
             self.signals.update_status.emit(msg, 'white')
+            self.signals.update_available.emit({
+                'latest_version': result['latest_version'],
+                'current_version': result.get('current_version', VERSION),
+                'download_url': DOWNLOAD_PAGE_URL,
+            })
+
+    def prompt_for_update(self, update_info: Dict[str, Any]) -> None:
+        """Ask the user if they want to open the download page for an available update."""
+        latest_version = update_info.get('latest_version') or self.latest_version
+        if not latest_version:
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Update Available",
+            (
+                f"BB's League Overlay v{latest_version} is available.\n\n"
+                "Do you want to go to the download page?"
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+
+        if reply == QMessageBox.Yes:
+            download_url = update_info.get('download_url') or DOWNLOAD_PAGE_URL
+            if not QDesktopServices.openUrl(QUrl(download_url)):
+                logger.warning(f"Failed to open update download page: {download_url}")
 
     def toggle_division_filter(self):
         """Toggle division filter - cycles through different division views.

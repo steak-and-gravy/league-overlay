@@ -16,6 +16,7 @@ from PySide6.QtGui import QColor
 
 from config.constants import (
     VERSION,
+    DOWNLOAD_PAGE_URL,
     UI_DIMENSIONS,
     TelemetryConfig,
     COLUMN_REGISTRY,
@@ -936,7 +937,7 @@ class SettingsDialog(QDialog):
 
         # Check for updates and show link if available
         if hasattr(self.parent_overlay, 'latest_version') and self.parent_overlay.latest_version:
-            version_text = f"Version {VERSION} | <a href='https://leagueoverlay.com/download.php' style='color: #FF8C00;'>Update to v{self.parent_overlay.latest_version}</a>"
+            version_text = f"Version {VERSION} | <a href='{DOWNLOAD_PAGE_URL}' style='color: #FF8C00;'>Update to v{self.parent_overlay.latest_version}</a>"
             self.status_label.setText(version_text)
             self.status_label.setOpenExternalLinks(True)
         
