@@ -1,5 +1,6 @@
 """Tests for the settings dialog column visibility list."""
 
+import os
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -150,6 +151,31 @@ def test_apply_settings_updates_recent_lap_flash_checkbox(qapp):
 
     assert overlay.settings.show_recent_lap_flash is False
     assert overlay.signals.refresh_colors.emit.called
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
+def test_save_local_copy_defaults_to_official_path_filename(qapp):
+    """Local copy dialog should suggest the official path basename."""
+    overlay, dialog = _build_dialog()
+    league = OfficialLeague(
+        name="BWRL GT3 Sprint",
+        path="bwrl/broken_wing_gt3.json",
+        title="Broken Wing GT3 Sprint",
+        description="Broken Wing Racing League Sunday Night GT3",
+        logo=None,
+        cache_file="cache_broken_wing_gt3.json",
+    )
+
+    with (
+        patch("config.official_leagues.get_official_league", return_value=league),
+        patch("ui.settings_dialog.QFileDialog.getSaveFileName", return_value=("", "")) as get_save_file_name,
+    ):
+        dialog.save_local_copy()
+
+    default_path = get_save_file_name.call_args.args[2]
+    assert os.path.basename(default_path) == "broken_wing_gt3.json"
 
     dialog.deleteLater()
     overlay.deleteLater()

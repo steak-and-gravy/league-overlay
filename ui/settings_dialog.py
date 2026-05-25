@@ -3,7 +3,6 @@
 import os
 import json
 import shutil
-import re
 from typing import TYPE_CHECKING
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -1324,9 +1323,8 @@ class SettingsDialog(QDialog):
             QMessageBox.critical(self, "Error", str(e))
             return
 
-        # Generate sanitized default filename
-        sanitized_name = re.sub(r'[^\w\s-]', '', league_name).strip().replace(' ', '_')
-        default_filename = f"{sanitized_name}.json"
+        # Match the official cache naming source, without the cache_ prefix.
+        default_filename = os.path.basename(league.path)
 
         # Get app directory for default location
         app_dir = os.path.dirname(os.path.abspath(self.parent_overlay.color_config_file))
