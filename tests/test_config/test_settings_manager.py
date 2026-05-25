@@ -11,6 +11,7 @@ Tests cover:
 import pytest
 import json
 import os
+from config.constants import UI_CONFIG
 from config.settings import AppSettings, SettingsManager
 
 
@@ -33,7 +34,7 @@ class TestAppSettingsDefaults:
         """Test default appearance settings."""
         settings = AppSettings()
         assert settings.opacity == 0.8
-        assert settings.font_size == "Slim Large"
+        assert settings.font_size == "Large"
         assert settings.row_color_style == "Default"
         assert settings.highlight_player_border is False
 
@@ -88,7 +89,7 @@ class TestLoadSettings:
             'width': 500,
             'height': 600,
             'opacity': 0.8,
-            'font_size': 'Slim Large',
+            'font_size': 'Large',
             'row_color_style': 'Alternate',
             'refresh_rate': 1.5,
             'hide_headers': True,
@@ -109,7 +110,7 @@ class TestLoadSettings:
         assert settings.width == 500
         assert settings.height == 600
         assert settings.opacity == 0.8
-        assert settings.font_size == 'Slim Large'
+        assert settings.font_size == 'Large'
         assert settings.row_color_style == 'Alternate'
         assert settings.refresh_rate == 1.5
         assert settings.hide_headers is True
@@ -250,7 +251,7 @@ class TestSaveSettings:
             width=500,
             height=600,
             opacity=0.8,
-            font_size='Slim Large',
+            font_size='Large',
             row_color_style='Alternate',
             highlight_player_border=True,
             refresh_rate=1.5,
@@ -271,7 +272,7 @@ class TestSaveSettings:
             data = json.load(f)
             assert data['x'] == 200
             assert data['opacity'] == 0.8
-            assert data['font_size'] == 'Slim Large'
+            assert data['font_size'] == 'Large'
             assert data['highlight_player_border'] is True
             assert data['pit_stop_indicator'] is False
             assert data['show_recent_lap_flash'] is False
@@ -422,19 +423,42 @@ class TestValidateSettings:
         settings = AppSettings(font_size='InvalidSize')
         validated = manager.validate(settings)
 
-        assert validated.font_size == 'Slim Large'
+        assert validated.font_size == 'Large'
+
+    def test_removed_slim_large_font_size_resets_to_default(self, tmp_path):
+        """Test old Slim Large configs naturally fall back to the Large default."""
+        settings_file = tmp_path / "settings.config"
+        manager = SettingsManager(str(settings_file))
+
+        settings = AppSettings(font_size='Slim Large')
+        validated = manager.validate(settings)
+
+        assert validated.font_size == 'Large'
 
     def test_validate_valid_font_sizes(self, tmp_path):
         """Test all valid font sizes pass validation."""
         settings_file = tmp_path / "settings.config"
         manager = SettingsManager(str(settings_file))
 
-        valid_sizes = ["Small", "Medium", "Slim Large", "Large"]
+        valid_sizes = ["Small", "Medium", "Large", "Extra Large"]
 
         for size in valid_sizes:
             settings = AppSettings(font_size=size)
             validated = manager.validate(settings)
             assert validated.font_size == size
+
+    def test_font_size_density_settings(self):
+        """Test desktop font presets keep the intended row spacing."""
+        medium = UI_CONFIG.FONT_SIZES["Medium"]
+        large = UI_CONFIG.FONT_SIZES["Large"]
+        extra_large = UI_CONFIG.FONT_SIZES["Extra Large"]
+
+        assert medium["data"] == "9pt"
+        assert medium["spacing"] == 2
+        assert large["data"] == "10pt"
+        assert large["spacing"] == 2
+        assert extra_large["data"] == "10.5pt"
+        assert extra_large["spacing"] == 1
 
     def test_validate_local_website_scale(self, tmp_path):
         """Test browser-source scale uses the allowed preset names."""
@@ -536,7 +560,20 @@ class TestLoadWithValidation:
         settings = manager.load()
 
         # Should reset to default
-        assert settings.font_size == 'Slim Large'
+        assert settings.font_size == 'Large'
+
+    def test_load_resets_removed_slim_large_font_size(self, tmp_path):
+        """Test old Slim Large persisted configs reset to the Large default."""
+        settings_file = tmp_path / "settings.config"
+        settings_data = {'font_size': 'Slim Large'}
+
+        with open(settings_file, 'w') as f:
+            json.dump(settings_data, f)
+
+        manager = SettingsManager(str(settings_file))
+        settings = manager.load()
+
+        assert settings.font_size == 'Large'
 
     def test_load_validates_dimensions(self, tmp_path):
         """Test loaded settings have dimensions validated."""

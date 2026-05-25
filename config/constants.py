@@ -142,17 +142,6 @@ class UIConfig:
                     "broadcast_title": "11pt",
                     "broadcast_session": "9pt",
                     "broadcast_track": "8.5pt",
-                    "spacing": 3
-                },
-                "Slim Large": {
-                    "title": "10pt",
-                    "button": "9pt",
-                    "status": "10pt",
-                    "header": "9pt",
-                    "data": "10pt",
-                    "broadcast_title": "12pt",
-                    "broadcast_session": "10pt",
-                    "broadcast_track": "9.5pt",
                     "spacing": 2
                 },
                 "Large": {
@@ -164,7 +153,18 @@ class UIConfig:
                     "broadcast_title": "12pt",
                     "broadcast_session": "10pt",
                     "broadcast_track": "9.5pt",
-                    "spacing": 4
+                    "spacing": 2
+                },
+                "Extra Large": {
+                    "title": "10pt",
+                    "button": "9pt",
+                    "status": "10pt",
+                    "header": "9pt",
+                    "data": "10.5pt",
+                    "broadcast_title": "12pt",
+                    "broadcast_session": "10pt",
+                    "broadcast_track": "9.5pt",
+                    "spacing": 1
                 }
             })
 

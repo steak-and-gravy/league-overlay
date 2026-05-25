@@ -95,6 +95,26 @@ def test_fixed_columns_use_disabled_checkbox_behavior(qapp):
     overlay.deleteLater()
 
 
+def test_font_size_options_include_extra_large_presets(qapp):
+    """Font size selector exposes the denser extra-large desktop presets."""
+    overlay, dialog = _build_dialog()
+
+    font_size_options = [
+        dialog.font_size_combo.itemText(index)
+        for index in range(dialog.font_size_combo.count())
+    ]
+
+    assert font_size_options == [
+        "Small",
+        "Medium",
+        "Large",
+        "Extra Large",
+    ]
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
 def test_reset_column_list_preserves_fixed_column_state(qapp):
     """Reset should rebuild fixed columns with the same always-visible metadata."""
     overlay, dialog = _build_dialog()

@@ -24,7 +24,7 @@ class AppSettings:
 
     # Appearance
     opacity: float = 0.8
-    font_size: str = "Slim Large"
+    font_size: str = "Large"
     row_color_style: str = "Default"
     highlight: float = 0.25
     highlight_player_border: bool = False
