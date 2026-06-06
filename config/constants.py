@@ -193,7 +193,6 @@ class TelemetryConfig:
     MAX_REFRESH_RATE: float = 3.0
 
     # iRacing SDK constants
-    MAX_CARS: int = 63
     INACTIVE_POSITION: int = 0
     INVALID_LAP: int = -1
     INVALID_LAP_PCT: float = -1.0

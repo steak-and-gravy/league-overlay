@@ -4,9 +4,9 @@ from typing import Dict, Set, Optional, Callable, List
 import threading
 import irsdk
 
-from config.constants import TELEMETRY_CONFIG
 from config.logging_config import get_logger
 from core.driver_state import DriverState
+from core.driver_info import build_driver_lookup, get_pace_car_indices, is_pace_car
 
 logger = get_logger(__name__)
 
@@ -466,7 +466,7 @@ class RaceStateTracker:
         except (KeyError, TypeError):
             race_laps = 0
 
-        for car_idx in range(TELEMETRY_CONFIG.MAX_CARS):
+        for car_idx in list(self.driver_snapshots.keys()):
             driver_state = self.get_snapshot(car_idx)
             if driver_state and car_idx not in active_car_indices:
                 # This driver disconnected or retired
@@ -527,8 +527,13 @@ class RaceStateTracker:
                 driver_info_data = self.ir['DriverInfo']
                 drivers = driver_info_data['Drivers'] if driver_info_data else []
             except (KeyError, TypeError):
+                driver_info_data = {}
                 drivers = []
-            drivers_dict = {driver.get('CarIdx'): driver for driver in drivers if driver.get('CarIdx') is not None}
+            pace_car_indices = get_pace_car_indices(driver_info_data)
+            drivers_dict = build_driver_lookup(
+                driver for driver in drivers
+                if not is_pace_car(driver, pace_car_indices)
+            )
 
             for car_idx, result_data in results_lookup.items():
                 # Skip if already in active drivers or has a snapshot

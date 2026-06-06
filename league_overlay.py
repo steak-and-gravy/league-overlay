@@ -36,6 +36,7 @@ from core.division_filter import DivisionFilter
 from core.race_state_tracker import RaceStateTracker
 from core.position_calculator import PositionCalculator
 from core.manufacturer import extract_manufacturer
+from core.driver_info import get_pace_car_indices, is_pace_car
 from core.telemetry_processor import TelemetryProcessor
 from core.update_checker import UpdateChecker
 from ui.widgets import DataUpdateSignal, CustomSizeGrip
@@ -1225,13 +1226,13 @@ class LeagueOverlay(QMainWindow):
             return placeholder_data
 
         player_class_id = self.position_calculator.player_car_class_id
+        pace_car_indices = get_pace_car_indices(driver_info)
 
         for session_driver in session_drivers:
             if not session_driver:
                 continue
 
-            driver_name = session_driver.get('UserName', '')
-            if driver_name and 'pace car' in driver_name.lower():
+            if is_pace_car(session_driver, pace_car_indices):
                 continue
 
             car_number = session_driver.get('CarNumber', '')

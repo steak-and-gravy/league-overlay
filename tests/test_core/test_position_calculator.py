@@ -199,6 +199,28 @@ class TestCalculateRealTimePositions:
         assert result[1]['car_idx'] == 2  # 10.5
         assert result[2]['car_idx'] == 3  # 10.3
 
+    def test_uses_shortest_live_array_length_for_real_time_positions(self):
+        """Uneven CarIdx arrays should not read past shorter live telemetry arrays."""
+        mock_ir = MagicMock()
+        calculator = PositionCalculator(mock_ir)
+
+        drivers = [
+            {'CarIdx': 1, 'UserID': '101', 'CarClassID': 2},
+            {'CarIdx': 4, 'UserID': '104', 'CarClassID': 2},
+        ]
+
+        live_data = {
+            'CarIdxLap': [0, 10],
+            'CarIdxLapDistPct': [0, 0.9],
+            'CarIdxClassPosition': [0, 1, 0, 0, 2],
+        }
+
+        mock_ir.__getitem__.side_effect = lambda key: live_data[key]
+
+        result = calculator.calculate_real_time_positions(make_drivers_dict(drivers))
+
+        assert [driver['car_idx'] for driver in result] == [1]
+
     def test_assigns_position(self):
         """Test position numbers assigned correctly."""
         mock_ir = MagicMock()

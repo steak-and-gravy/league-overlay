@@ -653,12 +653,14 @@ class TestSessionChangeFooterRefresh:
         app.ir = MagicMock()
         app.ir.__getitem__.side_effect = lambda key: {
             'DriverInfo': {
+                'PaceCarXIdx': [12],
                 'Drivers': [
                     {'CarIdx': 7, 'UserID': 101, 'UserName': 'Driver One', 'CarNumber': '12', 'CarClassID': 100, 'CarPath': 'porsche 911 gt3 r'},
                     {'CarIdx': 8, 'UserID': 102, 'UserName': 'Driver Two', 'CarNumber': '42', 'CarClassID': 100, 'CarPath': 'orphan prototype'},
                     {'CarIdx': 9, 'UserID': 103, 'UserName': 'Other Class', 'CarNumber': '88', 'CarClassID': 200},
                     {'CarIdx': 10, 'UserID': 104, 'UserName': 'Pace Car', 'CarNumber': 'PC', 'CarClassID': 100},
                     {'CarIdx': 11, 'UserID': 105, 'UserName': 'Spectator', 'CarNumber': '0', 'CarClassID': 100},
+                    {'CarIdx': 12, 'UserID': 106, 'UserName': 'Official Vehicle', 'CarNumber': 'PC2', 'CarClassID': 100},
                 ]
             }
         }[key]

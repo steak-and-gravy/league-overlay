@@ -14,6 +14,148 @@ from core.division_manager import DivisionManager
 from core.driver_state import DriverState
 
 
+class TestDynamicCarIdxCapacity:
+    """Regression tests for dynamic CarIdx array sizing."""
+
+    @pytest.fixture
+    def mock_dependencies(self):
+        """Create minimal mock dependencies for TelemetryProcessor."""
+        ir = MagicMock()
+        division_manager = MagicMock(spec=DivisionManager)
+        race_state_tracker = RaceStateTracker(ir)
+        gap_calculator = MagicMock(spec=GapCalculator)
+        position_calculator = MagicMock(spec=PositionCalculator)
+        position_calculator.player_car_idx = None
+        position_calculator.player_car_class_id = None
+
+        return {
+            'ir': ir,
+            'division_manager': division_manager,
+            'race_state_tracker': race_state_tracker,
+            'gap_calculator': gap_calculator,
+            'position_calculator': position_calculator
+        }
+
+    def test_session_info_filters_pace_car_xidx_when_live_arrays_are_hidden(self, mock_dependencies):
+        """High-index pace cars in DriverInfo should not enter the race driver lookup."""
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+        data = {
+            'DriverInfo': {
+                'PaceCarXIdx': [64, 65],
+                'Drivers': [
+                    {'CarIdx': 0, 'UserName': 'Driver 0', 'CarNumber': '01', 'CarClassID': 1},
+                    {'CarIdx': 64, 'UserName': 'Safety Truck', 'CarNumber': 'PC1', 'CarClassID': 1},
+                    {'CarIdx': 65, 'UserName': 'Official Vehicle', 'CarNumber': 'PC2', 'CarClassID': 1},
+                ],
+            },
+            'SessionNum': 0,
+            'SessionInfo': {'Sessions': [{'SessionType': 'Race', 'ResultsPositions': []}]},
+            'WeekendInfo': {'SessionID': 1234},
+        }
+        ir.__getitem__.side_effect = lambda key: data[key]
+
+        drivers, session_data, is_race = processor._get_session_info()
+
+        assert is_race is True
+        assert set(drivers.keys()) == {0}
+        assert session_data['pace_car_indices'] == {64, 65}
+
+    def test_driving_mode_uses_live_array_length_not_fixed_64_limit(self, mock_dependencies):
+        """A high-index player is valid when live CarIdx arrays have grown."""
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+        processor.position_calculator.player_car_idx = 90
+        ir.__getitem__.side_effect = lambda key: {
+            'CarIdxLap': [0] * 128,
+            'CarIdxClassPosition': [0] * 128,
+            'CarIdxLapDistPct': [0.0] * 128,
+        }[key]
+
+        assert processor._is_driving_mode() is True
+
+    def test_driving_mode_rejects_player_outside_current_live_array_length(self, mock_dependencies):
+        """Hidden high-index cars are not treated as drivable live telemetry rows."""
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+        processor.position_calculator.player_car_idx = 90
+        ir.__getitem__.side_effect = lambda key: {
+            'CarIdxLap': [0] * 64,
+            'CarIdxClassPosition': [0] * 64,
+            'CarIdxLapDistPct': [0.0] * 64,
+        }[key]
+
+        assert processor._is_driving_mode() is False
+
+    def test_footer_sof_excludes_pace_car_xidx_entries(self, mock_dependencies):
+        """PaceCarXIdx entries should not skew same-class SoF calculations."""
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+        processor.position_calculator.player_car_class_id = 1
+        data = {
+            'TrackTemp': 100.0,
+            'PlayerCarMyIncidentCount': 2,
+            'WeekendInfo': {'WeekendOptions': {'IncidentLimit': '17x'}},
+            'DriverInfo': {
+                'PaceCarXIdx': [70],
+                'Drivers': [
+                    {'CarIdx': 0, 'UserName': 'Driver A', 'CarClassID': 1, 'IRating': 1000},
+                    {'CarIdx': 1, 'UserName': 'Driver B', 'CarClassID': 1, 'IRating': 3000},
+                    {'CarIdx': 70, 'UserName': 'Official Vehicle', 'CarClassID': 1, 'IRating': 9000},
+                ],
+            },
+        }
+        ir.__getitem__.side_effect = lambda key: data[key]
+
+        footer_data = processor.get_footer_data()
+
+        assert footer_data['sof'] == 2000
+
+    def test_delta_returns_placeholder_when_reference_car_exceeds_lap_time_array(self, mock_dependencies):
+        """Delta calculation should respect the actual lap-time array length."""
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+        processor.position_calculator.player_car_idx = 90
+        ir.__getitem__.side_effect = lambda key: {
+            'CarIdxLap': [0] * 128,
+            'CarIdxClassPosition': [0] * 128,
+            'CarIdxLapDistPct': [0.0] * 128,
+        }[key]
+
+        delta = processor._calculate_delta(
+            driver_lap_time=88.5,
+            all_drivers_with_colors=[],
+            car_idx_last_lap=[0.0] * 64,
+            current_driver_color='#FFFFFF',
+            car_idx=1
+        )
+
+        assert delta == "--"
+
+    def test_tow_aware_overall_leader_skips_pace_car_xidx(self, mock_dependencies):
+        """Finish tracking leader selection should ignore high-index pace cars."""
+        processor = TelemetryProcessor(**mock_dependencies)
+        ir = mock_dependencies['ir']
+        data = {
+            'CarIdxLap': [0] * 66,
+            'CarIdxLapDistPct': [0.0] * 66,
+            'DriverInfo': {
+                'PaceCarXIdx': [64],
+                'Drivers': [
+                    {'CarIdx': 1, 'UserName': 'Race Leader', 'CarNumber': '1'},
+                    {'CarIdx': 64, 'UserName': 'Official Vehicle', 'CarNumber': 'PC2'},
+                ],
+            },
+        }
+        data['CarIdxLap'][1] = 10
+        data['CarIdxLapDistPct'][1] = 0.5
+        data['CarIdxLap'][64] = 11
+        data['CarIdxLapDistPct'][64] = 0.8
+        ir.__getitem__.side_effect = lambda key: data[key]
+
+        assert processor.get_tow_aware_overall_leader_idx() == 1
+
+
 class TestFinishedDriverSeparation:
     """Unit tests for Scenario #2 fix: Separating finished and racing drivers.
 

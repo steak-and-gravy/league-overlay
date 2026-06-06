@@ -806,3 +806,70 @@ class TestSessionStateFallback:
                 session_data={},
                 get_position_from_results_fn=lambda *_args: 1
             )
+
+
+class TestDynamicSnapshotCapacity:
+    """Regression tests for high CarIdx snapshot handling."""
+
+    def test_handle_disconnected_drivers_checks_high_car_idx_snapshots(self, mock_ir):
+        """Disconnected snapshots above 63 should still be processed."""
+        def mock_getitem(key):
+            if key == 'SessionState':
+                return 4
+            if key == 'RaceLaps':
+                return 0
+            raise KeyError(key)
+
+        mock_ir.__getitem__ = Mock(side_effect=mock_getitem)
+        tracker = RaceStateTracker(mock_ir)
+        tracker.update_snapshot(90, DriverState(
+            car_idx=90,
+            driver_info={'UserName': 'High Index Driver', 'CarClassID': 1},
+            position=12,
+            current_lap=5,
+            lap_pct=0.25,
+        ))
+
+        tracker.handle_disconnected_drivers(
+            active_drivers=[],
+            session_data={},
+            get_position_from_results_fn=lambda *_args: 12
+        )
+
+        snapshot = tracker.get_snapshot(90)
+        assert snapshot is not None
+        assert snapshot.is_disconnected is True
+        assert snapshot.position == -1
+
+    def test_results_restore_filters_pace_car_xidx(self, mock_ir):
+        """ResultsPositions restoration should not re-add PaceCarXIdx entries."""
+        def mock_getitem(key):
+            if key == 'DriverInfo':
+                return {
+                    'PaceCarXIdx': [70],
+                    'Drivers': [
+                        {'CarIdx': 1, 'UserName': 'Driver One', 'CarNumber': '1', 'CarClassID': 1},
+                        {'CarIdx': 70, 'UserName': 'Official Vehicle', 'CarNumber': 'PC2', 'CarClassID': 1},
+                    ],
+                }
+            if key == 'RaceLaps':
+                return 0
+            raise KeyError(key)
+
+        mock_ir.__getitem__ = Mock(side_effect=mock_getitem)
+        tracker = RaceStateTracker(mock_ir)
+        active_drivers = []
+        session_data = {
+            'results_lookup': {
+                1: {'CarIdx': 1, 'LapsComplete': 10, 'FastestTime': 90.0, 'LastTime': 91.0},
+                70: {'CarIdx': 70, 'LapsComplete': 10, 'FastestTime': 0.0, 'LastTime': 0.0},
+            }
+        }
+
+        tracker.handle_disconnected_drivers(
+            active_drivers=active_drivers,
+            session_data=session_data,
+            get_position_from_results_fn=lambda _session_data, car_idx: 1 if car_idx == 1 else 2
+        )
+
+        assert [driver['car_idx'] for driver in active_drivers] == [1]

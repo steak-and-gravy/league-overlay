@@ -29,7 +29,7 @@ from typing import Dict, List, Optional, Tuple, Any, Callable
 import time
 import irsdk
 
-from config.constants import TELEMETRY_CONFIG, TIMING
+from config.constants import TIMING
 from config.logging_config import get_logger
 from core.gap_calculator import GapCalculator
 from core.division_manager import DivisionManager
@@ -37,6 +37,7 @@ from core.race_state_tracker import RaceStateTracker
 from core.position_calculator import PositionCalculator
 from core.driver_state import DriverState
 from core.manufacturer import extract_manufacturer
+from core.driver_info import build_driver_lookup, get_pace_car_indices, is_pace_car
 
 logger = get_logger(__name__)
 
@@ -168,8 +169,13 @@ class TelemetryProcessor:
             if not drivers_list:
                 return None
 
+            pace_car_indices = get_pace_car_indices(driver_info)
+
             # Convert to dict for O(1) lookups instead of O(n) - significant performance gain with 40+ drivers
-            drivers = {driver.get('CarIdx'): driver for driver in drivers_list}
+            drivers = build_driver_lookup(
+                driver for driver in drivers_list
+                if not is_pace_car(driver, pace_car_indices)
+            )
 
         except (KeyError, TypeError) as e:
             logger.debug(f"Error getting driver info: {e}")
@@ -210,6 +216,8 @@ class TelemetryProcessor:
             'session_type': session_type,
             'current_session': current_session,
             'results_lookup': results_lookup,  # O(1) lookup dictionary
+            'drivers': drivers,
+            'pace_car_indices': pace_car_indices,
             'fastest_lap_time': (
                 fastest_lap_time
                 if fastest_lap_time != float('inf')
@@ -218,6 +226,51 @@ class TelemetryProcessor:
         }
 
         return (drivers, session_data, is_race)
+
+    def _get_car_idx_array_length(self, *field_names: str, minimum: int = 0) -> int:
+        """Return the largest available live CarIdx array length."""
+        max_len = minimum
+        for field_name in field_names:
+            try:
+                values = self.ir[field_name]
+            except (KeyError, TypeError):
+                continue
+
+            try:
+                max_len = max(max_len, len(values))
+            except TypeError:
+                continue
+
+        return max_len
+
+    @staticmethod
+    def _get_driver_lookup_capacity(drivers: Dict[int, Dict]) -> int:
+        """Return the array size needed to safely index known DriverInfo entries."""
+        valid_indices = [
+            car_idx for car_idx in drivers.keys()
+            if isinstance(car_idx, int) and car_idx >= 0
+        ]
+        if not valid_indices:
+            return 0
+        return max(valid_indices) + 1
+
+    def _get_driver_lookup(self, session_data: Dict) -> Dict[int, Dict]:
+        """Return DriverInfo lookup from session data or current telemetry."""
+        driver_lookup = session_data.get('drivers', {})
+        if driver_lookup:
+            return driver_lookup
+
+        try:
+            driver_info = self.ir['DriverInfo']
+            drivers_info = driver_info['Drivers']
+        except (KeyError, TypeError):
+            return {}
+
+        pace_car_indices = get_pace_car_indices(driver_info)
+        return build_driver_lookup(
+            driver for driver in drivers_info
+            if not is_pace_car(driver, pace_car_indices)
+        )
 
     def _detect_session_change(self, session_data: Dict) -> bool:
         """Detect if session has changed and update tracking.
@@ -620,6 +673,7 @@ class TelemetryProcessor:
             drivers_info = self.ir['DriverInfo']['Drivers']
         except (KeyError, TypeError):
             drivers_info = []
+        driver_lookup = build_driver_lookup(drivers_info)
 
         track_length_m = 0.0
         try:
@@ -661,8 +715,8 @@ class TelemetryProcessor:
             current_track_position = car_idx_lap[car_idx] + car_idx_lap_pct[car_idx]
             current_lap = car_idx_lap[car_idx]
             car_number = ""
-            if car_idx < len(drivers_info):
-                car_number = str(drivers_info[car_idx].get('CarNumber', '')).strip()
+            driver_info = driver_lookup.get(car_idx, {})
+            car_number = str(driver_info.get('CarNumber', '')).strip()
             is_debug_car_number_8 = (car_number == "8")
 
             prev_surface = self.tow_last_surface.get(car_idx)
@@ -1079,8 +1133,13 @@ class TelemetryProcessor:
         overall_leader_idx = None
         max_track_position = -1.0
         max_len = min(len(car_idx_lap), len(car_idx_lap_dist_pct))
+        driver_lookup = self._get_driver_lookup({})
+        should_filter_driver_lookup = bool(driver_lookup)
 
         for car_idx in range(max_len):
+            if should_filter_driver_lookup and car_idx not in driver_lookup:
+                continue
+
             if car_idx_lap[car_idx] < 0:
                 continue
 
@@ -1190,6 +1249,7 @@ class TelemetryProcessor:
                 'car_idx': driver['car_idx'],
                 'position': driver.get('position', 0),
                 'color': driver_color,
+                'driver_info': driver['driver_info'],
             })
 
         division_positions = {}
@@ -1480,7 +1540,16 @@ class TelemetryProcessor:
             True if player is driving (player_car_idx is valid), False if spectating
         """
         player_car_idx = self.position_calculator.player_car_idx
-        return player_car_idx is not None and player_car_idx < TELEMETRY_CONFIG.MAX_CARS
+        if player_car_idx is None or player_car_idx < 0:
+            return False
+
+        live_array_length = self._get_car_idx_array_length(
+            'CarIdxLap',
+            'CarIdxClassPosition',
+            'CarIdxLapDistPct',
+            'CarIdxEstTime'
+        )
+        return live_array_length == 0 or player_car_idx < live_array_length
 
     def _calculate_delta(self, driver_lap_time: float, all_drivers_with_colors: List[Dict],
                         car_idx_last_lap: list, current_driver_color: str, car_idx: int) -> str:
@@ -1507,6 +1576,8 @@ class TelemetryProcessor:
 
         if is_driving:
             # DRIVING MODE: Compare to player's last lap
+            if player_car_idx is None or player_car_idx >= len(car_idx_last_lap):
+                return "--"
             reference_lap_time = car_idx_last_lap[player_car_idx]
             reference_car_idx = player_car_idx
             # If player hasn't completed a lap yet, don't show delta for anyone
@@ -1518,6 +1589,8 @@ class TelemetryProcessor:
             if leaders:
                 leaders.sort(key=lambda x: x.get('position', 0))
                 overall_leader_idx = leaders[0]['car_idx']
+                if overall_leader_idx >= len(car_idx_last_lap):
+                    return "--"
                 reference_lap_time = car_idx_last_lap[overall_leader_idx]
                 reference_car_idx = overall_leader_idx
 
@@ -1618,8 +1691,7 @@ class TelemetryProcessor:
         car_idx = driver['car_idx']
         # Determine current driver's car class and filter to same class (always),
         # and same division when show_division is True
-        drivers_info = self.ir['DriverInfo']['Drivers']
-        current_info = drivers_info[car_idx] if car_idx < len(drivers_info) else {}
+        current_info = driver.get('driver_info', {})
         current_car_class_id = current_info.get('CarClassID')
 
         comparison_drivers = []
@@ -1634,7 +1706,8 @@ class TelemetryProcessor:
                 'position': temp_driver.get('position', 0),
                 'total_track_position': temp_driver['total_track_position'],
                 'current_lap': temp_driver['current_lap'],
-                'lap_pct': temp_driver['lap_pct']
+                'lap_pct': temp_driver['lap_pct'],
+                'driver_info': temp_info
             })
 
         comparison_drivers.sort(key=lambda x: x['position'])
@@ -1658,20 +1731,23 @@ class TelemetryProcessor:
 
         # Both cars still racing - calculate live time gap
         car_idx_est_time = self.ir['CarIdxEstTime']
-        current_est_time = car_idx_est_time[car_idx]
-        ahead_est_time = car_idx_est_time[car_ahead_idx]
+        if car_idx >= len(car_idx_est_time) or car_ahead_idx >= len(car_idx_est_time):
+            current_est_time = 0
+            ahead_est_time = 0
+        else:
+            current_est_time = car_idx_est_time[car_idx]
+            ahead_est_time = car_idx_est_time[car_ahead_idx]
 
         # Get lap times with bounds checking
         normalize_lap_time_pct = 0
         ahead_lap_time = 0
-        drivers = self.ir['DriverInfo']['Drivers']
-        if car_ahead_idx < len(drivers) and car_idx < len(drivers):
-            ahead_lap_time = drivers[car_ahead_idx]['CarClassEstLapTime']
-            current_lap_time = drivers[car_idx]['CarClassEstLapTime']
-            if (ahead_lap_time > 0 and current_lap_time > 0):
-                # Normalize Car Ahead EstTime
-                normalize_lap_time_pct = ahead_lap_time/current_lap_time
-                ahead_est_time = ahead_est_time/normalize_lap_time_pct
+        ahead_info = comparison_drivers[current_pos_index - 1].get('driver_info', {})
+        ahead_lap_time = ahead_info.get('CarClassEstLapTime', 0)
+        current_lap_time = current_info.get('CarClassEstLapTime', 0)
+        if ahead_lap_time > 0 and current_lap_time > 0:
+            # Normalize Car Ahead EstTime
+            normalize_lap_time_pct = ahead_lap_time/current_lap_time
+            ahead_est_time = ahead_est_time/normalize_lap_time_pct
 
         time_gap_raw = None
 
@@ -1777,8 +1853,7 @@ class TelemetryProcessor:
         car_idx = driver['car_idx']
 
         # Build comparison list: same class always; same division when show_division
-        drivers_info = self.ir['DriverInfo']['Drivers']
-        current_info = drivers_info[car_idx] if car_idx < len(drivers_info) else {}
+        current_info = driver.get('driver_info', {})
         current_car_class_id = current_info.get('CarClassID')
 
         comparison_drivers = []
@@ -1793,7 +1868,8 @@ class TelemetryProcessor:
                 'position': temp_driver.get('position', 0),
                 'total_track_position': temp_driver['total_track_position'],
                 'current_lap': temp_driver['current_lap'],
-                'lap_pct': temp_driver['lap_pct']
+                'lap_pct': temp_driver['lap_pct'],
+                'driver_info': temp_info
             })
 
         if not comparison_drivers:
@@ -1826,18 +1902,21 @@ class TelemetryProcessor:
 
         # Get estimated times
         car_idx_est_time = self.ir['CarIdxEstTime']
-        current_est_time = car_idx_est_time[car_idx]
-        leader_est_time = car_idx_est_time[leader_idx]
+        if car_idx >= len(car_idx_est_time) or leader_idx >= len(car_idx_est_time):
+            current_est_time = 0
+            leader_est_time = 0
+        else:
+            current_est_time = car_idx_est_time[car_idx]
+            leader_est_time = car_idx_est_time[leader_idx]
 
         normalize_lap_time_pct = 0
         leader_lap_time = 0
-        drivers = self.ir['DriverInfo']['Drivers']
-        if leader_idx < len(drivers) and car_idx < len(drivers):
-            leader_lap_time = drivers[leader_idx]['CarClassEstLapTime']
-            current_lap_time = drivers[car_idx]['CarClassEstLapTime']
-            if leader_lap_time > 0 and current_lap_time > 0:
-                normalize_lap_time_pct = leader_lap_time / current_lap_time
-                leader_est_time = leader_est_time / normalize_lap_time_pct
+        leader_info = leader_entry.get('driver_info', {})
+        leader_lap_time = leader_info.get('CarClassEstLapTime', 0)
+        current_lap_time = current_info.get('CarClassEstLapTime', 0)
+        if leader_lap_time > 0 and current_lap_time > 0:
+            normalize_lap_time_pct = leader_lap_time / current_lap_time
+            leader_est_time = leader_est_time / normalize_lap_time_pct
 
         time_gap_raw = None
 
@@ -1868,15 +1947,15 @@ class TelemetryProcessor:
                                      session_data: Dict, show_division: bool = True) -> str:
         """Gap to leader during practice/qualifying based on best laps."""
         # Build comparison group: same class always; optional same division
-        drivers_info = self.ir['DriverInfo']['Drivers']
-        current_info = drivers_info[car_idx] if car_idx < len(drivers_info) else {}
+        driver_lookup = self._get_driver_lookup(session_data)
+        current_info = driver_lookup.get(car_idx, {})
         current_car_class_id = current_info.get('CarClassID')
 
         pool = all_drivers_with_colors if not show_division else [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
 
         comparison_drivers = []
         for d in pool:
-            di = drivers_info[d['car_idx']] if d['car_idx'] < len(drivers_info) else {}
+            di = d.get('driver_info') or driver_lookup.get(d['car_idx'], {})
             if current_car_class_id is None or di.get('CarClassID') == current_car_class_id:
                 comparison_drivers.append(d)
 
@@ -1951,7 +2030,8 @@ class TelemetryProcessor:
 
         if show_division:
             # Division leader = first car in same division/class
-            current_driver_info = self.ir['DriverInfo']['Drivers'][car_idx] if car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+            driver_lookup = self._get_driver_lookup(session_data)
+            current_driver_info = driver_lookup.get(car_idx, {})
             current_car_class_id = current_driver_info.get('CarClassID')
 
             division_results = []
@@ -1960,7 +2040,7 @@ class TelemetryProcessor:
                 if result_car_idx is None:
                     continue
 
-                driver_info = self.ir['DriverInfo']['Drivers'][result_car_idx] if result_car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+                driver_info = driver_lookup.get(result_car_idx, {})
                 if not driver_info:
                     continue
 
@@ -1985,7 +2065,8 @@ class TelemetryProcessor:
             ahead_time = division_leader.get('Time', 0.0)
         else:
             # Overall mode: still compare within the same car class (class leader)
-            current_driver_info = self.ir['DriverInfo']['Drivers'][car_idx] if car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+            driver_lookup = self._get_driver_lookup(session_data)
+            current_driver_info = driver_lookup.get(car_idx, {})
             current_car_class_id = current_driver_info.get('CarClassID')
 
             class_results = []
@@ -1993,7 +2074,7 @@ class TelemetryProcessor:
                 result_car_idx = result.get('CarIdx')
                 if result_car_idx is None:
                     continue
-                driver_info = self.ir['DriverInfo']['Drivers'][result_car_idx] if result_car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+                driver_info = driver_lookup.get(result_car_idx, {})
                 if not driver_info:
                     continue
                 driver_car_class_id = driver_info.get('CarClassID')
@@ -2039,8 +2120,8 @@ class TelemetryProcessor:
             Interval string formatted to 3 decimal places
         """
         # Always compare within same car class; optionally scope to division
-        drivers_info = self.ir['DriverInfo']['Drivers']
-        current_info = drivers_info[car_idx] if car_idx < len(drivers_info) else {}
+        driver_lookup = self._get_driver_lookup(session_data)
+        current_info = driver_lookup.get(car_idx, {})
         current_car_class_id = current_info.get('CarClassID')
 
         if show_division:
@@ -2049,7 +2130,7 @@ class TelemetryProcessor:
             for d in all_drivers_with_colors:
                 if d['color'] != current_driver_color:
                     continue
-                di = drivers_info[d['car_idx']] if d['car_idx'] < len(drivers_info) else {}
+                di = d.get('driver_info') or driver_lookup.get(d['car_idx'], {})
                 if current_car_class_id is not None and di.get('CarClassID') != current_car_class_id:
                     continue
                 comparison_drivers.append(d)
@@ -2071,7 +2152,7 @@ class TelemetryProcessor:
             # Overall mode but still only same class
             filtered = []
             for d in all_drivers_with_colors:
-                di = drivers_info[d['car_idx']] if d['car_idx'] < len(drivers_info) else {}
+                di = d.get('driver_info') or driver_lookup.get(d['car_idx'], {})
                 if current_car_class_id is None or di.get('CarClassID') == current_car_class_id:
                     filtered.append(d)
             filtered.sort(key=lambda x: x['position'])
@@ -2183,7 +2264,8 @@ class TelemetryProcessor:
             current_division_color = current_driver_color
 
             # Get current driver's car class for multi-class filtering
-            current_driver_info = self.ir['DriverInfo']['Drivers'][car_idx] if car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+            driver_lookup = self._get_driver_lookup(session_data)
+            current_driver_info = driver_lookup.get(car_idx, {})
             current_car_class_id = current_driver_info.get('CarClassID')
 
             # Build list of drivers in same division AND same car class, sorted by position
@@ -2194,7 +2276,7 @@ class TelemetryProcessor:
                     continue
 
                 # Get division color and car class for this driver
-                driver_info = self.ir['DriverInfo']['Drivers'][result_car_idx] if result_car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+                driver_info = driver_lookup.get(result_car_idx, {})
 
                 # Skip if driver_info is empty (driver not in current session - disconnected/invalid)
                 if not driver_info:
@@ -2233,7 +2315,8 @@ class TelemetryProcessor:
             # OVERALL MODE: Compare within same class for car-ahead
 
             # Get current driver's car class
-            current_driver_info = self.ir['DriverInfo']['Drivers'][car_idx] if car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+            driver_lookup = self._get_driver_lookup(session_data)
+            current_driver_info = driver_lookup.get(car_idx, {})
             current_car_class_id = current_driver_info.get('CarClassID')
 
             # Build list of cars in same class
@@ -2242,7 +2325,7 @@ class TelemetryProcessor:
                 result_car_idx = result.get('CarIdx')
                 if result_car_idx is None:
                     continue
-                driver_info = self.ir['DriverInfo']['Drivers'][result_car_idx] if result_car_idx < len(self.ir['DriverInfo']['Drivers']) else {}
+                driver_info = driver_lookup.get(result_car_idx, {})
                 if not driver_info:
                     continue
                 driver_car_class_id = driver_info.get('CarClassID')
@@ -2435,15 +2518,22 @@ class TelemetryProcessor:
                 active_drivers, get_driver_color_fn)
 
             # Read lap time telemetry data
+            fallback_car_count = self._get_car_idx_array_length(
+                'CarIdxLap',
+                'CarIdxClassPosition',
+                'CarIdxLapDistPct',
+                'CarIdxEstTime',
+                minimum=self._get_driver_lookup_capacity(drivers)
+            )
             try:
                 car_idx_last_lap = self.ir['CarIdxLastLapTime']
             except (KeyError, TypeError):
-                car_idx_last_lap = [0.0] * TELEMETRY_CONFIG.MAX_CARS
+                car_idx_last_lap = [0.0] * fallback_car_count
 
             try:
                 car_idx_best_lap = self.ir['CarIdxBestLapTime']
             except (KeyError, TypeError):
-                car_idx_best_lap = [0.0] * TELEMETRY_CONFIG.MAX_CARS
+                car_idx_best_lap = [0.0] * fallback_car_count
 
             lap_telemetry_available = True
             try:
@@ -2600,17 +2690,23 @@ class TelemetryProcessor:
 
         # Calculate SoF from DriverInfo (average of non-zero iRatings in player's class)
         try:
-            drivers = self.ir['DriverInfo']['Drivers']
-            
+            driver_info = self.ir['DriverInfo']
+            drivers = driver_info['Drivers']
+            pace_car_indices = get_pace_car_indices(driver_info)
+
             # Get player's car class ID from position calculator (already cached)
             player_car_class_id = self.position_calculator.player_car_class_id
             
             # Only calculate if we have the player's class
             if player_car_class_id is not None:
                 iratings = [
-                    d.get('IRating', 0) 
-                    for d in drivers 
-                    if d.get('CarClassID') == player_car_class_id and d.get('IRating', 0) > 0
+                    d.get('IRating', 0)
+                    for d in drivers
+                    if (
+                        d.get('CarClassID') == player_car_class_id
+                        and d.get('IRating', 0) > 0
+                        and not is_pace_car(d, pace_car_indices)
+                    )
                 ]
                 footer_data['sof'] = sum(iratings) // len(iratings) if iratings else None
             else:

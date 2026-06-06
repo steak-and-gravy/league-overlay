@@ -12,6 +12,7 @@ from typing import Dict, List, Optional
 import irsdk
 
 from config.logging_config import get_logger
+from core.driver_info import is_pace_car
 
 logger = get_logger(__name__)
 
@@ -107,15 +108,19 @@ class PositionCalculator:
             return []
 
         active_drivers = []
+        max_len = min(
+            len(car_idx_lap),
+            len(car_idx_lap_dist_pct),
+            len(car_idx_class_position)
+        )
 
-        for car_idx in range(len(car_idx_class_position)):
+        for car_idx in range(max_len):
             driver_info = drivers.get(car_idx)
             if not driver_info:
                 continue
 
-            # Filter out pace car by name
-            driver_name = driver_info.get('UserName', '')
-            if 'pace car' in driver_name.lower():
+            # Filter out pace cars
+            if is_pace_car(driver_info):
                 continue
 
             # Filter out spectators (they have no car number)
@@ -188,9 +193,8 @@ class PositionCalculator:
             if not driver_info:
                 continue
 
-            # Filter out pace car by name
-            driver_name = driver_info.get('UserName', '')
-            if 'pace car' in driver_name.lower():
+            # Filter out pace cars
+            if is_pace_car(driver_info):
                 continue
 
             # Filter out spectators (they have no car number)
