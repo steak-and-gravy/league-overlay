@@ -62,6 +62,7 @@ def _make_parent():
         show_last_lap=False,
         show_delta=False,
         show_pit_lap=False,
+        always_use_driver_name=False,
         bold_drivers=False,
         pit_stop_indicator=True,
         font_size="Medium",
@@ -300,6 +301,53 @@ def test_create_row_renders_recent_lap_flash_inside_driver_name_cell(qapp):
     assert flash_text is not None
     assert flash_text.text() == "1:31.2"
     assert parent.settings.slower_color in name_container.styleSheet()
+    row.deleteLater()
+
+
+def test_create_row_prefers_team_name_when_available_by_default(qapp):
+    parent = _make_parent()
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver(
+        "porsche 911 gt3 r",
+        driver_info={
+            "UserName": "Logo Driver",
+            "TeamName": "Logo Racing",
+            "CarNumber": "42",
+            "CarClassID": 100,
+            "CarPath": "porsche 911 gt3 r",
+        },
+    )
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    name_container = layout.itemAtPosition(0, _column_index(parent, "driver_name")).widget()
+    name_text = name_container.findChild(QLabel, "driverNameText")
+
+    assert name_text.text() == "Logo Racing"
+    row.deleteLater()
+
+
+def test_create_row_uses_driver_name_when_override_enabled(qapp):
+    parent = _make_parent()
+    parent.settings.always_use_driver_name = True
+    renderer = DriverRowRenderer(parent)
+    driver = _make_driver(
+        "porsche 911 gt3 r",
+        driver_info={
+            "UserName": "Logo Driver",
+            "TeamName": "Logo Racing",
+            "CarNumber": "42",
+            "CarClassID": 100,
+            "CarPath": "porsche 911 gt3 r",
+        },
+    )
+
+    row = renderer.create_row(driver)
+    layout = row.layout()
+    name_container = layout.itemAtPosition(0, _column_index(parent, "driver_name")).widget()
+    name_text = name_container.findChild(QLabel, "driverNameText")
+
+    assert name_text.text() == "Logo Driver"
     row.deleteLater()
 
 

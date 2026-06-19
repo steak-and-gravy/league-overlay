@@ -156,6 +156,23 @@ def test_apply_settings_updates_recent_lap_flash_checkbox(qapp):
     overlay.deleteLater()
 
 
+def test_apply_settings_updates_always_use_driver_name_checkbox(qapp):
+    """Applying the dialog should persist the team-name override toggle."""
+    overlay, dialog = _build_dialog()
+
+    assert dialog.always_use_driver_name_cb.text() == "Always Use Driver Name"
+    assert dialog.always_use_driver_name_cb.isChecked() is False
+    assert "Team events normally show team names" in dialog.always_use_driver_name_cb.toolTip()
+    dialog.always_use_driver_name_cb.setChecked(True)
+    dialog.apply_settings()
+
+    assert overlay.settings.always_use_driver_name is True
+    assert overlay.signals.refresh_colors.emit.called
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
 def test_save_local_copy_defaults_to_official_path_filename(qapp):
     """Local copy dialog should suggest the official path basename."""
     overlay, dialog = _build_dialog()

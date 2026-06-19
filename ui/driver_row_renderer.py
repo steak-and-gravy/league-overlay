@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt
 from config.constants import COLUMN_REGISTRY, get_scaled_column_widths
 from config.logging_config import get_logger
 from core.driver_state import DriverState
+from .display_names import driver_display_name
 from .styles import DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, DarkColorStyle
 
 logger = get_logger(__name__)
@@ -402,7 +403,7 @@ class DriverRowRenderer:
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(4)
 
-        name_label = QLabel(driver.team_name if driver.team_name > "" else driver.driver_name)
+        name_label = QLabel(driver_display_name(driver, self.parent.settings))
         name_label.setObjectName("driverNameText")
         name_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         name_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)

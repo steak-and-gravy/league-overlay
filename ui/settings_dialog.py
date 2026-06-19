@@ -776,6 +776,20 @@ class SettingsDialog(QDialog):
 
         window_layout.addLayout(checkbox_row4)
 
+        checkbox_row5 = QHBoxLayout()
+        checkbox_row5.setSpacing(10)
+
+        self.always_use_driver_name_cb = QCheckBox("Always Use Driver Name")
+        self.always_use_driver_name_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.always_use_driver_name_cb.setChecked(self.parent_overlay.settings.always_use_driver_name)
+        self.always_use_driver_name_cb.setToolTip(
+            "Team events normally show team names when iRacing provides them. Enable this to show driver names instead."
+        )
+        checkbox_row5.addWidget(self.always_use_driver_name_cb)
+        checkbox_row5.addStretch()
+
+        window_layout.addLayout(checkbox_row5)
+
         window_group.setMinimumHeight(window_group.sizeHint().height())
 
         right_column.addWidget(window_group)
@@ -1433,6 +1447,7 @@ class SettingsDialog(QDialog):
             self.highlight_player_border_cb.setChecked(defaults.highlight_player_border)
             self.bold_drivers_cb.setChecked(defaults.bold_drivers)
             self.show_recent_lap_flash_cb.setChecked(defaults.show_recent_lap_flash)
+            self.always_use_driver_name_cb.setChecked(defaults.always_use_driver_name)
             self.local_website_enabled_cb.setChecked(defaults.local_website_enabled)
             self.local_website_port_spin.setValue(defaults.local_website_port)
             self.local_website_scale_combo.setCurrentText(defaults.local_website_scale)
@@ -1504,6 +1519,7 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.highlight_player_border = self.highlight_player_border_cb.isChecked()
             self.parent_overlay.settings.bold_drivers = self.bold_drivers_cb.isChecked()
             self.parent_overlay.settings.show_recent_lap_flash = self.show_recent_lap_flash_cb.isChecked()
+            self.parent_overlay.settings.always_use_driver_name = self.always_use_driver_name_cb.isChecked()
             self.parent_overlay.settings.local_website_enabled = self.local_website_enabled_cb.isChecked()
             self.parent_overlay.settings.local_website_port = self.local_website_port_spin.value()
             self.parent_overlay.settings.local_website_scale = self.local_website_scale_combo.currentText()

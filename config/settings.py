@@ -41,6 +41,7 @@ class AppSettings:
     show_last_lap: bool = False
     show_delta: bool = False
     show_recent_lap_flash: bool = True
+    always_use_driver_name: bool = False  # Prefer UserName over TeamName in team events
     show_best_lap: bool = False
     show_positions_gained: bool = True
     show_car_manufacturer: bool = True  # Show car manufacturer badge column
@@ -190,6 +191,7 @@ class SettingsManager:
                 'show_last_lap': settings.show_last_lap,
                 'show_delta': settings.show_delta,
                 'show_recent_lap_flash': settings.show_recent_lap_flash,
+                'always_use_driver_name': settings.always_use_driver_name,
                 'show_best_lap': settings.show_best_lap,
                 'show_positions_gained': settings.show_positions_gained,
                 'show_car_manufacturer': settings.show_car_manufacturer,
@@ -258,6 +260,7 @@ class SettingsManager:
             'show_last_lap': settings.show_last_lap,
             'show_delta': settings.show_delta,
             'show_recent_lap_flash': settings.show_recent_lap_flash,
+            'always_use_driver_name': settings.always_use_driver_name,
             'show_best_lap': settings.show_best_lap,
             'show_positions_gained': settings.show_positions_gained,
             'show_car_manufacturer': settings.show_car_manufacturer,

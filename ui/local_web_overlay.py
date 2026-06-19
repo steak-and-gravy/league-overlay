@@ -16,6 +16,7 @@ from config.constants import COLUMN_REGISTRY, UI_COLORS
 from config.logging_config import get_logger
 from core.driver_state import DriverState
 from core.gap_calculator import GapCalculator
+from ui.display_names import driver_display_name
 from ui.driver_row_renderer import DriverRowRenderer
 from ui.styles import get_half_effect_bg_color
 
@@ -160,7 +161,7 @@ def _serialize_driver(driver: DriverState, columns: List[Dict[str, str]],
         "pos": driver.position or "",
         "positions_gained": driver.positions_gained,
         "div_pos": driver.division_position or "",
-        "driver_name": driver.team_name if driver.team_name > "" else driver.driver_name,
+        "driver_name": driver_display_name(driver, settings),
         "car_manufacturer": driver.car_manufacturer,
         "rating": driver.combined_rating,
         "car_number": driver.car_number,

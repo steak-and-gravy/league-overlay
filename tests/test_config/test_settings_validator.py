@@ -560,6 +560,13 @@ class TestNewDisplaySettings:
         result = validator.validate_and_coerce(data)
         assert result['show_recent_lap_flash'] is True
 
+    def test_always_use_driver_name_default_false(self):
+        """Test always_use_driver_name defaults to False."""
+        validator = SettingsValidator()
+        data = {}
+        result = validator.validate_and_coerce(data)
+        assert result['always_use_driver_name'] is False
+
     def test_highlight_player_border_defaults_false(self):
         """Test highlight_player_border defaults to False."""
         validator = SettingsValidator()
@@ -587,6 +594,13 @@ class TestNewDisplaySettings:
         data = {'show_recent_lap_flash': False}
         result = validator.validate_and_coerce(data)
         assert result['show_recent_lap_flash'] is False
+
+    def test_always_use_driver_name_true(self):
+        """Test always_use_driver_name can be enabled."""
+        validator = SettingsValidator()
+        data = {'always_use_driver_name': True}
+        result = validator.validate_and_coerce(data)
+        assert result['always_use_driver_name'] is True
 
     def test_highlight_player_border_true(self):
         """Test highlight_player_border can be enabled."""
@@ -657,6 +671,13 @@ class TestNewDisplaySettings:
         result = validator.validate_and_coerce(data)
         assert result['show_recent_lap_flash'] is True
 
+    def test_always_use_driver_name_invalid_returns_default(self):
+        """Test invalid always_use_driver_name value returns default."""
+        validator = SettingsValidator()
+        data = {'always_use_driver_name': 'maybe'}
+        result = validator.validate_and_coerce(data)
+        assert result['always_use_driver_name'] is False
+
     def test_highlight_player_border_invalid_returns_default(self):
         """Test invalid highlight_player_border value returns default."""
         validator = SettingsValidator()
@@ -675,6 +696,7 @@ class TestNewDisplaySettings:
             'show_last_lap': True,
             'show_delta': True,
             'show_recent_lap_flash': False,
+            'always_use_driver_name': True,
             'font_size': 'Large'
         }
         result = validator.validate_and_coerce(data)
@@ -685,6 +707,7 @@ class TestNewDisplaySettings:
         assert result['show_last_lap'] is True
         assert result['show_delta'] is True
         assert result['show_recent_lap_flash'] is False
+        assert result['always_use_driver_name'] is True
         assert result['font_size'] == 'Large'
 
 
@@ -1148,6 +1171,7 @@ class TestNewDriverInfoColumns:
         assert result['show_car_number'] is True
         assert result['show_pit_lap'] is False
         assert result['pit_stop_indicator'] is True
+        assert result['always_use_driver_name'] is False
         assert result['show_division_gap'] is False
         assert result['show_division_interval'] is False
 

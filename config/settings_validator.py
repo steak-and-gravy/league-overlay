@@ -191,6 +191,11 @@ class SettingsValidator:
             default=self.defaults['show_recent_lap_flash'],
             field_name='show_recent_lap_flash'
         )
+        validated['always_use_driver_name'] = self.coerce_bool(
+            data.get('always_use_driver_name'),
+            default=self.defaults['always_use_driver_name'],
+            field_name='always_use_driver_name'
+        )
         validated['show_best_lap'] = self.coerce_bool(
             data.get('show_best_lap'),
             default=self.defaults['show_best_lap'],

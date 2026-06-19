@@ -60,6 +60,42 @@ def test_build_local_web_snapshot_uses_visible_columns_and_driver_values():
     assert snapshot["drivers"][0]["recentLapFlashState"] == "faster"
 
 
+def test_build_local_web_snapshot_prefers_team_name_by_default():
+    settings = AppSettings()
+    driver = DriverState(
+        car_idx=12,
+        driver_info={"UserName": "Test Driver", "TeamName": "Test Team", "CarNumber": "42"},
+    )
+    overlay = SimpleNamespace(
+        settings=settings,
+        displayed_data=[driver],
+        _last_footer_data={},
+    )
+
+    snapshot = build_local_web_snapshot(overlay)
+    cells = {cell["id"]: cell["value"] for cell in snapshot["drivers"][0]["cells"]}
+
+    assert cells["driver_name"] == "Test Team"
+
+
+def test_build_local_web_snapshot_uses_driver_name_when_override_enabled():
+    settings = AppSettings(always_use_driver_name=True)
+    driver = DriverState(
+        car_idx=12,
+        driver_info={"UserName": "Test Driver", "TeamName": "Test Team", "CarNumber": "42"},
+    )
+    overlay = SimpleNamespace(
+        settings=settings,
+        displayed_data=[driver],
+        _last_footer_data={},
+    )
+
+    snapshot = build_local_web_snapshot(overlay)
+    cells = {cell["id"]: cell["value"] for cell in snapshot["drivers"][0]["cells"]}
+
+    assert cells["driver_name"] == "Test Driver"
+
+
 def test_local_web_html_uses_responsive_browser_source_sizing():
     html = local_web_overlay._render_html()
 

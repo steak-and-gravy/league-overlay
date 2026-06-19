@@ -46,6 +46,7 @@ class TestAppSettingsDefaults:
         assert settings.pit_stop_indicator is True
         assert settings.bold_drivers is True
         assert settings.show_recent_lap_flash is True
+        assert settings.always_use_driver_name is False
         assert settings.show_car_manufacturer is True
         assert settings.broadcast_roll_rows == 5
         assert settings.broadcast_roll_interval_seconds == 5
@@ -259,6 +260,7 @@ class TestSaveSettings:
             pit_stop_indicator=False,
             bold_drivers=False,
             show_recent_lap_flash=False,
+            always_use_driver_name=True,
             local_website_enabled=True,
             local_website_port=8766,
             local_website_scale="Extra Large",
@@ -276,6 +278,7 @@ class TestSaveSettings:
             assert data['highlight_player_border'] is True
             assert data['pit_stop_indicator'] is False
             assert data['show_recent_lap_flash'] is False
+            assert data['always_use_driver_name'] is True
             assert data['local_website_enabled'] is True
             assert data['local_website_port'] == 8766
             assert data['local_website_scale'] == "Extra Large"
@@ -329,6 +332,7 @@ class TestSaveSettings:
             font_size='Large',
             hide_headers=True,
             show_recent_lap_flash=False,
+            always_use_driver_name=True,
             highlight_player_border=True,
             local_website_enabled=True,
             local_website_port=8766,
@@ -344,6 +348,7 @@ class TestSaveSettings:
         assert loaded.font_size == original.font_size
         assert loaded.hide_headers == original.hide_headers
         assert loaded.show_recent_lap_flash == original.show_recent_lap_flash
+        assert loaded.always_use_driver_name == original.always_use_driver_name
         assert loaded.highlight_player_border == original.highlight_player_border
         assert loaded.local_website_enabled == original.local_website_enabled
         assert loaded.local_website_port == original.local_website_port
