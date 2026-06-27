@@ -13,6 +13,8 @@ logger = get_logger(__name__)
 class DivisionManager:
     """Manages driver-to-division assignments and color configuration."""
 
+    DEFAULT_DIVISION = "Default"
+
     def __init__(self, config_file: str = FILE_CONFIG.DIVISIONS_FILE, settings_file: str = FILE_CONFIG.SETTINGS_FILE):
         """Initialize division manager.
 
@@ -185,6 +187,19 @@ class DivisionManager:
             return self._division_cache_by_name[user_name]
 
         return None
+
+    @classmethod
+    def normalize_division_name(cls, division: Optional[str]) -> str:
+        """Return the stable grouping key for a division assignment."""
+        if isinstance(division, str):
+            division = division.strip()
+            if division:
+                return division
+        return cls.DEFAULT_DIVISION
+
+    def get_driver_division_key(self, driver_info: Dict[str, str]) -> str:
+        """Get a driver's stable division grouping key."""
+        return self.normalize_division_name(self.get_driver_division(driver_info))
 
     def set_driver_division(self, driver_info: Dict[str, str], division: str) -> None:
         """Assign a driver to a division or remove assignment.

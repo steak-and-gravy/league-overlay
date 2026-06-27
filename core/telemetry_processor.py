@@ -1232,6 +1232,10 @@ class TelemetryProcessor:
     # DIVISION POSITION CALCULATION
     # ═══════════════════════════════════════════════════════════════════════════
 
+    def _get_driver_division_key(self, driver_info: Dict) -> str:
+        """Return the stable division grouping key for a driver."""
+        return self.division_manager.get_driver_division_key(driver_info)
+
     def _calculate_division_positions(self, active_drivers: List[Dict],
                                      get_driver_color_fn: Callable) -> Tuple[Dict[int, int], List[Dict]]:
         """Calculate division positions for all drivers.
@@ -1241,32 +1245,34 @@ class TelemetryProcessor:
             get_driver_color_fn: Function to get driver's division color
 
         Returns:
-            Tuple of (division_positions, all_drivers_with_colors):
+            Tuple of (division_positions, all_drivers_with_divisions):
             - division_positions: Dict mapping car_idx to division position (1-based)
-            - all_drivers_with_colors: List of dicts with car_idx, position, color
+            - all_drivers_with_divisions: List of dicts with car_idx, position, division key, and color
         """
-        all_drivers_with_colors = []
+        all_drivers_with_divisions = []
         for driver in active_drivers:
+            driver_info = driver['driver_info']
             driver_color = get_driver_color_fn(driver['driver_info'])
-            all_drivers_with_colors.append({
+            all_drivers_with_divisions.append({
                 'car_idx': driver['car_idx'],
                 'position': driver.get('position', 0),
                 'color': driver_color,
-                'driver_info': driver['driver_info'],
+                'division_key': self._get_driver_division_key(driver_info),
+                'driver_info': driver_info,
             })
 
         division_positions = {}
         from collections import defaultdict
-        grouped_by_color = defaultdict(list)  # Auto-creates empty list for new keys
-        for driver in all_drivers_with_colors:
-            grouped_by_color[driver['color']].append(driver)
+        grouped_by_division = defaultdict(list)  # Auto-creates empty list for new keys
+        for driver in all_drivers_with_divisions:
+            grouped_by_division[driver['division_key']].append(driver)
 
-        for drivers in grouped_by_color.values():
+        for drivers in grouped_by_division.values():
             sorted_drivers = sorted(drivers, key=lambda x: x['position'])
             for i, driver in enumerate(sorted_drivers):
                 division_positions[driver['car_idx']] = i + 1
 
-        return division_positions, all_drivers_with_colors
+        return division_positions, all_drivers_with_divisions
 
     def _get_live_pit_display(self, car_idx: int, current_lap: int) -> str:
         """Return the authoritative live pit/tow display for a driver."""
@@ -1864,13 +1870,14 @@ class TelemetryProcessor:
         # and same division when show_division is True
         current_info = driver.get('driver_info', {})
         current_car_class_id = current_info.get('CarClassID')
+        current_division_key = self._get_driver_division_key(current_info)
 
         comparison_drivers = []
         for temp_driver in active_drivers:
             temp_info = temp_driver['driver_info']
             if current_car_class_id is not None and temp_info.get('CarClassID') != current_car_class_id:
                 continue
-            if show_division and get_driver_color_fn(temp_info) != current_driver_color:
+            if show_division and self._get_driver_division_key(temp_info) != current_division_key:
                 continue
             comparison_drivers.append({
                 'car_idx': temp_driver['car_idx'],
@@ -2026,13 +2033,14 @@ class TelemetryProcessor:
         # Build comparison list: same class always; same division when show_division
         current_info = driver.get('driver_info', {})
         current_car_class_id = current_info.get('CarClassID')
+        current_division_key = self._get_driver_division_key(current_info)
 
         comparison_drivers = []
         for temp_driver in active_drivers:
             temp_info = temp_driver['driver_info']
             if current_car_class_id is not None and temp_info.get('CarClassID') != current_car_class_id:
                 continue
-            if show_division and get_driver_color_fn(temp_info) != current_driver_color:
+            if show_division and self._get_driver_division_key(temp_info) != current_division_key:
                 continue
             comparison_drivers.append({
                 'car_idx': temp_driver['car_idx'],
@@ -2114,15 +2122,23 @@ class TelemetryProcessor:
         return GapCalculator.format_gap_display(time_gap=time_gap_raw, lap_gap=lap_gap)
 
     def _calculate_practice_gap_to_leader(self, car_idx: int, current_driver_color: str,
-                                     all_drivers_with_colors: List[Dict],
+                                     all_drivers_with_divisions: List[Dict],
                                      session_data: Dict, show_division: bool = True) -> str:
         """Gap to leader during practice/qualifying based on best laps."""
         # Build comparison group: same class always; optional same division
         driver_lookup = self._get_driver_lookup(session_data)
         current_info = driver_lookup.get(car_idx, {})
         current_car_class_id = current_info.get('CarClassID')
+        current_division_key = self._get_driver_division_key(current_info)
 
-        pool = all_drivers_with_colors if not show_division else [d for d in all_drivers_with_colors if d['color'] == current_driver_color]
+        pool = (
+            all_drivers_with_divisions
+            if not show_division
+            else [
+                d for d in all_drivers_with_divisions
+                if d['division_key'] == current_division_key
+            ]
+        )
 
         comparison_drivers = []
         for d in pool:
@@ -2204,6 +2220,7 @@ class TelemetryProcessor:
             driver_lookup = self._get_driver_lookup(session_data)
             current_driver_info = driver_lookup.get(car_idx, {})
             current_car_class_id = current_driver_info.get('CarClassID')
+            current_division_key = self._get_driver_division_key(current_driver_info)
 
             division_results = []
             for result in sorted_results:
@@ -2215,10 +2232,9 @@ class TelemetryProcessor:
                 if not driver_info:
                     continue
 
-                driver_division_color = get_driver_color_fn(driver_info)
                 driver_car_class_id = driver_info.get('CarClassID')
 
-                division_match = driver_division_color == current_driver_color
+                division_match = self._get_driver_division_key(driver_info) == current_division_key
                 class_match = (current_car_class_id is None and driver_car_class_id is None) or (driver_car_class_id == current_car_class_id)
 
                 if division_match and class_match:
@@ -2275,7 +2291,7 @@ class TelemetryProcessor:
         return GapCalculator.format_gap_display(time_gap=time_gap, lap_gap=0)
 
     def _calculate_practice_interval(self, car_idx: int, current_color_position: int,
-                               current_driver_color: str, all_drivers_with_colors: List[Dict],
+                               current_driver_color: str, all_drivers_with_divisions: List[Dict],
                                session_data: Dict, show_division: bool = True) -> str:
         """Calculate interval for practice/qualifying based on best lap times.
 
@@ -2283,7 +2299,7 @@ class TelemetryProcessor:
             car_idx: Current car index
             current_color_position: Position within division
             current_driver_color: Division color
-            all_drivers_with_colors: List of drivers with color info
+            all_drivers_with_divisions: List of drivers with division info
             session_data: Session data dict (includes current_session and lookup caches)
             show_division: If True, compare to car ahead in same division. If False, compare to any car ahead.
 
@@ -2294,12 +2310,13 @@ class TelemetryProcessor:
         driver_lookup = self._get_driver_lookup(session_data)
         current_info = driver_lookup.get(car_idx, {})
         current_car_class_id = current_info.get('CarClassID')
+        current_division_key = self._get_driver_division_key(current_info)
 
         if show_division:
             # Filter to same division and class
             comparison_drivers = []
-            for d in all_drivers_with_colors:
-                if d['color'] != current_driver_color:
+            for d in all_drivers_with_divisions:
+                if d['division_key'] != current_division_key:
                     continue
                 di = d.get('driver_info') or driver_lookup.get(d['car_idx'], {})
                 if current_car_class_id is not None and di.get('CarClassID') != current_car_class_id:
@@ -2322,7 +2339,7 @@ class TelemetryProcessor:
         else:
             # Overall mode but still only same class
             filtered = []
-            for d in all_drivers_with_colors:
+            for d in all_drivers_with_divisions:
                 di = d.get('driver_info') or driver_lookup.get(d['car_idx'], {})
                 if current_car_class_id is None or di.get('CarClassID') == current_car_class_id:
                     filtered.append(d)
@@ -2430,14 +2447,11 @@ class TelemetryProcessor:
         if show_division:
             # DIVISION GAP MODE: Find car ahead in same division/class
 
-            # Use the division color that was already calculated and passed in
-            # (don't recalculate - for disconnected/restored drivers the driver_info may differ)
-            current_division_color = current_driver_color
-
             # Get current driver's car class for multi-class filtering
             driver_lookup = self._get_driver_lookup(session_data)
             current_driver_info = driver_lookup.get(car_idx, {})
             current_car_class_id = current_driver_info.get('CarClassID')
+            current_division_key = self._get_driver_division_key(current_driver_info)
 
             # Build list of drivers in same division AND same car class, sorted by position
             division_results = []
@@ -2446,19 +2460,18 @@ class TelemetryProcessor:
                 if result_car_idx is None:
                     continue
 
-                # Get division color and car class for this driver
+                # Get division key and car class for this driver
                 driver_info = driver_lookup.get(result_car_idx, {})
 
                 # Skip if driver_info is empty (driver not in current session - disconnected/invalid)
                 if not driver_info:
                     continue
 
-                driver_division_color = get_driver_color_fn(driver_info)
                 driver_car_class_id = driver_info.get('CarClassID')
 
-                # Filter by BOTH division color AND car class (for multi-class support)
+                # Filter by BOTH division key AND car class (for multi-class support)
                 # This ensures we compare within the same class even if divisions aren't configured
-                division_match = driver_division_color == current_division_color
+                division_match = self._get_driver_division_key(driver_info) == current_division_key
                 class_match = (current_car_class_id is None and driver_car_class_id is None) or (driver_car_class_id == current_car_class_id)
 
                 if division_match and class_match:
@@ -2688,7 +2701,7 @@ class TelemetryProcessor:
                 self._dedupe_cooldown_final_positions(active_drivers, session_data)
 
             # Calculate division positions
-            division_positions, all_drivers_with_colors = self._calculate_division_positions(
+            division_positions, all_drivers_with_divisions = self._calculate_division_positions(
                 active_drivers, get_driver_color_fn)
 
             # Read lap time telemetry data
@@ -2745,7 +2758,7 @@ class TelemetryProcessor:
                 # Calculate overall interval (show_division=False)
                 interval = self._calculate_interval(
                     driver, current_color_position, current_driver_color,
-                    active_drivers, all_drivers_with_colors,
+                    active_drivers, all_drivers_with_divisions,
                     is_race, session_data,
                     get_driver_color_fn, show_division=False
                 )
@@ -2753,7 +2766,7 @@ class TelemetryProcessor:
                 # Calculate division interval (show_division=True)
                 division_interval = self._calculate_interval(
                     driver, current_color_position, current_driver_color,
-                    active_drivers, all_drivers_with_colors,
+                    active_drivers, all_drivers_with_divisions,
                     is_race, session_data,
                     get_driver_color_fn, show_division=True
                 )
@@ -2761,7 +2774,7 @@ class TelemetryProcessor:
                 # Calculate overall gap to leader (show_division=False)
                 gap_to_leader = self._calculate_gap_to_leader(
                     driver, position, current_color_position, current_driver_color,
-                    active_drivers, all_drivers_with_colors,
+                    active_drivers, all_drivers_with_divisions,
                     is_race, session_data,
                     get_driver_color_fn, show_division=False
                 )
@@ -2769,7 +2782,7 @@ class TelemetryProcessor:
                 # Calculate division gap to leader (show_division=True)
                 division_gap_to_leader = self._calculate_gap_to_leader(
                     driver, position, current_color_position, current_driver_color,
-                    active_drivers, all_drivers_with_colors,
+                    active_drivers, all_drivers_with_divisions,
                     is_race, session_data,
                     get_driver_color_fn, show_division=True
                 )
@@ -2787,7 +2800,7 @@ class TelemetryProcessor:
                 # Calculate delta lap time comparison
                 delta = self._calculate_delta(
                     last_lap_time,
-                    all_drivers_with_colors,
+                    all_drivers_with_divisions,
                     car_idx_last_lap,
                     current_driver_color,
                     car_idx

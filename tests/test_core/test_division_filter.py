@@ -27,6 +27,16 @@ def mock_division_manager():
         "Default": "#C5C5C5",
         "All": "#FFFFFF"
     }
+    manager.normalize_division_name.side_effect = DivisionManager.normalize_division_name
+    manager.get_driver_division_key.side_effect = (
+        lambda info: DivisionManager.normalize_division_name(manager.get_driver_division(info))
+    )
+    manager.get_driver_division.side_effect = lambda info: {
+        '1': 'Pro',
+        '2': 'ProAm',
+        '3': 'Am',
+        '4': 'Rookie',
+    }.get(info.get('UserID'))
     return manager
 
 
@@ -43,21 +53,25 @@ def sample_race_data():
         DriverState(
             car_idx=0,
             position=1,
+            division_name="Pro",
             driver_info={'UserID': '1', 'UserName': 'Driver1'}
         ),
         DriverState(
             car_idx=1,
             position=2,
+            division_name="ProAm",
             driver_info={'UserID': '2', 'UserName': 'Driver2'}
         ),
         DriverState(
             car_idx=2,
             position=3,
+            division_name="Am",
             driver_info={'UserID': '3', 'UserName': 'Driver3'}
         ),
         DriverState(
             car_idx=3,
             position=4,
+            division_name="Rookie",
             driver_info={'UserID': '4', 'UserName': 'Driver4'}
         )
     ]
@@ -162,8 +176,8 @@ class TestSpectatorModeFilterCycling:
         """Test that spectator mode only cycles through divisions with active drivers."""
         # Race data with only Pro and Am drivers (no ProAm or Rookie)
         race_data = [
-            DriverState(car_idx=0, driver_info={'UserID': '1', 'UserName': 'Driver1'}),  # Pro
-            DriverState(car_idx=1, driver_info={'UserID': '3', 'UserName': 'Driver3'}),  # Am
+            DriverState(car_idx=0, division_name="Pro", driver_info={'UserID': '1', 'UserName': 'Driver1'}),
+            DriverState(car_idx=1, division_name="Am", driver_info={'UserID': '3', 'UserName': 'Driver3'}),
         ]
 
         # First cycle: Pro
@@ -211,9 +225,9 @@ class TestApplyFilter:
     def test_filter_with_multiple_drivers_same_division(self, division_filter):
         """Test filtering when multiple drivers are in the same division."""
         race_data = [
-            DriverState(car_idx=0, driver_info={'UserID': '1', 'UserName': 'Driver1'}),  # Pro
-            DriverState(car_idx=1, driver_info={'UserID': '1', 'UserName': 'Driver5'}),  # Pro (same color)
-            DriverState(car_idx=2, driver_info={'UserID': '2', 'UserName': 'Driver2'}),  # ProAm
+            DriverState(car_idx=0, division_name="Pro", driver_info={'UserID': '1', 'UserName': 'Driver1'}),
+            DriverState(car_idx=1, division_name="Pro", driver_info={'UserID': '1', 'UserName': 'Driver5'}),
+            DriverState(car_idx=2, division_name="ProAm", driver_info={'UserID': '2', 'UserName': 'Driver2'}),
         ]
 
         def color_fn(info):
@@ -229,6 +243,29 @@ class TestApplyFilter:
         assert len(result) == 2
         assert result[0].car_idx == 0
         assert result[1].car_idx == 1
+
+    def test_specific_division_filter_does_not_merge_same_color_divisions(self, division_filter):
+        """Filtering should use division identity, not color equality."""
+        race_data = [
+            DriverState(car_idx=0, division_name="Pro", driver_info={'UserID': '1', 'UserName': 'Driver1'}),
+            DriverState(car_idx=1, division_name="ProAm", driver_info={'UserID': '2', 'UserName': 'Driver2'}),
+            DriverState(car_idx=2, division_name="ProAm", driver_info={'UserID': '5', 'UserName': 'Driver5'}),
+        ]
+
+        def same_color_fn(_info):
+            return '#FF0000'
+
+        division_filter.current_division_filter = "ProAm"
+        division_filter.division_manager.division_colors['Pro'] = '#FF0000'
+        division_filter.division_manager.division_colors['ProAm'] = '#FF0000'
+
+        result = division_filter.apply_filter(
+            race_data,
+            player_car_idx=None,
+            get_driver_color_fn=same_color_fn
+        )
+
+        assert [driver.car_idx for driver in result] == [1, 2]
 
     def test_empty_race_data_returns_empty(self, division_filter):
         """Test that empty race data returns empty list."""
@@ -321,7 +358,7 @@ class TestGetDivisionsWithDrivers:
     def test_excludes_default_and_all(self, division_filter):
         """Test that Default and All are excluded from active divisions."""
         race_data = [
-            DriverState(car_idx=0, driver_info={'UserID': '1', 'UserName': 'Driver1'})
+            DriverState(car_idx=0, driver_info={'UserID': '5', 'UserName': 'Driver1'})
         ]
 
         def color_fn(info):
@@ -343,8 +380,8 @@ class TestGetDivisionsWithDrivers:
     def test_single_division_race(self, division_filter):
         """Test detection when all drivers are in one division."""
         race_data = [
-            DriverState(car_idx=0, driver_info={'UserID': '1', 'UserName': 'Driver1'}),
-            DriverState(car_idx=1, driver_info={'UserID': '1', 'UserName': 'Driver2'}),
+            DriverState(car_idx=0, division_name="Pro", driver_info={'UserID': '1', 'UserName': 'Driver1'}),
+            DriverState(car_idx=1, division_name="Pro", driver_info={'UserID': '1', 'UserName': 'Driver2'}),
         ]
 
         def color_fn(info):

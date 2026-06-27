@@ -52,7 +52,7 @@ class DivisionFilter:
         Args:
             race_data: Current race data (unfiltered)
             player_car_idx: Player's car index, or None if spectating
-            get_driver_color_fn: Function to get a driver's division color
+            get_driver_color_fn: Deprecated; retained for caller compatibility
         """
         player_on_track = player_car_idx is not None and any(
             d.car_idx == player_car_idx for d in race_data
@@ -106,7 +106,7 @@ class DivisionFilter:
         Args:
             race_data: Full list of DriverState objects to filter
             player_car_idx: Player's car index, or None if spectating
-            get_driver_color_fn: Function to get a driver's division color
+            get_driver_color_fn: Deprecated; retained for caller compatibility
 
         Returns:
             Filtered list of DriverState objects
@@ -116,22 +116,25 @@ class DivisionFilter:
 
         # Filter to player's division only
         if self.show_only_my_division and player_car_idx is not None:
-            player_color = None
+            player_division_key = None
             for driver in race_data:
                 if driver.car_idx == player_car_idx:
-                    player_color = get_driver_color_fn(driver.driver_info)
+                    player_division_key = self._get_driver_division_key(driver)
                     break
 
-            if player_color:
-                return [d for d in race_data if get_driver_color_fn(d.driver_info) == player_color]
+            if player_division_key:
+                return [
+                    d for d in race_data
+                    if self._get_driver_division_key(d) == player_division_key
+                ]
             return race_data
 
         # Filter to specific division (spectator mode)
         if self.current_division_filter is not None:
-            division_color = self.division_manager.division_colors.get(self.current_division_filter)
-            if division_color:
-                return [d for d in race_data if get_driver_color_fn(d.driver_info) == division_color]
-            return race_data
+            return [
+                d for d in race_data
+                if self._get_driver_division_key(d) == self.current_division_filter
+            ]
 
         # No filter - show all
         return race_data
@@ -163,6 +166,12 @@ class DivisionFilter:
         self.show_only_my_division = False
         self.current_division_filter = None
 
+    def _get_driver_division_key(self, driver: DriverState) -> str:
+        """Return the stable division key for filtering a DriverState."""
+        if driver.division_name is not None:
+            return self.division_manager.normalize_division_name(driver.division_name)
+        return self.division_manager.get_driver_division_key(driver.driver_info)
+
     def _get_divisions_with_drivers(
         self,
         race_data: List[DriverState],
@@ -172,15 +181,14 @@ class DivisionFilter:
 
         Args:
             race_data: Current race data
-            get_driver_color_fn: Function to get a driver's division color
+            get_driver_color_fn: Deprecated; retained for caller compatibility
 
         Returns:
             Set of division names with active drivers
         """
         divisions_with_drivers = set()
         for driver in race_data:
-            driver_color = get_driver_color_fn(driver.driver_info)
-            for div_name, div_color in self.division_manager.division_colors.items():
-                if div_color == driver_color and div_name not in ["Default", "All"]:
-                    divisions_with_drivers.add(div_name)
+            division_key = self._get_driver_division_key(driver)
+            if division_key not in ["Default", "All"]:
+                divisions_with_drivers.add(division_key)
         return divisions_with_drivers

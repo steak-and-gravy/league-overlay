@@ -3151,6 +3151,12 @@ class TestFinishingGapCalculation:
     def processor(self, mock_ir):
         """Create TelemetryProcessor with mock dependencies."""
         division_manager = MagicMock(spec=DivisionManager)
+        division_manager.get_driver_division.return_value = None
+        division_manager.get_driver_division_key.side_effect = (
+            lambda info: DivisionManager.normalize_division_name(
+                division_manager.get_driver_division(info)
+            )
+        )
         race_state_tracker = RaceStateTracker(mock_ir)
         gap_calculator = GapCalculator()
         position_calculator = MagicMock(spec=PositionCalculator)
@@ -3164,6 +3170,32 @@ class TestFinishingGapCalculation:
             gap_calculator,
             position_calculator
         )
+
+    def test_division_positions_use_division_key_not_color(self, processor):
+        """Same-color divisions should still maintain separate positions."""
+        processor.division_manager.get_driver_division.side_effect = lambda info: {
+            100: "Pro",
+            101: "ProAm",
+            102: "ProAm",
+        }.get(info.get("UserID"))
+
+        active_drivers = [
+            {'car_idx': 0, 'position': 1, 'driver_info': {'UserID': 100}},
+            {'car_idx': 1, 'position': 2, 'driver_info': {'UserID': 101}},
+            {'car_idx': 2, 'position': 3, 'driver_info': {'UserID': 102}},
+        ]
+
+        def same_color(_driver_info):
+            return "#FF0000"
+
+        division_positions, drivers_with_divisions = processor._calculate_division_positions(
+            active_drivers,
+            same_color
+        )
+
+        assert division_positions == {0: 1, 1: 1, 2: 2}
+        assert [d["division_key"] for d in drivers_with_divisions] == ["Pro", "ProAm", "ProAm"]
+        assert {d["color"] for d in drivers_with_divisions} == {"#FF0000"}
 
     def test_overall_gap_mode_same_lap_time_gaps(self, processor):
         """Test overall gap mode with drivers on same lap showing time gaps."""
@@ -3289,6 +3321,17 @@ class TestFinishingGapCalculation:
         dict_mock_ir = DictMock(real_ir)
 
         division_manager = MagicMock(spec=DivisionManager)
+        division_manager.get_driver_division.side_effect = lambda info: {
+            100: "Pro",
+            101: "ProAm",
+            102: "ProAm",
+            103: "Am",
+        }.get(info.get("UserID"))
+        division_manager.get_driver_division_key.side_effect = (
+            lambda info: DivisionManager.normalize_division_name(
+                division_manager.get_driver_division(info)
+            )
+        )
         race_state_tracker = RaceStateTracker(dict_mock_ir)
         gap_calculator = GapCalculator()
         position_calculator = MagicMock(spec=PositionCalculator)
@@ -3337,6 +3380,47 @@ class TestFinishingGapCalculation:
             3, "#00FF00", session_data, mock_get_color, show_division=True
         )
         assert gap == "Leader"
+
+    def test_finishing_interval_does_not_merge_same_color_divisions(self, processor):
+        """Finished division intervals should use division identity, not color."""
+        processor.division_manager.get_driver_division.side_effect = lambda info: {
+            100: "Pro",
+            101: "ProAm",
+            102: "ProAm",
+        }.get(info.get("UserID"))
+
+        results_positions = [
+            {'Position': 0, 'CarIdx': 0, 'Time': 0.0000, 'LapsComplete': 15},
+            {'Position': 1, 'CarIdx': 1, 'Time': 2.5000, 'LapsComplete': 15},
+            {'Position': 2, 'CarIdx': 2, 'Time': 4.7500, 'LapsComplete': 15},
+        ]
+        session_data = {
+            'results_lookup': {r['CarIdx']: r for r in results_positions},
+            'current_session': {'ResultsPositions': results_positions}
+        }
+
+        def same_color(_driver_info):
+            return "#FF0000"
+
+        gap = processor._calculate_finishing_interval_from_results(
+            1,
+            "#FF0000",
+            session_data,
+            same_color,
+            show_division=True
+        )
+
+        assert gap == "Leader"
+
+        gap = processor._calculate_finishing_interval_from_results(
+            2,
+            "#FF0000",
+            session_data,
+            same_color,
+            show_division=True
+        )
+
+        assert gap == "2.2"
 
     def test_division_gap_mode_with_lap_deficit_within_division(self, processor):
         """Test division gap mode where drivers in same division are laps down from each other."""
