@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget, QStyleOptionViewItem
 
 from config.constants import UI_DIMENSIONS
@@ -21,6 +22,9 @@ class DummyOverlay(QWidget):
         self.settings = AppSettings()
         self.division_manager = SimpleNamespace(
             division_colors=self.settings.division_colors.copy(),
+            app_default_division_colors=self.settings.division_colors.copy(),
+            league_division_colors={},
+            user_override_division_colors={},
             driver_colors={'drivers': []},
             config_file="official:BWRL GT3 Sprint",
         )
@@ -45,6 +49,44 @@ class DummyOverlay(QWidget):
 
     def refresh_official_league(self):
         return True, "", 0
+
+    def get_active_league_source_key(self):
+        if self.color_config_file.startswith("official:"):
+            return self.color_config_file
+        return os.path.abspath(os.path.expanduser(self.color_config_file))
+
+    def get_active_league_display_name(self):
+        if self.color_config_file.startswith("official:"):
+            return self.color_config_file.replace("official:", "", 1)
+        return os.path.basename(self.color_config_file)
+
+    def refresh_effective_division_colors(self):
+        source_key = self.get_active_league_source_key()
+        colors = self.settings.division_colors.copy()
+        colors.update(self.division_manager.league_division_colors)
+        colors.update(self.settings.league_color_overrides.get(source_key, {}))
+        self.division_manager.app_default_division_colors = self.settings.division_colors.copy()
+        self.division_manager.user_override_division_colors = self.settings.league_color_overrides.get(source_key, {})
+        self.division_manager.division_colors = colors
+
+    def set_active_league_division_color(self, division, color):
+        source_key = self.get_active_league_source_key()
+        self.settings.league_color_overrides.setdefault(source_key, {})[division] = color
+        self.refresh_effective_division_colors()
+
+    def reset_active_league_division_colors(self):
+        self.settings.league_color_overrides.pop(self.get_active_league_source_key(), None)
+        self.refresh_effective_division_colors()
+
+    def has_active_league_color_override(self):
+        return self.get_active_league_source_key() in self.settings.league_color_overrides
+
+    def get_active_league_color_status(self):
+        if self.has_active_league_color_override():
+            return "Custom"
+        if self.division_manager.league_division_colors:
+            return "League defaults"
+        return "App defaults"
 
 
 def _build_dialog():
@@ -151,6 +193,60 @@ def test_apply_settings_updates_recent_lap_flash_checkbox(qapp):
 
     assert overlay.settings.show_recent_lap_flash is False
     assert overlay.signals.refresh_colors.emit.called
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
+def test_class_colors_show_active_league_context(qapp):
+    """Class color controls should describe the active league palette."""
+    overlay, dialog = _build_dialog()
+
+    assert dialog.colors_title.text() == "Class Colors - BWRL GT3 Sprint"
+    assert dialog.color_status_label.text() == "App defaults"
+    assert dialog.reset_league_colors_btn.isEnabled() is False
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
+def test_choose_color_writes_active_league_override(qapp):
+    """Changing a swatch should persist a custom color for only the active league."""
+    overlay, dialog = _build_dialog()
+
+    with patch("ui.settings_dialog.QColorDialog.getColor", return_value=QColor("#123456")):
+        dialog.choose_color("Pro")
+
+    assert overlay.settings.league_color_overrides == {
+        "official:BWRL GT3 Sprint": {"Pro": "#123456"}
+    }
+    assert overlay.division_manager.division_colors["Pro"] == "#123456"
+    assert dialog.color_status_label.text() == "Custom"
+    assert dialog.reset_league_colors_btn.isEnabled() is True
+    assert overlay.save_settings_called is True
+    assert overlay.signals.refresh_colors.emit.called
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
+def test_reset_league_colors_reveals_league_defaults(qapp):
+    """Resetting class colors should remove only the active league override."""
+    overlay, dialog = _build_dialog()
+    overlay.division_manager.league_division_colors = {"Pro": "#111111"}
+    overlay.settings.league_color_overrides["official:BWRL GT3 Sprint"] = {"Pro": "#222222"}
+    overlay.refresh_effective_division_colors()
+    dialog.refresh_color_controls()
+
+    assert dialog.color_status_label.text() == "Custom"
+    assert dialog.color_value_labels["Pro"].text() == "#222222"
+
+    dialog.reset_league_colors()
+
+    assert overlay.settings.league_color_overrides == {}
+    assert overlay.division_manager.division_colors["Pro"] == "#111111"
+    assert dialog.color_status_label.text() == "League defaults"
+    assert dialog.color_value_labels["Pro"].text() == "#111111"
 
     dialog.deleteLater()
     overlay.deleteLater()

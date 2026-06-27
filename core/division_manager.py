@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from config.constants import UI_CONFIG, FILE_CONFIG
 from config.logging_config import get_logger
@@ -15,7 +15,13 @@ class DivisionManager:
 
     DEFAULT_DIVISION = "Default"
 
-    def __init__(self, config_file: str = FILE_CONFIG.DIVISIONS_FILE, settings_file: str = FILE_CONFIG.SETTINGS_FILE):
+    def __init__(
+        self,
+        config_file: str = FILE_CONFIG.DIVISIONS_FILE,
+        settings_file: str = FILE_CONFIG.SETTINGS_FILE,
+        app_default_colors: Optional[Dict[str, str]] = None,
+        league_color_overrides: Optional[Dict[str, Dict[str, str]]] = None,
+    ):
         """Initialize division manager.
 
         Args:
@@ -25,17 +31,22 @@ class DivisionManager:
         self.config_file = config_file
         self.settings_file = settings_file
         self.driver_colors: dict[str, list] = {'drivers': []}
+        self.app_default_division_colors: dict[str, str] = UI_CONFIG.DEFAULT_COLORS.copy()
+        self.league_division_colors: dict[str, str] = {}
+        self.user_override_division_colors: dict[str, str] = {}
         self.division_colors: dict[str, str] = UI_CONFIG.DEFAULT_COLORS.copy()
+        self.division_color_status: str = "App defaults"
 
         # O(1) lookup caches for division assignments (95% faster than O(n) linear search)
         self._division_cache_by_id: Dict[str, str] = {}
         self._division_cache_by_name: Dict[str, str] = {}
 
         self.load_driver_config()
-        self.load_division_config()
+        self.refresh_division_colors(app_default_colors, league_color_overrides)
 
     def load_driver_config(self) -> None:
         """Load driver-division mappings from config file or remote source."""
+        self.league_division_colors = {}
         if self.config_file.startswith("official:"):
             self._load_official_league()
         else:
@@ -69,6 +80,7 @@ class DivisionManager:
 
             if 'drivers' in data:
                 self.driver_colors = data
+                self._load_league_division_colors(data)
                 logger.info(f"Loaded {len(data['drivers'])} drivers from {league.name}")
             else:
                 self.driver_colors = {'drivers': []}
@@ -82,6 +94,7 @@ class DivisionManager:
                     with open(cache_path, 'r') as f:
                         data = json.load(f)
                         self.driver_colors = data if 'drivers' in data else {'drivers': []}
+                        self._load_league_division_colors(data)
                         logger.info(f"Loaded from cache: {len(self.driver_colors['drivers'])} drivers")
                 except Exception as cache_error:
                     logger.error(f"Cache load failed: {cache_error}")
@@ -101,6 +114,7 @@ class DivisionManager:
                     data = json.load(f)
                     if 'drivers' in data:
                         self.driver_colors = data
+                        self._load_league_division_colors(data)
                         logger.info(f"Loaded {len(data['drivers'])} driver division assignments from {self.config_file}")
                     else:
                         self.driver_colors = {'drivers': []}
@@ -114,18 +128,117 @@ class DivisionManager:
         self._build_lookup_cache()
 
     def load_division_config(self) -> None:
-        """Load division colors from settings file."""
+        """Load effective division colors from settings file."""
+        self.refresh_division_colors()
+
+    def refresh_division_colors(
+        self,
+        app_default_colors: Optional[Dict[str, str]] = None,
+        league_color_overrides: Optional[Dict[str, Dict[str, str]]] = None,
+        league_source: Optional[str] = None,
+    ) -> None:
+        """Refresh effective colors using app, league, and user override precedence."""
+        if app_default_colors is None or league_color_overrides is None:
+            settings_colors, settings_overrides = self._read_settings_color_data()
+            if app_default_colors is None:
+                app_default_colors = settings_colors
+            if league_color_overrides is None:
+                league_color_overrides = settings_overrides
+
+        self.app_default_division_colors = self._coerce_division_colors(app_default_colors)
+        normalized_source = self.normalize_league_source(league_source or self.config_file)
+        source_overrides = {}
+        if isinstance(league_color_overrides, dict):
+            source_overrides = league_color_overrides.get(normalized_source, {})
+
+        self.user_override_division_colors = self._coerce_color_map(
+            source_overrides,
+            "league color override"
+        )
+
+        effective_colors = self.app_default_division_colors.copy()
+        effective_colors.update(self.league_division_colors)
+        effective_colors.update(self.user_override_division_colors)
+        self.division_colors = effective_colors
+
+        if self.user_override_division_colors:
+            self.division_color_status = "Custom"
+        elif self.league_division_colors:
+            self.division_color_status = "League defaults"
+        else:
+            self.division_color_status = "App defaults"
+
+    def _read_settings_color_data(self) -> tuple[Dict[str, str], Dict[str, Dict[str, str]]]:
+        """Read color palette fields from the settings file, if present."""
         if os.path.exists(self.settings_file):
             try:
                 with open(self.settings_file, 'r') as f:
                     data = json.load(f)
-                    division_colors = data.get('division_colors', {})
-                    self.division_colors.update(division_colors)
+                    return (
+                        data.get('division_colors', {}),
+                        data.get('league_color_overrides', {})
+                    )
             except (json.JSONDecodeError, IOError) as e:
                 logger.error(f"Error loading division colors: {e}", exc_info=True)
-                self.division_colors = UI_CONFIG.DEFAULT_COLORS.copy()
-        else:
-            self.division_colors = UI_CONFIG.DEFAULT_COLORS.copy()
+        return UI_CONFIG.DEFAULT_COLORS.copy(), {}
+
+    def _load_league_division_colors(self, data: Any) -> None:
+        """Extract optional top-level division colors from a league file."""
+        self.league_division_colors = {}
+        if isinstance(data, dict):
+            self.league_division_colors = self._coerce_color_map(
+                data.get('division_colors', {}),
+                "league file division_colors"
+            )
+
+    @classmethod
+    def normalize_league_source(cls, source: Optional[str]) -> str:
+        """Return the stable settings key for a league source."""
+        if not isinstance(source, str):
+            return ""
+
+        source = source.strip()
+        if not source:
+            return ""
+        if source.startswith("official:"):
+            league_name = source.replace("official:", "", 1).strip()
+            if not league_name:
+                return ""
+            return f"official:{league_name}"
+        return os.path.abspath(os.path.expanduser(source))
+
+    def _coerce_division_colors(self, colors: Any) -> Dict[str, str]:
+        """Validate a full palette while preserving defaults for missing divisions."""
+        valid_colors = UI_CONFIG.DEFAULT_COLORS.copy()
+        valid_colors.update(self._coerce_color_map(colors, "division colors"))
+        return valid_colors
+
+    def _coerce_color_map(self, colors: Any, label: str) -> Dict[str, str]:
+        """Validate a partial division color map."""
+        if not isinstance(colors, dict):
+            return {}
+
+        valid_colors = {}
+        for division, color in colors.items():
+            if not isinstance(division, str) or not division.strip():
+                logger.warning(f"Ignoring invalid division name in {label}: {division}")
+                continue
+            if not isinstance(color, str) or not self._is_valid_hex_color(color):
+                logger.warning(f"Ignoring invalid color for division '{division}' in {label}: {color}")
+                continue
+            valid_colors[division.strip()] = color
+        return valid_colors
+
+    @staticmethod
+    def _is_valid_hex_color(color: str) -> bool:
+        """Check if a string is a valid #RRGGBB or #RRGGBBAA color."""
+        if not color.startswith('#') or len(color) not in (7, 9):
+            return False
+        try:
+            int(color[1:], 16)
+            return True
+        except ValueError:
+            return False
 
     def _build_lookup_cache(self) -> None:
         """Build fast lookup dictionaries for driver divisions.

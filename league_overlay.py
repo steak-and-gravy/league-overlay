@@ -164,7 +164,11 @@ class LeagueOverlay(QMainWindow):
         # ═══════════════════════════════════════════════════════════
         # Initialize DivisionManager with league config
         division_config = self.color_config_file
-        self.division_manager = DivisionManager(division_config)
+        self.division_manager = DivisionManager(
+            division_config,
+            app_default_colors=self.settings.division_colors,
+            league_color_overrides=self.settings.league_color_overrides,
+        )
         self.division_filter = DivisionFilter(self.division_manager)
         self.race_state_tracker = RaceStateTracker(self.ir)
         self.gap_calculator = GapCalculator()
@@ -903,17 +907,24 @@ class LeagueOverlay(QMainWindow):
         self.settings = self.settings_manager.load()
 
         # Handle league config file if specified
-        if self.settings.league_config and os.path.exists(self.settings.league_config):
+        if self.settings.league_config and (
+            self.settings.league_config.startswith("official:")
+            or os.path.exists(self.settings.league_config)
+        ):
             self.color_config_file = self.settings.league_config
 
             # Reload DivisionManager with custom config
-            self.division_manager = DivisionManager(self.settings.league_config)
+            self.division_manager = DivisionManager(
+                self.settings.league_config,
+                app_default_colors=self.settings.division_colors,
+                league_color_overrides=self.settings.league_color_overrides,
+            )
 
     def save_settings(self):
         """Persist current settings - delegates to SettingsManager."""
         # Update settings object with current window geometry and config
         self.settings.league_config = self.color_config_file
-        self.settings.division_colors = self.division_manager.division_colors
+        self.settings.division_colors = self.division_manager.app_default_division_colors.copy()
         self.settings.x = self.geometry().x()
         self.settings.y = self.geometry().y()
         self.settings.height = self.geometry().height()
@@ -975,7 +986,57 @@ class LeagueOverlay(QMainWindow):
         if hasattr(self, 'broadcast_header'):
             self.broadcast_header.refresh_styles()
         self.update_local_web_overlay()
-            
+
+    def get_active_league_source_key(self) -> str:
+        """Return the normalized settings key for the active league source."""
+        return DivisionManager.normalize_league_source(self.color_config_file)
+
+    def get_active_league_display_name(self) -> str:
+        """Return a compact display name for the active league."""
+        if isinstance(self.color_config_file, str) and self.color_config_file.startswith("official:"):
+            return self.color_config_file.replace("official:", "", 1)
+        if isinstance(self.color_config_file, str):
+            return os.path.basename(self.color_config_file) or self.color_config_file
+        return "Current League"
+
+    def refresh_effective_division_colors(self) -> None:
+        """Refresh effective division colors for the active league."""
+        self.division_manager.refresh_division_colors(
+            app_default_colors=self.settings.division_colors,
+            league_color_overrides=self.settings.league_color_overrides,
+            league_source=self.color_config_file,
+        )
+
+    def set_active_league_division_color(self, division: str, color: str) -> None:
+        """Persist a user color override for the active league."""
+        source_key = self.get_active_league_source_key()
+        if not source_key:
+            return
+
+        override_palette = self.settings.league_color_overrides.setdefault(source_key, {})
+        override_palette[division] = color
+        self.refresh_effective_division_colors()
+
+    def reset_active_league_division_colors(self) -> None:
+        """Remove only the active league's user color override."""
+        source_key = self.get_active_league_source_key()
+        if source_key:
+            self.settings.league_color_overrides.pop(source_key, None)
+        self.refresh_effective_division_colors()
+
+    def has_active_league_color_override(self) -> bool:
+        """Return True when the active league has a saved user override."""
+        source_key = self.get_active_league_source_key()
+        return bool(source_key and source_key in self.settings.league_color_overrides)
+
+    def get_active_league_color_status(self) -> str:
+        """Return the label describing the active palette source."""
+        if self.has_active_league_color_override():
+            return "Custom"
+        if self.division_manager.league_division_colors:
+            return "League defaults"
+        return "App defaults"
+
 
     def set_driver_division(self, driver_info: Dict[str, str], division_name: str) -> None:
         """Assign a driver to a division - delegates to DivisionManager.
@@ -1014,7 +1075,11 @@ class LeagueOverlay(QMainWindow):
         self.color_config_file = config_file_path
 
         # Reload DivisionManager with the new config file
-        self.division_manager = DivisionManager(config_file_path)
+        self.division_manager = DivisionManager(
+            config_file_path,
+            app_default_colors=self.settings.division_colors,
+            league_color_overrides=self.settings.league_color_overrides,
+        )
 
         # Refresh the UI to show new colors (reset change tracking to force update)
         self._last_emitted_data = []
@@ -1076,6 +1141,7 @@ class LeagueOverlay(QMainWindow):
 
             # Reload config
             self.division_manager.load_driver_config()
+            self.refresh_effective_division_colors()
 
             # Update UI
             self.signals.refresh_colors.emit()

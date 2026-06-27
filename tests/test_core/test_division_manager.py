@@ -153,6 +153,68 @@ class TestLoadDivisionColors:
         # Should have default colors
         assert 'Default' in manager.division_colors
 
+    def test_league_file_colors_override_app_defaults(self, tmp_path):
+        """Test league-file division colors layer over app defaults."""
+        config_file = tmp_path / "divisions.json"
+        settings_file = tmp_path / "settings.json"
+        with open(config_file, 'w') as f:
+            json.dump({
+                'drivers': [],
+                'division_colors': {
+                    'Pro': '#111111',
+                    'ProAm': 'not-a-color',
+                }
+            }, f)
+
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(settings_file),
+            app_default_colors={
+                'Pro': '#AAAAAA',
+                'ProAm': '#BBBBBB',
+                'Am': '#CCCCCC',
+                'Rookie': '#DDDDDD',
+                'Default': '#EEEEEE',
+            },
+        )
+
+        assert manager.division_colors['Pro'] == '#111111'
+        assert manager.division_colors['ProAm'] == '#BBBBBB'
+        assert manager.division_color_status == "League defaults"
+
+    def test_user_override_wins_over_league_file_colors(self, tmp_path):
+        """Test per-league user overrides are the highest color layer."""
+        config_file = tmp_path / "divisions.json"
+        settings_file = tmp_path / "settings.json"
+        with open(config_file, 'w') as f:
+            json.dump({
+                'drivers': [],
+                'division_colors': {'Pro': '#111111'}
+            }, f)
+
+        source_key = os.path.abspath(str(config_file))
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(settings_file),
+            app_default_colors={'Pro': '#AAAAAA'},
+            league_color_overrides={source_key: {'Pro': '#222222'}},
+        )
+
+        assert manager.division_colors['Pro'] == '#222222'
+        assert manager.division_color_status == "Custom"
+
+    def test_normalize_league_source_expands_local_paths(self, tmp_path, monkeypatch):
+        """Test local league override keys use absolute expanded paths."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+        monkeypatch.setenv("HOME", str(home_dir))
+
+        normalized = DivisionManager.normalize_league_source("~/league.json")
+
+        assert normalized == os.path.abspath(os.path.join(str(home_dir), "league.json"))
+        assert DivisionManager.normalize_league_source(" official:Test League ") == "official:Test League"
+        assert DivisionManager.normalize_league_source("official:") == ""
+
 
 class TestGetDriverDivision:
     """Test cases for retrieving driver division."""

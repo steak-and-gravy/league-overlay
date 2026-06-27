@@ -7,6 +7,7 @@ providing graceful fallbacks to defaults when invalid data is encountered.
 Defaults are extracted from the AppSettings dataclass to ensure a single source of truth.
 """
 
+import os
 from dataclasses import fields, MISSING
 from typing import Optional, Any, List, Dict
 from config.constants import (
@@ -298,6 +299,10 @@ class SettingsValidator:
         validated['division_colors'] = self.coerce_division_colors(
             data.get('division_colors'),
             field_name='division_colors'
+        )
+        validated['league_color_overrides'] = self.coerce_league_color_overrides(
+            data.get('league_color_overrides'),
+            field_name='league_color_overrides'
         )
 
         # Color fields (performance indicator colors)
@@ -601,6 +606,71 @@ class SettingsValidator:
             return default
 
         return value
+
+    def coerce_league_color_overrides(self, value: Any, field_name: str) -> Dict[str, Dict[str, str]]:
+        """Coerce per-league color override settings."""
+        if value is None:
+            return {}
+
+        if not isinstance(value, dict):
+            logger.warning(
+                f"Field '{field_name}' has invalid type {type(value).__name__}, using empty overrides"
+            )
+            return {}
+
+        validated_overrides = {}
+        for source_key, colors in value.items():
+            if not isinstance(source_key, str) or not source_key.strip():
+                logger.warning(f"League color override key '{source_key}' is invalid, skipping")
+                continue
+            normalized_source_key = self.normalize_league_source_key(source_key)
+            if not normalized_source_key:
+                logger.warning(f"League color override key '{source_key}' is invalid, skipping")
+                continue
+            if not isinstance(colors, dict):
+                logger.warning(
+                    f"League color override for '{source_key}' has invalid type {type(colors).__name__}, skipping"
+                )
+                continue
+
+            validated_colors = self.coerce_partial_division_colors(
+                colors,
+                field_name=f"{field_name}.{source_key}"
+            )
+            if validated_colors:
+                validated_overrides[normalized_source_key] = validated_colors
+
+        return validated_overrides
+
+    @staticmethod
+    def normalize_league_source_key(source_key: str) -> str:
+        """Normalize official and local league source keys for settings storage."""
+        source_key = source_key.strip()
+        if source_key.startswith("official:"):
+            league_name = source_key.replace("official:", "", 1).strip()
+            if not league_name:
+                return ""
+            return f"official:{league_name}"
+        return os.path.abspath(os.path.expanduser(source_key))
+
+    def coerce_partial_division_colors(self, value: Any, field_name: str) -> Dict[str, str]:
+        """Coerce a partial division color map without filling missing divisions."""
+        if not isinstance(value, dict):
+            logger.warning(
+                f"Field '{field_name}' has invalid type {type(value).__name__}, skipping"
+            )
+            return {}
+
+        validated_colors = {}
+        for division, color in value.items():
+            if not isinstance(division, str) or not division.strip():
+                logger.warning(f"Division name '{division}' is not a string, skipping")
+                continue
+            if not isinstance(color, str) or not self._is_valid_hex_color(color):
+                logger.warning(f"Color for division '{division}' is invalid, skipping")
+                continue
+            validated_colors[division.strip()] = color
+        return validated_colors
 
     def _is_valid_hex_color(self, color: str) -> bool:
         """Check if string is a valid hex color format.

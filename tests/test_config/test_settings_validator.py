@@ -382,6 +382,70 @@ class TestCoerceDivisionColors:
         assert result['Custom'] == '#AABBCC'
 
 
+class TestCoerceLeagueColorOverrides:
+    """Test cases for per-league color override validation."""
+
+    def test_valid_overrides_preserve_partial_palettes(self):
+        """Test valid per-league overrides do not fill missing divisions."""
+        validator = SettingsValidator()
+        overrides = {
+            ' official:BWRL GT3 Sprint ': {'Pro': '#123456'},
+            '/tmp/league.json': {'Am': '#ABCDEF'},
+        }
+
+        result = validator.coerce_league_color_overrides(
+            overrides,
+            field_name='league_color_overrides'
+        )
+
+        assert result == {
+            'official:BWRL GT3 Sprint': {'Pro': '#123456'},
+            '/tmp/league.json': {'Am': '#ABCDEF'},
+        }
+
+    def test_local_override_keys_are_normalized(self, tmp_path, monkeypatch):
+        """Test local override keys are expanded to absolute paths on load."""
+        validator = SettingsValidator()
+        monkeypatch.chdir(tmp_path)
+
+        result = validator.coerce_league_color_overrides(
+            {'league.json': {'Pro': '#123456'}},
+            field_name='league_color_overrides'
+        )
+
+        assert result == {str(tmp_path / "league.json"): {'Pro': '#123456'}}
+
+    def test_invalid_override_entries_are_skipped(self):
+        """Test invalid override keys and colors are ignored."""
+        validator = SettingsValidator()
+        overrides = {
+            'official:BWRL GT3 Sprint': {
+                'Pro': '#123456',
+                'ProAm': 'purple',
+            },
+            '': {'Pro': '#FFFFFF'},
+            'official:Bad': 'not-a-dict',
+        }
+
+        result = validator.coerce_league_color_overrides(
+            overrides,
+            field_name='league_color_overrides'
+        )
+
+        assert result == {'official:BWRL GT3 Sprint': {'Pro': '#123456'}}
+
+    def test_non_dict_overrides_return_empty(self):
+        """Test invalid override container returns no overrides."""
+        validator = SettingsValidator()
+
+        result = validator.coerce_league_color_overrides(
+            [],
+            field_name='league_color_overrides'
+        )
+
+        assert result == {}
+
+
 class TestValidateAndCoerce:
     """Test cases for complete validation pipeline."""
 
@@ -409,6 +473,9 @@ class TestValidateAndCoerce:
                 'ProAm': '#00FF00',
                 'Am': '#0000FF',
                 'Rookie': '#FFFF00'
+            },
+            'league_color_overrides': {
+                'official:BWRL GT3 Sprint': {'Pro': '#123456'}
             }
         }
         result = validator.validate_and_coerce(data)
@@ -419,6 +486,9 @@ class TestValidateAndCoerce:
         assert result['highlight_player_border'] is True
         assert result['local_website_enabled'] is True
         assert result['local_website_port'] == 8766
+        assert result['league_color_overrides'] == {
+            'official:BWRL GT3 Sprint': {'Pro': '#123456'}
+        }
 
     def test_partial_fields_uses_defaults(self):
         """Test partial fields fills in defaults."""

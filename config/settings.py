@@ -69,8 +69,9 @@ class AppSettings:
     # Column display order (list of column IDs)
     column_order: List[str] = field(default_factory=lambda: list(DEFAULT_COLUMN_ORDER))
 
-    # Division colors (loaded from config)
+    # Division colors (global app defaults)
     division_colors: Optional[Dict[str, str]] = None
+    league_color_overrides: Dict[str, Dict[str, str]] = field(default_factory=dict)
 
     def __post_init__(self):
         """Initialize default division colors if not provided."""
@@ -173,6 +174,7 @@ class SettingsManager:
                 'league_config': settings.league_config,
                 'recent_local_configs': settings.recent_local_configs,
                 'division_colors': settings.division_colors,
+                'league_color_overrides': settings.league_color_overrides,
                 'x': settings.x,
                 'y': settings.y,
                 'width': settings.width,
@@ -242,6 +244,7 @@ class SettingsManager:
             'league_config': settings.league_config,
             'recent_local_configs': settings.recent_local_configs,
             'division_colors': settings.division_colors,
+            'league_color_overrides': settings.league_color_overrides,
             'x': settings.x,
             'y': settings.y,
             'width': settings.width,

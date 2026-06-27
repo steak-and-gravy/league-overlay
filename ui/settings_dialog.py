@@ -209,9 +209,36 @@ class SettingsDialog(QDialog):
         colors_layout = QVBoxLayout(colors_group)
         colors_layout.setSpacing(8)
 
-        colors_title = QLabel("Class Colors")
-        colors_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
-        colors_layout.addWidget(colors_title)
+        self.colors_title = QLabel()
+        self.colors_title.setStyleSheet("font-weight: bold; font-size: 11pt; border: none; color: white;")
+        colors_layout.addWidget(self.colors_title)
+
+        color_status_row = QHBoxLayout()
+        color_status_row.setSpacing(6)
+        self.color_status_label = QLabel()
+        self.color_status_label.setStyleSheet("border: none; color: #cccccc; font-size: 8pt;")
+        color_status_row.addWidget(self.color_status_label)
+        color_status_row.addStretch()
+        self.reset_league_colors_btn = QPushButton("Reset League Colors")
+        self.reset_league_colors_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #404040;
+                color: white;
+                padding: 4px 6px;
+                border: none;
+                font-size: 8pt;
+            }
+            QPushButton:hover {
+                background-color: #505050;
+            }
+            QPushButton:disabled {
+                background-color: #2a2a2a;
+                color: #666666;
+            }
+        """)
+        self.reset_league_colors_btn.clicked.connect(self.reset_league_colors)
+        color_status_row.addWidget(self.reset_league_colors_btn)
+        colors_layout.addLayout(color_status_row)
 
         self.color_buttons = {}
         self.color_value_labels = {}
@@ -231,15 +258,7 @@ class SettingsDialog(QDialog):
 
             color_btn = QPushButton()
             color_btn.setFixedSize(72, 18)
-            color_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {color};
-                    border: 2px solid #555555;
-                }}
-                QPushButton:hover {{
-                    border: 2px solid #777777;
-                }}
-            """)
+            color_btn.setStyleSheet(self._color_button_style(color))
             color_btn.clicked.connect(lambda checked, d=division: self.choose_color(d))
             self.color_buttons[division] = color_btn
             color_row.addWidget(color_btn)
@@ -258,6 +277,8 @@ class SettingsDialog(QDialog):
 
             color_row.addStretch()
             colors_layout.addLayout(color_row)
+
+        self.refresh_color_controls()
 
         # Add performance indicator colors section
         colors_layout.addSpacing(8)
@@ -1074,6 +1095,35 @@ class SettingsDialog(QDialog):
 
         return item
 
+    def _color_button_style(self, color):
+        """Return the stylesheet for a class color swatch."""
+        return f"""
+            QPushButton {{
+                background-color: {color};
+                border: 2px solid #555555;
+            }}
+            QPushButton:hover {{
+                border: 2px solid #777777;
+            }}
+        """
+
+    def _update_color_button(self, division, color):
+        """Update a single class color swatch and value label."""
+        if division in self.color_buttons:
+            self.color_buttons[division].setStyleSheet(self._color_button_style(color))
+        if division in self.color_value_labels:
+            self.color_value_labels[division].setText(color)
+
+    def refresh_color_controls(self):
+        """Refresh class color controls from the active effective palette."""
+        league_name = self.parent_overlay.get_active_league_display_name()
+        self.colors_title.setText(f"Class Colors - {league_name}")
+        self.color_status_label.setText(self.parent_overlay.get_active_league_color_status())
+        self.reset_league_colors_btn.setEnabled(self.parent_overlay.has_active_league_color_override())
+
+        for division, color in self.parent_overlay.division_manager.division_colors.items():
+            self._update_color_button(division, color)
+
     def choose_color(self, division):
         """Open color picker to customize a division's color."""
         current_color = self.parent_overlay.division_manager.division_colors[division]
@@ -1081,17 +1131,17 @@ class SettingsDialog(QDialog):
 
         if color.isValid():
             new_color = color.name()
-            self.parent_overlay.division_manager.division_colors[division] = new_color
-            self.color_buttons[division].setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {new_color};
-                    border: 2px solid #555555;
-                }}
-                QPushButton:hover {{
-                    border: 2px solid #777777;
-                }}
-            """)
-            self.color_value_labels[division].setText(new_color)
+            self.parent_overlay.set_active_league_division_color(division, new_color)
+            self.parent_overlay.save_settings()
+            self.refresh_color_controls()
+            self.parent_overlay.signals.refresh_colors.emit()
+
+    def reset_league_colors(self):
+        """Reset the active league's custom class color override."""
+        self.parent_overlay.reset_active_league_division_colors()
+        self.parent_overlay.save_settings()
+        self.refresh_color_controls()
+        self.parent_overlay.signals.refresh_colors.emit()
 
     def choose_performance_color(self, color_type):
         """Open color picker to customize performance indicator colors.
@@ -1259,8 +1309,10 @@ class SettingsDialog(QDialog):
             self.parent_overlay.color_config_file = league_source
             self.parent_overlay.division_manager.config_file = league_source
             self.parent_overlay.division_manager.load_driver_config()
+            self.parent_overlay.refresh_effective_division_colors()
             self.parent_overlay.apply_official_league_broadcast_metadata()
             self.parent_overlay.signals.refresh_colors.emit()
+            self.refresh_color_controls()
 
             # Save to settings (but don't add to recent - it's official)
             self.parent_overlay.settings.league_config = league_source
@@ -1288,8 +1340,10 @@ class SettingsDialog(QDialog):
             self.parent_overlay.color_config_file = file_path
             self.parent_overlay.division_manager.config_file = file_path
             self.parent_overlay.division_manager.load_driver_config()
+            self.parent_overlay.refresh_effective_division_colors()
             self.parent_overlay.apply_official_league_broadcast_metadata()
             self.parent_overlay.signals.refresh_colors.emit()
+            self.refresh_color_controls()
 
             # Add to recent files and save settings
             self.parent_overlay.add_to_recent_files(file_path)
@@ -1310,6 +1364,8 @@ class SettingsDialog(QDialog):
 
         # Update status message
         if success:
+            self.parent_overlay.refresh_effective_division_colors()
+            self.refresh_color_controls()
             self.status_label.setText(f"Refreshed {driver_count} driver{'s' if driver_count != 1 else ''}")
             self.status_label.setStyleSheet("color: #4CAF50; font-size: 8pt;")
         else:
@@ -1464,20 +1520,11 @@ class SettingsDialog(QDialog):
             # Reset column order and visibility in the UI list only (applied on Apply)
             self._reset_column_list_to_defaults(defaults)
 
-            # Reset division colors from defaults
-            for division, color in defaults.division_colors.items():
-                if division in self.color_buttons:
-                    self.parent_overlay.division_manager.division_colors[division] = color
-                    self.color_buttons[division].setStyleSheet(f"""
-                        QPushButton {{
-                            background-color: {color};
-                            border: 2px solid #555555;
-                        }}
-                        QPushButton:hover {{
-                            border: 2px solid #777777;
-                        }}
-                    """)
-                    self.color_value_labels[division].setText(color)
+            # Reset app default colors and clear per-league color overrides.
+            self.parent_overlay.settings.division_colors = defaults.division_colors.copy()
+            self.parent_overlay.settings.league_color_overrides = {}
+            self.parent_overlay.refresh_effective_division_colors()
+            self.refresh_color_controls()
 
             # Reset performance indicator colors from defaults
             self.parent_overlay.settings.faster_color = defaults.faster_color

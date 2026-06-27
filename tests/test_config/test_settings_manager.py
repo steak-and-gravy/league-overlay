@@ -66,6 +66,7 @@ class TestAppSettingsDefaults:
         assert settings.division_colors is not None
         assert isinstance(settings.division_colors, dict)
         assert settings.division_colors["Default"] == "#C5C5C5"
+        assert settings.league_color_overrides == {}
 
 
 class TestLoadSettings:
@@ -265,7 +266,8 @@ class TestSaveSettings:
             local_website_port=8766,
             local_website_scale="Extra Large",
             league_config='/path/to/config.json',
-            division_colors={'Pro': '#FF0000'}
+            division_colors={'Pro': '#FF0000'},
+            league_color_overrides={'official:League': {'Pro': '#00FF00'}}
         )
 
         manager.save(settings)
@@ -283,6 +285,7 @@ class TestSaveSettings:
             assert data['local_website_port'] == 8766
             assert data['local_website_scale'] == "Extra Large"
             assert data['division_colors'] == {'Pro': '#FF0000'}
+            assert data['league_color_overrides'] == {'official:League': {'Pro': '#00FF00'}}
 
     def test_load_legacy_center_drivers_config_uses_pit_stop_indicator_default(self, tmp_path):
         """Legacy configs should ignore removed center_drivers and default Pit Stop Indicator on."""
@@ -357,6 +360,18 @@ class TestSaveSettings:
 
 class TestValidateSettings:
     """Test cases for settings validation."""
+
+    def test_validate_preserves_league_color_overrides(self, tmp_path):
+        """Test manual validation preserves per-league color overrides."""
+        settings_file = tmp_path / "settings.config"
+        manager = SettingsManager(str(settings_file))
+
+        settings = AppSettings(
+            league_color_overrides={'official:League': {'Pro': '#123456'}}
+        )
+        validated = manager.validate(settings)
+
+        assert validated.league_color_overrides == {'official:League': {'Pro': '#123456'}}
 
     def test_validate_opacity_clamped_low(self, tmp_path):
         """Test opacity clamped to minimum 0.0."""
