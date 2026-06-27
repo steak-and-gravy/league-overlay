@@ -4115,6 +4115,163 @@ class TestFinishingGapCalculation:
         assert processor.race_state_tracker.is_driver_finished(car_idx)
         assert snapshot.position == 35
 
+    def test_cooldown_dedupe_repairs_duplicate_protected_final_positions(self, processor, mock_ir):
+        """Cooldown final reconciliation uses ResultsPositions to remove duplicate standings."""
+        mock_ir.__getitem__.side_effect = lambda key: {
+            'SessionState': 6,
+        }[key]
+
+        driver_infos = {
+            1: {'UserID': 101, 'UserName': 'Driver A', 'CarIdx': 1},
+            2: {'UserID': 102, 'UserName': 'Driver B', 'CarIdx': 2},
+            3: {'UserID': 103, 'UserName': 'Driver C', 'CarIdx': 3},
+        }
+        active_drivers = [
+            {'car_idx': 1, 'driver_info': driver_infos[1], 'position': 60, 'final_position': 60, 'disconnected': True},
+            {'car_idx': 2, 'driver_info': driver_infos[2], 'position': 60, 'final_position': 60, 'disconnected': True},
+            {'car_idx': 3, 'driver_info': driver_infos[3], 'position': 59, 'final_position': 59, 'disconnected': True},
+        ]
+        session_data = {
+            'results_lookup': {
+                1: {'CarIdx': 1, 'ClassPosition': 58},
+                2: {'CarIdx': 2, 'ClassPosition': 59},
+                3: {'CarIdx': 3, 'ClassPosition': 57},
+            }
+        }
+
+        for car_idx, position in [(1, 60), (2, 60), (3, 59)]:
+            snapshot = DriverState(
+                car_idx=car_idx,
+                driver_info=driver_infos[car_idx],
+                position=position,
+                is_disconnected=True,
+                pit_lap="PIT",
+                preserve_disconnected_position=True,
+            )
+            processor.race_state_tracker.update_snapshot(car_idx, snapshot)
+            processor.race_state_tracker.mark_driver_finished(car_idx, position)
+
+        processor._dedupe_cooldown_final_positions(active_drivers, session_data)
+
+        assert processor.cooldown_final_position_dedup_complete is True
+        assert {driver['car_idx']: driver['position'] for driver in active_drivers} == {
+            1: 59,
+            2: 60,
+            3: 58,
+        }
+        assert {driver['car_idx']: driver['final_position'] for driver in active_drivers} == {
+            1: 59,
+            2: 60,
+            3: 58,
+        }
+        assert processor.race_state_tracker.get_snapshot(1).position == 59
+        assert processor.race_state_tracker.get_snapshot(2).position == 60
+        assert processor.race_state_tracker.get_snapshot(3).position == 58
+
+        division_positions, _ = processor._calculate_division_positions(
+            active_drivers,
+            lambda _driver_info: "#FFFFFF"
+        )
+        assert division_positions == {3: 1, 1: 2, 2: 3}
+
+    def test_cooldown_dedupe_does_not_run_during_checkered(self, processor, mock_ir):
+        """Checkered transitional standings keep protected disconnected rows from jumping."""
+        mock_ir.__getitem__.side_effect = lambda key: {
+            'SessionState': 5,
+        }[key]
+
+        active_drivers = [
+            {'car_idx': 1, 'driver_info': {'UserName': 'Driver A'}, 'position': 60, 'final_position': 60, 'disconnected': True},
+            {'car_idx': 2, 'driver_info': {'UserName': 'Driver B'}, 'position': 60, 'final_position': 60, 'disconnected': True},
+        ]
+        session_data = {
+            'results_lookup': {
+                1: {'CarIdx': 1, 'ClassPosition': 58},
+                2: {'CarIdx': 2, 'ClassPosition': 59},
+            }
+        }
+
+        processor._dedupe_cooldown_final_positions(active_drivers, session_data)
+
+        assert processor.cooldown_final_position_dedup_complete is False
+        assert [driver['position'] for driver in active_drivers] == [60, 60]
+
+    def test_cooldown_dedupe_stops_after_standings_are_unique(self, processor, mock_ir):
+        """Once final standings are unique, future cooldown ticks skip dedupe work."""
+        mock_ir.__getitem__.side_effect = lambda key: {
+            'SessionState': 6,
+        }[key]
+
+        active_drivers = [
+            {'car_idx': 1, 'driver_info': {'UserName': 'Driver A'}, 'position': 1, 'final_position': 1},
+            {'car_idx': 2, 'driver_info': {'UserName': 'Driver B'}, 'position': 2, 'final_position': 2},
+        ]
+
+        processor._dedupe_cooldown_final_positions(active_drivers, {'results_lookup': {}})
+        assert processor.cooldown_final_position_dedup_complete is True
+
+        active_drivers[1]['position'] = 1
+        active_drivers[1]['final_position'] = 1
+        processor._dedupe_cooldown_final_positions(
+            active_drivers,
+            {'results_lookup': {2: {'CarIdx': 2, 'ClassPosition': 1}}}
+        )
+
+        assert [driver['position'] for driver in active_drivers] == [1, 1]
+
+    def test_cooldown_dedupe_waits_for_all_positive_positions_before_completion(self, processor, mock_ir):
+        """Unique-but-unresolved standings should not permanently disable cooldown dedupe."""
+        mock_ir.__getitem__.side_effect = lambda key: {
+            'SessionState': 6,
+        }[key]
+
+        active_drivers = [
+            {'car_idx': 1, 'driver_info': {'UserName': 'Driver A', 'CarClassID': 100}, 'position': 1, 'final_position': 1},
+            {'car_idx': 2, 'driver_info': {'UserName': 'Driver B', 'CarClassID': 100}, 'position': 0, 'final_position': 0},
+        ]
+
+        processor._dedupe_cooldown_final_positions(active_drivers, {'results_lookup': {}})
+        assert processor.cooldown_final_position_dedup_complete is False
+
+        active_drivers[1]['position'] = 1
+        active_drivers[1]['final_position'] = 1
+        processor._dedupe_cooldown_final_positions(
+            active_drivers,
+            {
+                'results_lookup': {
+                    1: {'CarIdx': 1, 'ClassPosition': 0},
+                    2: {'CarIdx': 2, 'ClassPosition': 1},
+                }
+            }
+        )
+
+        assert processor.cooldown_final_position_dedup_complete is True
+        assert [driver['position'] for driver in active_drivers] == [1, 2]
+
+    def test_cooldown_dedupe_allows_same_position_in_different_classes(self, processor, mock_ir):
+        """Class positions can repeat across car classes without needing repair."""
+        mock_ir.__getitem__.side_effect = lambda key: {
+            'SessionState': 6,
+        }[key]
+
+        active_drivers = [
+            {'car_idx': 1, 'driver_info': {'UserName': 'GT3 Leader', 'CarClassID': 100}, 'position': 1, 'final_position': 1},
+            {'car_idx': 2, 'driver_info': {'UserName': 'GT4 Leader', 'CarClassID': 200}, 'position': 1, 'final_position': 1},
+        ]
+
+        processor._dedupe_cooldown_final_positions(
+            active_drivers,
+            {
+                'results_lookup': {
+                    1: {'CarIdx': 1, 'ClassPosition': 0},
+                    2: {'CarIdx': 2, 'ClassPosition': 0},
+                }
+            }
+        )
+
+        assert processor.cooldown_final_position_dedup_complete is True
+        assert [driver['position'] for driver in active_drivers] == [1, 1]
+
     def test_pending_mandatory_stop_shows_car_number_outline_in_race(self, processor):
         """Race entries keep the outline visible until a valid stop after lap 1 is completed."""
         car_idx = 3

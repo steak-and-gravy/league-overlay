@@ -25,7 +25,7 @@ This handles lapped drivers who finish (e.g., P13, P14) without creating gaps or
 duplicates in the overall standings. Prevents stale track data contamination.
 """
 
-from typing import Dict, List, Optional, Tuple, Any, Callable
+from typing import Dict, List, Optional, Tuple, Any, Callable, Set
 import time
 import irsdk
 
@@ -104,6 +104,7 @@ class TelemetryProcessor:
         self.tow_frozen_track_position: Dict[int, float] = {}
         self.tow_last_live_track_position: Dict[int, float] = {}
         self.tow_last_wait_log_time: Dict[int, float] = {}
+        self.cooldown_final_position_dedup_complete: bool = False
 
     def reset_fields(self) -> None:
         """Clear all session-specific tracking data.
@@ -141,6 +142,8 @@ class TelemetryProcessor:
         self.tow_frozen_track_position.clear()
         self.tow_last_live_track_position.clear()
         self.tow_last_wait_log_time.clear()
+
+        self.cooldown_final_position_dedup_complete = False
 
         # Reset prepopulation retry tracking
         self.prepopulate_retry_count = 0
@@ -1529,6 +1532,174 @@ class TelemetryProcessor:
                 and snapshot.position > 0):
             driver['position'] = snapshot.position
 
+    def _get_session_state(self) -> int:
+        """Return the current iRacing session state with a racing fallback."""
+        try:
+            return self.ir['SessionState']
+        except (KeyError, TypeError):
+            return 4
+
+    @staticmethod
+    def _get_final_display_position(driver: Dict) -> int:
+        """Return the positive display position used for final standings."""
+        final_position = driver.get('final_position')
+        if isinstance(final_position, int) and final_position > 0:
+            return final_position
+
+        position = driver.get('position', 0)
+        return position if isinstance(position, int) else 0
+
+    @staticmethod
+    def _get_driver_class_key(driver: Dict) -> Any:
+        """Return the car class key used for class-scoped final standings."""
+        driver_info = driver.get('driver_info', {})
+        return driver_info.get('CarClassID')
+
+    def _get_duplicate_final_positions_by_class(self, active_drivers: List[Dict]) -> Dict[Any, Set[int]]:
+        """Return positive final/display positions used by more than one driver per class."""
+        seen_by_class: Dict[Any, Set[int]] = {}
+        duplicates_by_class: Dict[Any, Set[int]] = {}
+
+        for driver in active_drivers:
+            class_key = self._get_driver_class_key(driver)
+            seen_positions = seen_by_class.setdefault(class_key, set())
+            duplicate_positions = duplicates_by_class.setdefault(class_key, set())
+            position = self._get_final_display_position(driver)
+            if position <= 0:
+                continue
+            if position in seen_positions:
+                duplicate_positions.add(position)
+            else:
+                seen_positions.add(position)
+
+        return {
+            class_key: duplicate_positions
+            for class_key, duplicate_positions in duplicates_by_class.items()
+            if duplicate_positions
+        }
+
+    def _all_final_positions_positive(self, active_drivers: List[Dict]) -> bool:
+        """Return True when every active row has a positive final/display position."""
+        if not active_drivers:
+            return False
+
+        for driver in active_drivers:
+            if self._get_final_display_position(driver) <= 0:
+                return False
+
+        return True
+
+    def _get_duplicate_final_positions(self, active_drivers: List[Dict]) -> Set[int]:
+        """Return positive final/display positions used by more than one driver.
+
+        Kept as a compatibility wrapper for tests and local diagnostics. Production
+        cooldown reconciliation uses class-scoped duplicates.
+        """
+        seen_positions: Set[int] = set()
+        duplicate_positions: Set[int] = set()
+
+        for driver in active_drivers:
+            position = self._get_final_display_position(driver)
+            if position <= 0:
+                continue
+            if position in seen_positions:
+                duplicate_positions.add(position)
+            else:
+                seen_positions.add(position)
+
+        return duplicate_positions
+
+    def _set_driver_final_position(self, driver: Dict, position: int) -> bool:
+        """Set a driver's cooldown-final display position and snapshot."""
+        if position <= 0:
+            return False
+
+        changed = False
+        current_position = driver.get('position')
+        if current_position != position:
+            driver['position'] = position
+            changed = True
+
+        car_idx = driver.get('car_idx')
+        is_finished = False
+        if car_idx is not None:
+            is_finished = self.race_state_tracker.is_driver_finished(car_idx)
+
+        current_final_position = driver.get('final_position')
+        if (is_finished or 'final_position' in driver) and current_final_position != position:
+            driver['final_position'] = position
+            changed = True
+
+        if car_idx is not None:
+            snapshot = self.race_state_tracker.get_snapshot(car_idx)
+            if snapshot is not None and snapshot.position != position:
+                snapshot.position = position
+                changed = True
+
+        return changed
+
+    def _dedupe_cooldown_final_positions(self, active_drivers: List[Dict], session_data: Dict) -> None:
+        """Repair duplicate final positions once the session reaches Cool Down."""
+        if self.cooldown_final_position_dedup_complete:
+            return
+
+        session_state = self._get_session_state()
+        try:
+            if session_state < 6:
+                return
+        except TypeError:
+            return
+
+        max_passes = max(len(active_drivers), 1)
+        for pass_number in range(max_passes):
+            duplicates_by_class = self._get_duplicate_final_positions_by_class(active_drivers)
+            if not duplicates_by_class:
+                if self._all_final_positions_positive(active_drivers):
+                    self.cooldown_final_position_dedup_complete = True
+                    logger.info("COOLDOWN_DEDUP - Final displayed standings are unique; dedupe complete")
+                else:
+                    logger.info(
+                        "COOLDOWN_DEDUP - No duplicate final positions, "
+                        "but waiting for all active rows to have positive positions"
+                    )
+                return
+
+            changed = False
+            repaired_car_indices: List[int] = []
+            for driver in active_drivers:
+                class_key = self._get_driver_class_key(driver)
+                current_position = self._get_final_display_position(driver)
+                duplicate_positions = duplicates_by_class.get(class_key, set())
+                if current_position not in duplicate_positions:
+                    continue
+
+                car_idx = driver.get('car_idx')
+                if car_idx is None:
+                    continue
+
+                result_position = self.get_position_from_results(session_data, car_idx)
+                if result_position <= 0:
+                    continue
+
+                if self._set_driver_final_position(driver, result_position):
+                    changed = True
+                    repaired_car_indices.append(car_idx)
+
+            if repaired_car_indices:
+                logger.info(
+                    "COOLDOWN_DEDUP - Repaired duplicate final positions "
+                    f"pass={pass_number + 1} cars={repaired_car_indices}"
+                )
+
+            if not changed:
+                logger.warning(
+                    "COOLDOWN_DEDUP - Duplicate final positions remain but "
+                    "ResultsPositions did not change any affected rows"
+                )
+                return
+
+        logger.warning("COOLDOWN_DEDUP - Duplicate final positions remain after max repair passes")
+
     # ═══════════════════════════════════════════════════════════════════════════
     # DELTA CALCULATION
     # ═══════════════════════════════════════════════════════════════════════════
@@ -2512,6 +2683,9 @@ class TelemetryProcessor:
 
             if not active_drivers:
                 return None
+
+            if is_race:
+                self._dedupe_cooldown_final_positions(active_drivers, session_data)
 
             # Calculate division positions
             division_positions, all_drivers_with_colors = self._calculate_division_positions(
