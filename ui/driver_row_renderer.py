@@ -86,6 +86,7 @@ class DriverRowRenderer:
         "HYU": "hyundai.png",
         "KIA": "kia.png",
         "LAM": "lamborghini.png",
+        "LEG": "ford.png",
         "LIG": "ligier.png",
         "MAZ": "mazda.png",
         "MX5": "mazda.png",
