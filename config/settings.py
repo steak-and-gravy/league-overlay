@@ -65,6 +65,7 @@ class AppSettings:
     # Configuration files
     league_config: Optional[str] = None
     recent_local_configs: List[str] = field(default_factory=list)
+    auto_assign_unknown_driver_class: Optional[str] = None
 
     # Column display order (list of column IDs)
     column_order: List[str] = field(default_factory=lambda: list(DEFAULT_COLUMN_ORDER))
@@ -216,6 +217,10 @@ class SettingsManager:
                 'column_order': settings.column_order
             }
 
+            # Keep legacy config files behaviorally and structurally unchanged while off.
+            if settings.auto_assign_unknown_driver_class is not None:
+                settings_dict['auto_assign_unknown_driver_class'] = settings.auto_assign_unknown_driver_class
+
             with open(self.settings_file, 'w') as f:
                 json.dump(settings_dict, f, indent=2)
 
@@ -243,6 +248,7 @@ class SettingsManager:
         settings_dict = {
             'league_config': settings.league_config,
             'recent_local_configs': settings.recent_local_configs,
+            'auto_assign_unknown_driver_class': settings.auto_assign_unknown_driver_class,
             'division_colors': settings.division_colors,
             'league_color_overrides': settings.league_color_overrides,
             'x': settings.x,

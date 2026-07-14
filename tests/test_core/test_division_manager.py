@@ -322,6 +322,39 @@ class TestGetDriverDivision:
         division = manager.get_driver_division({})
         assert division is None
 
+    def test_unknown_driver_uses_configured_fallback_without_writing_league_file(self, tmp_path):
+        config_file = tmp_path / "divisions.json"
+        config_file.write_text(json.dumps({
+            'drivers': [{'id': '123', 'name': 'Known', 'division': 'Pro'}]
+        }))
+        original_contents = config_file.read_text()
+
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(tmp_path / "settings.json"),
+            unknown_driver_class='Am',
+        )
+
+        assert manager.get_driver_division({'UserID': '123', 'UserName': 'Known'}) == 'Pro'
+        assert manager.get_driver_division({'UserID': '999', 'UserName': 'Unknown'}) == 'Am'
+        assert manager.get_driver_division_key({'UserID': '999', 'UserName': 'Unknown'}) == 'Am'
+        assert manager.get_driver_color({'UserID': '999', 'UserName': 'Unknown'}) == manager.division_colors['Am']
+        assert config_file.read_text() == original_contents
+
+    def test_unknown_driver_fallback_rejects_invalid_class_and_can_be_disabled(self, tmp_path):
+        manager = DivisionManager(
+            config_file=str(tmp_path / "divisions.json"),
+            settings_file=str(tmp_path / "settings.json"),
+            unknown_driver_class='Invalid',
+        )
+        unknown = {'UserID': '999', 'UserName': 'Unknown'}
+
+        assert manager.get_driver_division(unknown) is None
+        manager.set_unknown_driver_class('Rookie')
+        assert manager.get_driver_division(unknown) == 'Rookie'
+        manager.set_unknown_driver_class(None)
+        assert manager.get_driver_division(unknown) is None
+
 
 class TestSetDriverDivision:
     """Test cases for setting driver division."""

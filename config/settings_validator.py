@@ -12,6 +12,7 @@ from dataclasses import fields, MISSING
 from typing import Optional, Any, List, Dict
 from config.constants import (
     LOCAL_WEBSITE_SCALE_OPTIONS,
+    ASSIGNABLE_DIVISIONS,
     TELEMETRY_CONFIG,
     VALID_COLUMN_IDS,
     DEFAULT_COLUMN_ORDER,
@@ -83,6 +84,13 @@ class SettingsValidator:
             field_name='recent_local_configs'
         )
 
+        validated['auto_assign_unknown_driver_class'] = self.coerce_enum(
+            data.get('auto_assign_unknown_driver_class'),
+            valid_values=list(ASSIGNABLE_DIVISIONS),
+            default=self.defaults['auto_assign_unknown_driver_class'],
+            field_name='auto_assign_unknown_driver_class'
+        )
+
         # Integer fields (window position and dimensions)
         validated['x'] = self.coerce_int(
             data.get('x'),
@@ -121,6 +129,7 @@ class SettingsValidator:
             max_val=1.0,
             field_name='opacity'
         )
+
         validated['refresh_rate'] = self.coerce_float(
             data.get('refresh_rate'),
             default=self.defaults['refresh_rate'],
@@ -496,7 +505,7 @@ class SettingsValidator:
         )
         return default
 
-    def coerce_enum(self, value: Any, valid_values: List[str], default: str, field_name: str) -> str:
+    def coerce_enum(self, value: Any, valid_values: List[str], default: Optional[str], field_name: str) -> Optional[str]:
         """Coerce value to one of the valid enum values.
 
         Args:

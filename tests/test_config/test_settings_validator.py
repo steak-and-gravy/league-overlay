@@ -748,6 +748,17 @@ class TestNewDisplaySettings:
         result = validator.validate_and_coerce(data)
         assert result['always_use_driver_name'] is False
 
+    def test_unknown_driver_class_defaults_off_and_rejects_invalid_values(self):
+        validator = SettingsValidator()
+
+        assert validator.validate_and_coerce({})['auto_assign_unknown_driver_class'] is None
+        assert validator.validate_and_coerce(
+            {'auto_assign_unknown_driver_class': 'Am'}
+        )['auto_assign_unknown_driver_class'] == 'Am'
+        assert validator.validate_and_coerce(
+            {'auto_assign_unknown_driver_class': 'NotAClass'}
+        )['auto_assign_unknown_driver_class'] is None
+
     def test_highlight_player_border_invalid_returns_default(self):
         """Test invalid highlight_player_border value returns default."""
         validator = SettingsValidator()
@@ -1242,6 +1253,7 @@ class TestNewDriverInfoColumns:
         assert result['show_pit_lap'] is False
         assert result['pit_stop_indicator'] is True
         assert result['always_use_driver_name'] is False
+        assert result['auto_assign_unknown_driver_class'] is None
         assert result['show_division_gap'] is False
         assert result['show_division_interval'] is False
 

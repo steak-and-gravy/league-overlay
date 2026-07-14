@@ -16,6 +16,33 @@ from league_overlay import LeagueOverlay
 from core.driver_state import DriverState
 
 
+@patch("league_overlay.DivisionManager")
+def test_reload_division_config_rebinds_runtime_consumers(mock_manager_class):
+    app = LeagueOverlay.__new__(LeagueOverlay)
+    app.settings = SimpleNamespace(
+        division_colors={"Default": "#C5C5C5"},
+        league_color_overrides={},
+        auto_assign_unknown_driver_class="Am",
+    )
+    app.division_filter = SimpleNamespace(division_manager=object())
+    app.telemetry_processor = SimpleNamespace(division_manager=object())
+    app.signals = SimpleNamespace(refresh_colors=SimpleNamespace(emit=Mock()))
+    app._last_emitted_data = [object()]
+    replacement_manager = mock_manager_class.return_value
+
+    LeagueOverlay.reload_division_config(app, "/tmp/league.json")
+
+    assert app.division_manager is replacement_manager
+    assert app.division_filter.division_manager is replacement_manager
+    assert app.telemetry_processor.division_manager is replacement_manager
+    mock_manager_class.assert_called_once_with(
+        "/tmp/league.json",
+        app_default_colors=app.settings.division_colors,
+        league_color_overrides=app.settings.league_color_overrides,
+        unknown_driver_class="Am",
+    )
+
+
 def test_update_all_backgrounds_refreshes_footer_opacity():
     app = LeagueOverlay.__new__(LeagueOverlay)
     app.settings = SimpleNamespace(

@@ -92,6 +92,9 @@ VALID_COLUMN_IDS: frozenset = frozenset(DEFAULT_COLUMN_ORDER)
 # Browser-source display scale options for the local web overlay.
 LOCAL_WEBSITE_SCALE_OPTIONS: List[str] = ["Compact", "Medium", "Large", "Extra Large"]
 
+# Driver classes that can be assigned by league configuration and settings.
+ASSIGNABLE_DIVISIONS: tuple[str, ...] = ("Pro", "ProAm", "Am", "Rookie")
+
 
 @dataclass(frozen=True)
 class Timing:

@@ -168,6 +168,7 @@ class LeagueOverlay(QMainWindow):
             division_config,
             app_default_colors=self.settings.division_colors,
             league_color_overrides=self.settings.league_color_overrides,
+            unknown_driver_class=self.settings.auto_assign_unknown_driver_class,
         )
         self.division_filter = DivisionFilter(self.division_manager)
         self.race_state_tracker = RaceStateTracker(self.ir)
@@ -918,7 +919,9 @@ class LeagueOverlay(QMainWindow):
                 self.settings.league_config,
                 app_default_colors=self.settings.division_colors,
                 league_color_overrides=self.settings.league_color_overrides,
+                unknown_driver_class=self.settings.auto_assign_unknown_driver_class,
             )
+            self._rebind_division_manager_consumers()
 
     def save_settings(self):
         """Persist current settings - delegates to SettingsManager."""
@@ -932,6 +935,13 @@ class LeagueOverlay(QMainWindow):
 
         # Delegate to settings manager (all other settings already in self.settings)
         self.settings_manager.save(self.settings)
+
+    def _rebind_division_manager_consumers(self) -> None:
+        """Keep runtime consumers aligned after replacing the division manager."""
+        if hasattr(self, 'division_filter'):
+            self.division_filter.division_manager = self.division_manager
+        if hasattr(self, 'telemetry_processor'):
+            self.telemetry_processor.division_manager = self.division_manager
 
     def sync_local_web_overlay(self):
         """Start, stop, or refresh the local-network browser-source overlay."""
@@ -1079,7 +1089,9 @@ class LeagueOverlay(QMainWindow):
             config_file_path,
             app_default_colors=self.settings.division_colors,
             league_color_overrides=self.settings.league_color_overrides,
+            unknown_driver_class=self.settings.auto_assign_unknown_driver_class,
         )
+        self._rebind_division_manager_consumers()
 
         # Refresh the UI to show new colors (reset change tracking to force update)
         self._last_emitted_data = []

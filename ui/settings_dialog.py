@@ -21,6 +21,7 @@ from config.constants import (
     COLUMN_REGISTRY,
     DEFAULT_COLUMN_ORDER,
     LOCAL_WEBSITE_SCALE_OPTIONS,
+    ASSIGNABLE_DIVISIONS,
 )
 from config.logging_config import set_log_level, get_logger
 from ui.local_web_overlay import get_local_network_url
@@ -147,6 +148,25 @@ class SettingsDialog(QDialog):
         self.populate_league_dropdown()
         league_row.addWidget(self.league_combo, 1)
         config_layout.addLayout(league_row)
+
+        unknown_driver_row = QHBoxLayout()
+        unknown_driver_label = QLabel("Unknown drivers:")
+        unknown_driver_label.setStyleSheet("font-size: 9pt; color: white; border: none;")
+        unknown_driver_row.addWidget(unknown_driver_label)
+
+        self.unknown_driver_class_combo = QComboBox()
+        self.unknown_driver_class_combo.addItem("Off", None)
+        for division in ASSIGNABLE_DIVISIONS:
+            self.unknown_driver_class_combo.addItem(division, division)
+        selected_unknown_class = self.parent_overlay.settings.auto_assign_unknown_driver_class
+        selected_index = self.unknown_driver_class_combo.findData(selected_unknown_class)
+        self.unknown_driver_class_combo.setCurrentIndex(max(0, selected_index))
+        self.unknown_driver_class_combo.setToolTip(
+            "Automatically treat drivers missing from the active league file as the selected class."
+        )
+        self.unknown_driver_class_combo.setStyleSheet(self.league_combo.styleSheet())
+        unknown_driver_row.addWidget(self.unknown_driver_class_combo, 1)
+        config_layout.addLayout(unknown_driver_row)
 
         # Buttons row for refresh and save local copy
         buttons_row = QHBoxLayout()
@@ -460,7 +480,7 @@ class SettingsDialog(QDialog):
 
         left_column.addWidget(broadcast_group)
 
-        # Local website section
+        # Local website section (placed in the right column with other app settings)
         local_web_group = QFrame()
         local_web_group.setStyleSheet("QFrame { border: 1px solid #555555; padding: 4px; background-color: #333333; }")
         local_web_group.setMinimumWidth(300)
@@ -553,7 +573,6 @@ class SettingsDialog(QDialog):
         self.local_website_port_spin.valueChanged.connect(self._update_local_website_link)
         self._update_local_website_link()
 
-        left_column.addWidget(local_web_group)
         left_column.addStretch()
 
         # RIGHT COLUMN
@@ -814,6 +833,7 @@ class SettingsDialog(QDialog):
         window_group.setMinimumHeight(window_group.sizeHint().height())
 
         right_column.addWidget(window_group)
+        right_column.addWidget(local_web_group)
 
         # Column Configuration section — reorderable list with visibility checkboxes
         column_group = QFrame()
@@ -1504,6 +1524,7 @@ class SettingsDialog(QDialog):
             self.bold_drivers_cb.setChecked(defaults.bold_drivers)
             self.show_recent_lap_flash_cb.setChecked(defaults.show_recent_lap_flash)
             self.always_use_driver_name_cb.setChecked(defaults.always_use_driver_name)
+            self.unknown_driver_class_combo.setCurrentIndex(0)
             self.local_website_enabled_cb.setChecked(defaults.local_website_enabled)
             self.local_website_port_spin.setValue(defaults.local_website_port)
             self.local_website_scale_combo.setCurrentText(defaults.local_website_scale)
@@ -1567,6 +1588,9 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.bold_drivers = self.bold_drivers_cb.isChecked()
             self.parent_overlay.settings.show_recent_lap_flash = self.show_recent_lap_flash_cb.isChecked()
             self.parent_overlay.settings.always_use_driver_name = self.always_use_driver_name_cb.isChecked()
+            unknown_driver_class = self.unknown_driver_class_combo.currentData()
+            self.parent_overlay.settings.auto_assign_unknown_driver_class = unknown_driver_class
+            self.parent_overlay.division_manager.set_unknown_driver_class(unknown_driver_class)
             self.parent_overlay.settings.local_website_enabled = self.local_website_enabled_cb.isChecked()
             self.parent_overlay.settings.local_website_port = self.local_website_port_spin.value()
             self.parent_overlay.settings.local_website_scale = self.local_website_scale_combo.currentText()

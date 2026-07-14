@@ -53,6 +53,7 @@ class TestAppSettingsDefaults:
         assert settings.local_website_enabled is False
         assert settings.local_website_port == 8765
         assert settings.local_website_scale == "Large"
+        assert settings.auto_assign_unknown_driver_class is None
 
     def test_default_config_files(self):
         """Test default config file paths."""
@@ -156,6 +157,16 @@ class TestLoadSettings:
         assert settings.width == 320
         assert settings.refresh_rate == 1.0  # Default from AppSettings
         assert settings.hide_headers is False
+        assert settings.auto_assign_unknown_driver_class is None
+
+    def test_load_unknown_driver_class(self, tmp_path):
+        settings_file = tmp_path / "settings.config"
+        with open(settings_file, 'w') as f:
+            json.dump({'auto_assign_unknown_driver_class': 'Am'}, f)
+
+        settings = SettingsManager(str(settings_file)).load()
+
+        assert settings.auto_assign_unknown_driver_class == 'Am'
 
     def test_load_invalid_json(self, tmp_path):
         """Test loading malformed JSON returns defaults."""
@@ -241,6 +252,7 @@ class TestSaveSettings:
             assert data['local_website_enabled'] is True
             assert data['local_website_port'] == 8766
             assert data['local_website_scale'] == "Large"
+            assert 'auto_assign_unknown_driver_class' not in data
 
     def test_save_all_fields(self, tmp_path):
         """Test saving all settings fields."""
@@ -267,7 +279,8 @@ class TestSaveSettings:
             local_website_scale="Extra Large",
             league_config='/path/to/config.json',
             division_colors={'Pro': '#FF0000'},
-            league_color_overrides={'official:League': {'Pro': '#00FF00'}}
+            league_color_overrides={'official:League': {'Pro': '#00FF00'}},
+            auto_assign_unknown_driver_class='Rookie',
         )
 
         manager.save(settings)
@@ -286,6 +299,7 @@ class TestSaveSettings:
             assert data['local_website_scale'] == "Extra Large"
             assert data['division_colors'] == {'Pro': '#FF0000'}
             assert data['league_color_overrides'] == {'official:League': {'Pro': '#00FF00'}}
+            assert data['auto_assign_unknown_driver_class'] == 'Rookie'
 
     def test_load_legacy_center_drivers_config_uses_pit_stop_indicator_default(self, tmp_path):
         """Legacy configs should ignore removed center_drivers and default Pit Stop Indicator on."""

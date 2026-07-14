@@ -4,7 +4,7 @@ import json
 import os
 from typing import Any, Dict, Optional
 
-from config.constants import UI_CONFIG, FILE_CONFIG
+from config.constants import ASSIGNABLE_DIVISIONS, UI_CONFIG, FILE_CONFIG
 from config.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -21,6 +21,7 @@ class DivisionManager:
         settings_file: str = FILE_CONFIG.SETTINGS_FILE,
         app_default_colors: Optional[Dict[str, str]] = None,
         league_color_overrides: Optional[Dict[str, Dict[str, str]]] = None,
+        unknown_driver_class: Optional[str] = None,
     ):
         """Initialize division manager.
 
@@ -36,6 +37,8 @@ class DivisionManager:
         self.user_override_division_colors: dict[str, str] = {}
         self.division_colors: dict[str, str] = UI_CONFIG.DEFAULT_COLORS.copy()
         self.division_color_status: str = "App defaults"
+        self.unknown_driver_class: Optional[str] = None
+        self.set_unknown_driver_class(unknown_driver_class)
 
         # O(1) lookup caches for division assignments (95% faster than O(n) linear search)
         self._division_cache_by_id: Dict[str, str] = {}
@@ -284,7 +287,8 @@ class DivisionManager:
             driver_info: Dictionary containing driver information (UserID, UserName)
 
         Returns:
-            Division name if assigned, None otherwise
+            Division name if assigned, the configured unknown-driver class,
+            or None when automatic assignment is off.
 
         Performance: O(1) hash lookup instead of O(n) linear search.
         95-99% faster than previous implementation.
@@ -299,7 +303,11 @@ class DivisionManager:
         if user_name and user_name in self._division_cache_by_name:
             return self._division_cache_by_name[user_name]
 
-        return None
+        return self.unknown_driver_class
+
+    def set_unknown_driver_class(self, division: Optional[str]) -> None:
+        """Set the non-persistent fallback class used for unregistered drivers."""
+        self.unknown_driver_class = division if division in ASSIGNABLE_DIVISIONS else None
 
     @classmethod
     def normalize_division_name(cls, division: Optional[str]) -> str:

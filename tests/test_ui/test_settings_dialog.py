@@ -27,6 +27,10 @@ class DummyOverlay(QWidget):
             user_override_division_colors={},
             driver_colors={'drivers': []},
             config_file="official:BWRL GT3 Sprint",
+            unknown_driver_class=None,
+        )
+        self.division_manager.set_unknown_driver_class = lambda division: setattr(
+            self.division_manager, "unknown_driver_class", division
         )
         self.color_config_file = "official:BWRL GT3 Sprint"
         self.settings_manager = Mock()
@@ -133,6 +137,38 @@ def test_fixed_columns_use_disabled_checkbox_behavior(qapp):
 
     _, gap_item = _find_item(dialog, "gap")
     assert gap_item.data(ALWAYS_VISIBLE_ROLE) is False
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
+def test_unknown_driver_class_control_defaults_off_and_applies_selected_class(qapp):
+    overlay, dialog = _build_dialog()
+
+    options = [
+        dialog.unknown_driver_class_combo.itemText(index)
+        for index in range(dialog.unknown_driver_class_combo.count())
+    ]
+    assert options == ["Off", "Pro", "ProAm", "Am", "Rookie"]
+    assert dialog.unknown_driver_class_combo.currentData() is None
+
+    dialog.unknown_driver_class_combo.setCurrentText("ProAm")
+    dialog.apply_settings()
+
+    assert overlay.settings.auto_assign_unknown_driver_class == "ProAm"
+    assert overlay.division_manager.unknown_driver_class == "ProAm"
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
+def test_settings_sections_fit_fixed_dialog_without_layout_compression(qapp):
+    overlay, dialog = _build_dialog()
+    dialog.show()
+    qapp.processEvents()
+
+    assert dialog.minimumSizeHint().width() <= dialog.width()
+    assert dialog.minimumSizeHint().height() <= dialog.height()
 
     dialog.deleteLater()
     overlay.deleteLater()
