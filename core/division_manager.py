@@ -2,6 +2,9 @@
 
 import json
 import os
+import tempfile
+import threading
+import time
 from typing import Any, Dict, Optional
 
 from config.constants import ASSIGNABLE_DIVISIONS, UI_CONFIG, FILE_CONFIG
@@ -14,6 +17,7 @@ class DivisionManager:
     """Manages driver-to-division assignments and color configuration."""
 
     DEFAULT_DIVISION = "Default"
+    PERSISTENCE_RETRY_SECONDS = 5.0
 
     def __init__(
         self,
@@ -22,6 +26,7 @@ class DivisionManager:
         app_default_colors: Optional[Dict[str, str]] = None,
         league_color_overrides: Optional[Dict[str, Dict[str, str]]] = None,
         unknown_driver_class: Optional[str] = None,
+        persist_unknown_driver_assignments: bool = False,
     ):
         """Initialize division manager.
 
@@ -37,8 +42,15 @@ class DivisionManager:
         self.user_override_division_colors: dict[str, str] = {}
         self.division_colors: dict[str, str] = UI_CONFIG.DEFAULT_COLORS.copy()
         self.division_color_status: str = "App defaults"
+        self._assignment_lock = threading.RLock()
+        self._load_lock = threading.Lock()
+        self._persistence_retry_after: Dict[tuple[str, Any], float] = {}
         self.unknown_driver_class: Optional[str] = None
-        self.set_unknown_driver_class(unknown_driver_class)
+        self.persist_unknown_driver_assignments = False
+        self.configure_unknown_driver_assignment(
+            unknown_driver_class,
+            persist_unknown_driver_assignments,
+        )
 
         # O(1) lookup caches for division assignments (95% faster than O(n) linear search)
         self._division_cache_by_id: Dict[str, str] = {}
@@ -47,27 +59,34 @@ class DivisionManager:
         self.load_driver_config()
         self.refresh_division_colors(app_default_colors, league_color_overrides)
 
-    def load_driver_config(self) -> None:
+    def load_driver_config(self) -> tuple[bool, str, int]:
         """Load driver-division mappings from config file or remote source."""
-        self.league_division_colors = {}
-        if self.config_file.startswith("official:"):
-            self._load_official_league()
-        else:
-            self._load_local_file()
+        with self._load_lock:
+            return self._load_driver_config_source(self.config_file)
 
-    def _load_official_league(self) -> None:
+    def change_config_source(self, config_file: str) -> tuple[bool, str, int]:
+        """Load and atomically activate a different local or official league source."""
+        with self._load_lock:
+            return self._load_driver_config_source(config_file)
+
+    def _load_driver_config_source(self, config_file: str) -> tuple[bool, str, int]:
+        """Fetch or parse a source, then atomically install its loaded state."""
+        if config_file.startswith("official:"):
+            return self._load_official_league(config_file)
+        return self._load_local_file(config_file)
+
+    def _load_official_league(self, config_file: str) -> tuple[bool, str, int]:
         """Load driver config from official remote league."""
         from config.official_leagues import get_official_league, get_full_league_url
         import requests
 
-        league_name = self.config_file.replace("official:", "")
+        league_name = config_file.replace("official:", "")
 
         try:
             league = get_official_league(league_name)
-        except ValueError as e:
+        except ValueError:
             logger.error(f"Unknown official league: {league_name}")
-            self.driver_colors = {'drivers': []}
-            return
+            return False, f"Unknown official league: {league_name}", 0
 
         # Try to fetch from remote
         try:
@@ -76,59 +95,64 @@ class DivisionManager:
             response.raise_for_status()
             data = response.json()
 
-            # Save to cache for offline use
-            cache_path = os.path.join(os.path.dirname(__file__), '..', league.cache_file)
-            with open(cache_path, 'w') as f:
-                json.dump(data, f, indent=2)
-
-            if 'drivers' in data:
-                self.driver_colors = data
-                self._load_league_division_colors(data)
-                logger.info(f"Loaded {len(data['drivers'])} drivers from {league.name}")
-            else:
-                self.driver_colors = {'drivers': []}
+            cache_path = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), '..', league.cache_file)
+            )
+            with self._assignment_lock:
+                cache_saved = self._atomic_write_json(cache_path, data)
+                self._install_loaded_config_locked(config_file, data)
+            driver_count = len(self.driver_colors['drivers'])
+            logger.info(f"Loaded {driver_count} drivers from {league.name}")
+            if not cache_saved:
+                return False, f"Loaded {league.name}, but failed to update its local cache", driver_count
+            return True, f"Successfully refreshed {league.name}", driver_count
 
         except Exception as e:
             # Fall back to cache
             logger.warning(f"Failed to fetch {league.name}, using cache: {e}")
-            cache_path = os.path.join(os.path.dirname(__file__), '..', league.cache_file)
+            cache_path = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), '..', league.cache_file)
+            )
             if os.path.exists(cache_path):
                 try:
                     with open(cache_path, 'r') as f:
                         data = json.load(f)
-                        self.driver_colors = data if 'drivers' in data else {'drivers': []}
-                        self._load_league_division_colors(data)
-                        logger.info(f"Loaded from cache: {len(self.driver_colors['drivers'])} drivers")
+                    with self._assignment_lock:
+                        self._install_loaded_config_locked(config_file, data)
+                    logger.info(f"Loaded from cache: {len(self.driver_colors['drivers'])} drivers")
                 except Exception as cache_error:
                     logger.error(f"Cache load failed: {cache_error}")
-                    self.driver_colors = {'drivers': []}
             else:
                 logger.error(f"No cache available for {league.name}")
-                self.driver_colors = {'drivers': []}
+            return False, f"Failed to refresh {league.name}: {e}", len(self.driver_colors['drivers'])
 
-        # Build lookup cache after loading
-        self._build_lookup_cache()
-
-    def _load_local_file(self) -> None:
+    def _load_local_file(self, config_file: str) -> tuple[bool, str, int]:
         """Load driver config from local file."""
-        if os.path.exists(self.config_file):
+        with self._assignment_lock:
+            if not os.path.exists(config_file):
+                return False, f"League config not found: {config_file}", len(self.driver_colors['drivers'])
             try:
-                with open(self.config_file, 'r') as f:
+                with open(config_file, 'r') as f:
                     data = json.load(f)
-                    if 'drivers' in data:
-                        self.driver_colors = data
-                        self._load_league_division_colors(data)
-                        logger.info(f"Loaded {len(data['drivers'])} driver division assignments from {self.config_file}")
-                    else:
-                        self.driver_colors = {'drivers': []}
             except (json.JSONDecodeError, IOError) as e:
                 logger.error(f"Error loading division config: {e}", exc_info=True)
-                self.driver_colors = {'drivers': []}
+                return False, f"Failed to load {config_file}: {e}", len(self.driver_colors['drivers'])
+            self._install_loaded_config_locked(config_file, data)
+        logger.info(
+            f"Loaded {len(self.driver_colors['drivers'])} driver division assignments from {config_file}"
+        )
+        return True, f"Loaded {config_file}", len(self.driver_colors['drivers'])
+
+    def _install_loaded_config_locked(self, config_file: str, data: Any) -> None:
+        """Install a fully parsed source while holding the assignment lock."""
+        self.config_file = config_file
+        if isinstance(data, dict) and isinstance(data.get('drivers'), list):
+            self.driver_colors = data
         else:
             self.driver_colors = {'drivers': []}
-
-        # Build lookup cache after loading
+        self._load_league_division_colors(data)
         self._build_lookup_cache()
+        self._persistence_retry_after.clear()
 
     def load_division_config(self) -> None:
         """Load effective division colors from settings file."""
@@ -267,18 +291,67 @@ class DivisionManager:
 
         logger.debug(f"Built division cache: {len(self._division_cache_by_id)} by ID, {len(self._division_cache_by_name)} by name")
 
-    def save_config(self) -> None:
+    def save_config(self) -> bool:
         """Save driver-division mappings to config file."""
-        try:
-            # Log warning if editing official league cache
-            if os.path.basename(self.config_file).startswith("cache_official_"):
-                logger.info("Editing official league cache - changes will be overwritten on next refresh")
+        with self._assignment_lock:
+            return self._save_config_locked()
 
-            with open(self.config_file, 'w') as f:
-                json.dump(self.driver_colors, f, indent=2)
-            logger.debug(f"Saved division config to {self.config_file}")
-        except IOError as e:
-            logger.error(f"Error saving division config: {e}", exc_info=True)
+    def _save_config_locked(self) -> bool:
+        """Save the active mappings while holding the assignment lock."""
+        target_file = self.get_writable_config_path()
+        if not target_file:
+            return False
+        if self.config_file.startswith("official:"):
+            logger.info("Editing official league cache - changes will be overwritten on next refresh")
+
+        if self._atomic_write_json(target_file, self.driver_colors):
+            logger.debug(f"Saved division config to {target_file}")
+            return True
+        return False
+
+    def _atomic_write_json(self, target_file: str, data: Any) -> bool:
+        """Write JSON through a same-directory temp file and atomically replace the target."""
+        temp_path = None
+        try:
+            target_dir = os.path.dirname(os.path.abspath(target_file))
+            os.makedirs(target_dir, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode='w',
+                encoding='utf-8',
+                dir=target_dir,
+                prefix=f".{os.path.basename(target_file)}.",
+                suffix='.tmp',
+                delete=False,
+            ) as temp_file:
+                temp_path = temp_file.name
+                json.dump(data, temp_file, indent=2)
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+            os.replace(temp_path, target_file)
+            return True
+        except (OSError, TypeError, ValueError) as e:
+            logger.error(f"Error saving division config to {target_file}: {e}", exc_info=True)
+            if temp_path:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+            return False
+
+    def get_writable_config_path(self) -> Optional[str]:
+        """Resolve the local JSON path used for assignment persistence."""
+        if not self.config_file.startswith("official:"):
+            return self.config_file
+
+        from config.official_leagues import get_official_league
+
+        league_name = self.config_file.replace("official:", "", 1)
+        try:
+            league = get_official_league(league_name)
+        except ValueError:
+            logger.error(f"Cannot persist assignments for unknown official league: {league_name}")
+            return None
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', league.cache_file))
 
     def get_driver_division(self, driver_info: Dict[str, str]) -> Optional[str]:
         """Get the division assigned to a driver using O(1) hash lookup.
@@ -293,21 +366,59 @@ class DivisionManager:
         Performance: O(1) hash lookup instead of O(n) linear search.
         95-99% faster than previous implementation.
         """
-        # Try UserID lookup first (most reliable)
-        user_id = driver_info.get('UserID', '')
-        if user_id and user_id in self._division_cache_by_id:
-            return self._division_cache_by_id[user_id]
+        with self._assignment_lock:
+            # Try UserID lookup first (most reliable)
+            user_id = driver_info.get('UserID', '')
+            if user_id and user_id in self._division_cache_by_id:
+                return self._division_cache_by_id[user_id]
 
-        # Fallback to UserName lookup
-        user_name = driver_info.get('UserName', '')
-        if user_name and user_name in self._division_cache_by_name:
-            return self._division_cache_by_name[user_name]
+            # Fallback to UserName lookup
+            user_name = driver_info.get('UserName', '')
+            if user_name and user_name in self._division_cache_by_name:
+                return self._division_cache_by_name[user_name]
 
-        return self.unknown_driver_class
+            if (
+                self.unknown_driver_class
+                and self.persist_unknown_driver_assignments
+                and (user_id or user_name)
+            ):
+                retry_key = ('id', user_id) if user_id else ('name', user_name)
+                now = time.monotonic()
+                if now >= self._persistence_retry_after.get(retry_key, 0.0):
+                    if self._set_driver_division_locked(driver_info, self.unknown_driver_class):
+                        self._persistence_retry_after.pop(retry_key, None)
+                    else:
+                        self._persistence_retry_after[retry_key] = (
+                            now + self.PERSISTENCE_RETRY_SECONDS
+                        )
+
+            return self.unknown_driver_class
 
     def set_unknown_driver_class(self, division: Optional[str]) -> None:
-        """Set the non-persistent fallback class used for unregistered drivers."""
-        self.unknown_driver_class = division if division in ASSIGNABLE_DIVISIONS else None
+        """Set the fallback class while preserving the current persistence choice."""
+        self.configure_unknown_driver_assignment(
+            division,
+            self.persist_unknown_driver_assignments,
+        )
+
+    def set_persist_unknown_driver_assignments(self, enabled: bool) -> None:
+        """Set persistence while preserving the current fallback class."""
+        self.configure_unknown_driver_assignment(self.unknown_driver_class, enabled)
+
+    def configure_unknown_driver_assignment(
+        self,
+        division: Optional[str],
+        persist: bool,
+    ) -> None:
+        """Atomically configure fallback classification and optional JSON persistence."""
+        with self._assignment_lock:
+            normalized_division = division if division in ASSIGNABLE_DIVISIONS else None
+            self.unknown_driver_class = normalized_division
+            self.persist_unknown_driver_assignments = bool(
+                normalized_division and persist
+            )
+            if not self.persist_unknown_driver_assignments:
+                self._persistence_retry_after.clear()
 
     @classmethod
     def normalize_division_name(cls, division: Optional[str]) -> str:
@@ -322,7 +433,7 @@ class DivisionManager:
         """Get a driver's stable division grouping key."""
         return self.normalize_division_name(self.get_driver_division(driver_info))
 
-    def set_driver_division(self, driver_info: Dict[str, str], division: str) -> None:
+    def set_driver_division(self, driver_info: Dict[str, str], division: str) -> bool:
         """Assign a driver to a division or remove assignment.
 
         Args:
@@ -333,6 +444,11 @@ class DivisionManager:
             Setting division to "Default" removes the driver from the config,
             causing them to display with the default white color.
         """
+        with self._assignment_lock:
+            return self._set_driver_division_locked(driver_info, division)
+
+    def _set_driver_division_locked(self, driver_info: Dict[str, str], division: str) -> bool:
+        """Assign a driver while the caller holds the assignment lock."""
         user_id = driver_info.get('UserID', '')
         user_name = driver_info.get('UserName', '')
 
@@ -349,10 +465,14 @@ class DivisionManager:
                 existing_entry = i
                 break
 
+        original_drivers = list(self.driver_colors['drivers'])
+        changed = False
+
         if division == "Default":
             # Remove driver from config (they'll get default white color)
             if existing_entry is not None:
                 self.driver_colors['drivers'].pop(existing_entry)
+                changed = True
         else:
             # Add or update driver's division assignment
             entry = {'division': division}
@@ -370,11 +490,16 @@ class DivisionManager:
                 self.driver_colors['drivers'][existing_entry] = entry
             else:
                 self.driver_colors['drivers'].append(entry)
+            changed = True
 
-            self.save_config()
+        if changed and not self._save_config_locked():
+            self.driver_colors['drivers'] = original_drivers
+            self._build_lookup_cache()
+            return False
 
         # Rebuild cache after modification
         self._build_lookup_cache()
+        return True
 
     def get_division_color(self, division: Optional[str]) -> str:
         """Get the color hex code for a division.

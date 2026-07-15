@@ -169,6 +169,7 @@ class LeagueOverlay(QMainWindow):
             app_default_colors=self.settings.division_colors,
             league_color_overrides=self.settings.league_color_overrides,
             unknown_driver_class=self.settings.auto_assign_unknown_driver_class,
+            persist_unknown_driver_assignments=self.settings.persist_auto_assigned_unknown_drivers,
         )
         self.division_filter = DivisionFilter(self.division_manager)
         self.race_state_tracker = RaceStateTracker(self.ir)
@@ -920,6 +921,7 @@ class LeagueOverlay(QMainWindow):
                 app_default_colors=self.settings.division_colors,
                 league_color_overrides=self.settings.league_color_overrides,
                 unknown_driver_class=self.settings.auto_assign_unknown_driver_class,
+                persist_unknown_driver_assignments=self.settings.persist_auto_assigned_unknown_drivers,
             )
             self._rebind_division_manager_consumers()
 
@@ -1055,9 +1057,6 @@ class LeagueOverlay(QMainWindow):
         # Delegate to DivisionManager for assignment logic
         self.division_manager.set_driver_division(driver_info, division_name)
 
-        # Save configuration
-        self.division_manager.save_config()
-
         # Immediately refresh display to show new division assignment
         self.refresh_driver_colors()
 
@@ -1090,6 +1089,7 @@ class LeagueOverlay(QMainWindow):
             app_default_colors=self.settings.division_colors,
             league_color_overrides=self.settings.league_color_overrides,
             unknown_driver_class=self.settings.auto_assign_unknown_driver_class,
+            persist_unknown_driver_assignments=self.settings.persist_auto_assigned_unknown_drivers,
         )
         self._rebind_division_manager_consumers()
 
@@ -1129,40 +1129,13 @@ class LeagueOverlay(QMainWindow):
             logger.warning("Cannot refresh - not an official league")
             return (False, "Cannot refresh - not an official league", 0)
 
-        from config.official_leagues import get_official_league, get_full_league_url
-        import requests
-
-        league_name = self.color_config_file.replace("official:", "")
-
         try:
-            league = get_official_league(league_name)
-
-            # Fetch from remote
-            league_url = get_full_league_url(league)
-            response = requests.get(league_url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-
-            # Save to cache
-            cache_path = os.path.join(os.path.dirname(__file__), league.cache_file)
-            with open(cache_path, 'w') as f:
-                json.dump(data, f, indent=2)
-
-            # Count drivers
-            driver_count = len(data.get('drivers', []))
-
-            # Reload config
-            self.division_manager.load_driver_config()
+            success, message, driver_count = self.division_manager.load_driver_config()
             self.refresh_effective_division_colors()
-
-            # Update UI
             self.signals.refresh_colors.emit()
-
-            logger.info(f"Successfully refreshed {league.name}")
-            return (True, f"Successfully refreshed {league.name}", driver_count)
-
+            return success, message, driver_count
         except Exception as e:
-            error_msg = f"Failed to refresh {league.name}: {e}"
+            error_msg = f"Failed to refresh official league: {e}"
             logger.error(error_msg)
             return (False, error_msg, 0)
 

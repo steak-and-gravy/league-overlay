@@ -155,7 +155,7 @@ class SettingsDialog(QDialog):
         unknown_driver_row.addWidget(unknown_driver_label)
 
         self.unknown_driver_class_combo = QComboBox()
-        self.unknown_driver_class_combo.addItem("Off", None)
+        self.unknown_driver_class_combo.addItem("Default", None)
         for division in ASSIGNABLE_DIVISIONS:
             self.unknown_driver_class_combo.addItem(division, division)
         selected_unknown_class = self.parent_overlay.settings.auto_assign_unknown_driver_class
@@ -167,6 +167,21 @@ class SettingsDialog(QDialog):
         self.unknown_driver_class_combo.setStyleSheet(self.league_combo.styleSheet())
         unknown_driver_row.addWidget(self.unknown_driver_class_combo, 1)
         config_layout.addLayout(unknown_driver_row)
+
+        self.persist_unknown_drivers_cb = QCheckBox("Save unknown drivers to league file")
+        self.persist_unknown_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.persist_unknown_drivers_cb.setChecked(
+            self.parent_overlay.settings.persist_auto_assigned_unknown_drivers
+        )
+        self.persist_unknown_drivers_cb.setToolTip(
+            "Add automatically classified drivers to the active local league JSON. "
+            "For official leagues, this updates the local cache and the next refresh overwrites it."
+        )
+        self.unknown_driver_class_combo.currentIndexChanged.connect(
+            self._sync_unknown_driver_persistence_state
+        )
+        config_layout.addWidget(self.persist_unknown_drivers_cb)
+        self._sync_unknown_driver_persistence_state()
 
         # Buttons row for refresh and save local copy
         buttons_row = QHBoxLayout()
@@ -819,7 +834,7 @@ class SettingsDialog(QDialog):
         checkbox_row5 = QHBoxLayout()
         checkbox_row5.setSpacing(10)
 
-        self.always_use_driver_name_cb = QCheckBox("Always Use Driver Name")
+        self.always_use_driver_name_cb = QCheckBox("Use Driver Name")
         self.always_use_driver_name_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
         self.always_use_driver_name_cb.setChecked(self.parent_overlay.settings.always_use_driver_name)
         self.always_use_driver_name_cb.setToolTip(
@@ -1326,9 +1341,14 @@ class SettingsDialog(QDialog):
     def _load_official_league(self, league_source):
         """Load an official league."""
         try:
+            success, message, _driver_count = (
+                self.parent_overlay.division_manager.change_config_source(league_source)
+            )
+            if not success and self.parent_overlay.division_manager.config_file != league_source:
+                raise RuntimeError(message)
+            if not success:
+                logger.warning(message)
             self.parent_overlay.color_config_file = league_source
-            self.parent_overlay.division_manager.config_file = league_source
-            self.parent_overlay.division_manager.load_driver_config()
             self.parent_overlay.refresh_effective_division_colors()
             self.parent_overlay.apply_official_league_broadcast_metadata()
             self.parent_overlay.signals.refresh_colors.emit()
@@ -1357,9 +1377,12 @@ class SettingsDialog(QDialog):
                 json.load(f)  # Validate JSON
 
             # Load the config
+            success, message, _driver_count = (
+                self.parent_overlay.division_manager.change_config_source(file_path)
+            )
+            if not success:
+                raise RuntimeError(message)
             self.parent_overlay.color_config_file = file_path
-            self.parent_overlay.division_manager.config_file = file_path
-            self.parent_overlay.division_manager.load_driver_config()
             self.parent_overlay.refresh_effective_division_colors()
             self.parent_overlay.apply_official_league_broadcast_metadata()
             self.parent_overlay.signals.refresh_colors.emit()
@@ -1525,6 +1548,7 @@ class SettingsDialog(QDialog):
             self.show_recent_lap_flash_cb.setChecked(defaults.show_recent_lap_flash)
             self.always_use_driver_name_cb.setChecked(defaults.always_use_driver_name)
             self.unknown_driver_class_combo.setCurrentIndex(0)
+            self.persist_unknown_drivers_cb.setChecked(defaults.persist_auto_assigned_unknown_drivers)
             self.local_website_enabled_cb.setChecked(defaults.local_website_enabled)
             self.local_website_port_spin.setValue(defaults.local_website_port)
             self.local_website_scale_combo.setCurrentText(defaults.local_website_scale)
@@ -1589,8 +1613,15 @@ class SettingsDialog(QDialog):
             self.parent_overlay.settings.show_recent_lap_flash = self.show_recent_lap_flash_cb.isChecked()
             self.parent_overlay.settings.always_use_driver_name = self.always_use_driver_name_cb.isChecked()
             unknown_driver_class = self.unknown_driver_class_combo.currentData()
+            persist_unknown_drivers = (
+                unknown_driver_class is not None and self.persist_unknown_drivers_cb.isChecked()
+            )
             self.parent_overlay.settings.auto_assign_unknown_driver_class = unknown_driver_class
-            self.parent_overlay.division_manager.set_unknown_driver_class(unknown_driver_class)
+            self.parent_overlay.settings.persist_auto_assigned_unknown_drivers = persist_unknown_drivers
+            self.parent_overlay.division_manager.configure_unknown_driver_assignment(
+                unknown_driver_class,
+                persist_unknown_drivers
+            )
             self.parent_overlay.settings.local_website_enabled = self.local_website_enabled_cb.isChecked()
             self.parent_overlay.settings.local_website_port = self.local_website_port_spin.value()
             self.parent_overlay.settings.local_website_scale = self.local_website_scale_combo.currentText()
@@ -1674,6 +1705,13 @@ class SettingsDialog(QDialog):
             self.broadcast_roll_rows_spin.setEnabled(roll_settings_enabled)
         if hasattr(self, 'broadcast_roll_interval_spin'):
             self.broadcast_roll_interval_spin.setEnabled(roll_settings_enabled)
+
+    def _sync_unknown_driver_persistence_state(self, *_args):
+        """Only allow persistence when an automatic class is selected."""
+        enabled = self.unknown_driver_class_combo.currentData() is not None
+        self.persist_unknown_drivers_cb.setEnabled(enabled)
+        if not enabled:
+            self.persist_unknown_drivers_cb.setChecked(False)
             
     def on_cancel(self):
         """Cancel settings"""

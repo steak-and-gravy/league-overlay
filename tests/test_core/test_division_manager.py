@@ -12,6 +12,10 @@ Tests cover:
 import pytest
 import json
 import os
+import threading
+from unittest.mock import Mock, patch
+
+from config.official_leagues import OfficialLeague
 from core.division_manager import DivisionManager
 
 
@@ -354,6 +358,267 @@ class TestGetDriverDivision:
         assert manager.get_driver_division(unknown) == 'Rookie'
         manager.set_unknown_driver_class(None)
         assert manager.get_driver_division(unknown) is None
+
+    def test_unknown_driver_can_be_persisted_once_to_local_league_file(self, tmp_path):
+        config_file = tmp_path / "divisions.json"
+        config_file.write_text(json.dumps({'drivers': []}))
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(tmp_path / "settings.json"),
+            unknown_driver_class='ProAm',
+            persist_unknown_driver_assignments=True,
+        )
+        unknown = {'UserID': '789', 'UserName': 'New Driver'}
+
+        assert manager.get_driver_division(unknown) == 'ProAm'
+        assert manager.get_driver_division(unknown) == 'ProAm'
+
+        saved = json.loads(config_file.read_text())
+        assert saved['drivers'] == [
+            {'division': 'ProAm', 'id': '789', 'name': 'New Driver'}
+        ]
+
+    def test_official_unknown_driver_updates_cache_until_next_refresh(self, tmp_path):
+        cache_file = tmp_path / "cache_test_league.json"
+        league = OfficialLeague(
+            name="Test League",
+            path="test/league.json",
+            title="Test League",
+            description="Test",
+            logo=None,
+            cache_file=str(cache_file),
+        )
+        remote_data = {
+            'drivers': [{'id': '123', 'name': 'Known Driver', 'division': 'Pro'}],
+            'division_colors': {'Pro': '#112233'},
+        }
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.side_effect = lambda: json.loads(json.dumps(remote_data))
+
+        with (
+            patch("config.official_leagues.get_official_league", return_value=league),
+            patch("requests.get", return_value=response),
+        ):
+            manager = DivisionManager(
+                config_file="official:Test League",
+                settings_file=str(tmp_path / "settings.json"),
+                unknown_driver_class='Am',
+                persist_unknown_driver_assignments=True,
+            )
+            unknown = {'UserID': '999', 'UserName': 'Cached Driver'}
+
+            assert manager.get_writable_config_path() == str(cache_file)
+            assert manager.get_driver_division(unknown) == 'Am'
+            augmented_cache = json.loads(cache_file.read_text())
+            assert augmented_cache['drivers'][-1] == {
+                'division': 'Am', 'id': '999', 'name': 'Cached Driver'
+            }
+
+            refresh_started = threading.Event()
+            release_refresh = threading.Event()
+
+            def blocked_refresh_json():
+                refresh_started.set()
+                assert release_refresh.wait(timeout=2)
+                return json.loads(json.dumps(remote_data))
+
+            response.json.side_effect = blocked_refresh_json
+            refresh_thread = threading.Thread(target=manager.load_driver_config)
+            refresh_thread.start()
+            assert refresh_started.wait(timeout=2)
+            assert manager.get_driver_division(
+                {'UserID': '888', 'UserName': 'Concurrent Cached Driver'}
+            ) == 'Am'
+            release_refresh.set()
+            refresh_thread.join(timeout=2)
+            assert refresh_thread.is_alive() is False
+
+        refreshed_cache = json.loads(cache_file.read_text())
+        assert refreshed_cache == remote_data
+        assert all(driver.get('id') != '999' for driver in refreshed_cache['drivers'])
+
+    def test_failed_automatic_write_rolls_back_and_retries(self, tmp_path):
+        config_file = tmp_path / "divisions.json"
+        config_file.write_text(json.dumps({'drivers': []}))
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(tmp_path / "settings.json"),
+            unknown_driver_class='Rookie',
+            persist_unknown_driver_assignments=True,
+        )
+        unknown = {'UserID': '404', 'UserName': 'Retry Driver'}
+        original_atomic_write = manager._atomic_write_json
+        attempts = 0
+
+        def fail_once(target_file, data):
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                return False
+            return original_atomic_write(target_file, data)
+
+        with (
+            patch.object(manager, '_atomic_write_json', side_effect=fail_once),
+            patch("core.division_manager.time.monotonic", side_effect=[100.0, 101.0, 106.0]),
+        ):
+            assert manager.get_driver_division(unknown) == 'Rookie'
+            assert manager.driver_colors['drivers'] == []
+            assert manager.get_driver_division(unknown) == 'Rookie'
+            assert attempts == 1
+            assert manager.get_driver_division(unknown) == 'Rookie'
+
+        assert attempts == 2
+        assert json.loads(config_file.read_text())['drivers'] == [
+            {'division': 'Rookie', 'id': '404', 'name': 'Retry Driver'}
+        ]
+
+    def test_persistent_write_failure_is_rate_limited(self, tmp_path):
+        config_file = tmp_path / "divisions.json"
+        config_file.write_text(json.dumps({'drivers': []}))
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(tmp_path / "settings.json"),
+            unknown_driver_class='Am',
+            persist_unknown_driver_assignments=True,
+        )
+        unknown = {'UserID': '500', 'UserName': 'Read Only Driver'}
+
+        with (
+            patch.object(manager, '_atomic_write_json', return_value=False) as atomic_write,
+            patch("core.division_manager.time.monotonic", side_effect=[20.0, 21.0, 22.0]),
+        ):
+            assert manager.get_driver_division(unknown) == 'Am'
+            assert manager.get_driver_division(unknown) == 'Am'
+            assert manager.get_driver_division(unknown) == 'Am'
+
+        assert atomic_write.call_count == 1
+        assert manager.driver_colors['drivers'] == []
+
+    def test_atomic_write_failure_preserves_existing_json(self, tmp_path):
+        config_file = tmp_path / "divisions.json"
+        original_data = {'drivers': [{'id': '1', 'division': 'Pro'}]}
+        config_file.write_text(json.dumps(original_data))
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(tmp_path / "settings.json"),
+        )
+
+        assert manager._atomic_write_json(str(config_file), {'invalid': object()}) is False
+        assert json.loads(config_file.read_text()) == original_data
+
+    def test_source_switch_keeps_old_target_active_until_atomic_commit(self, tmp_path):
+        old_file = tmp_path / "old.json"
+        new_file = tmp_path / "new.json"
+        old_file.write_text(json.dumps({'drivers': []}))
+        new_data = {'drivers': [{'id': '2', 'name': 'New Known', 'division': 'Pro'}]}
+        new_file.write_text(json.dumps(new_data))
+        manager = DivisionManager(
+            config_file=str(old_file),
+            settings_file=str(tmp_path / "settings.json"),
+            unknown_driver_class='Am',
+            persist_unknown_driver_assignments=True,
+        )
+        load_started = threading.Event()
+        release_load = threading.Event()
+        original_load_local = manager._load_local_file
+
+        def blocked_load(config_file):
+            load_started.set()
+            assert release_load.wait(timeout=2)
+            return original_load_local(config_file)
+
+        with patch.object(manager, '_load_local_file', side_effect=blocked_load):
+            switch_thread = threading.Thread(
+                target=manager.change_config_source,
+                args=(str(new_file),),
+            )
+            switch_thread.start()
+            assert load_started.wait(timeout=2)
+            assert manager.config_file == str(old_file)
+
+            unknown = {'UserID': '999', 'UserName': 'Old Session Unknown'}
+            assert manager.get_driver_division(unknown) == 'Am'
+
+            release_load.set()
+            switch_thread.join(timeout=2)
+            assert switch_thread.is_alive() is False
+
+        assert json.loads(old_file.read_text())['drivers'][-1]['id'] == '999'
+        assert json.loads(new_file.read_text()) == new_data
+        assert manager.config_file == str(new_file)
+        assert manager.get_driver_division({'UserID': '2'}) == 'Pro'
+
+    def test_same_source_reload_cannot_install_stale_data_over_persisted_assignment(self, tmp_path):
+        config_file = tmp_path / "league.json"
+        config_file.write_text(json.dumps({'drivers': []}))
+        manager = DivisionManager(
+            config_file=str(config_file),
+            settings_file=str(tmp_path / "settings.json"),
+            unknown_driver_class='ProAm',
+            persist_unknown_driver_assignments=True,
+        )
+        read_started = threading.Event()
+        release_read = threading.Event()
+        persistence_finished = threading.Event()
+        original_json_load = json.load
+
+        def blocked_json_load(file_obj):
+            read_started.set()
+            assert release_read.wait(timeout=2)
+            return original_json_load(file_obj)
+
+        with patch("core.division_manager.json.load", side_effect=blocked_json_load):
+            reload_thread = threading.Thread(target=manager.load_driver_config)
+            reload_thread.start()
+            assert read_started.wait(timeout=2)
+
+            def persist_unknown():
+                manager.get_driver_division({'UserID': '321', 'UserName': 'Locked Driver'})
+                persistence_finished.set()
+
+            persistence_thread = threading.Thread(target=persist_unknown)
+            persistence_thread.start()
+            assert persistence_finished.wait(timeout=0.05) is False
+            release_read.set()
+            reload_thread.join(timeout=2)
+            persistence_thread.join(timeout=2)
+
+        assert reload_thread.is_alive() is False
+        assert persistence_thread.is_alive() is False
+        assert json.loads(config_file.read_text())['drivers'] == [
+            {'division': 'ProAm', 'id': '321', 'name': 'Locked Driver'}
+        ]
+
+    def test_failed_official_source_switch_preserves_active_local_league(self, tmp_path):
+        local_file = tmp_path / "active.json"
+        local_data = {'drivers': [{'id': '1', 'name': 'Active Driver', 'division': 'Pro'}]}
+        local_file.write_text(json.dumps(local_data))
+        manager = DivisionManager(
+            config_file=str(local_file),
+            settings_file=str(tmp_path / "settings.json"),
+        )
+        league = OfficialLeague(
+            name="Unavailable League",
+            path="missing.json",
+            title="Unavailable",
+            description="Unavailable",
+            logo=None,
+            cache_file=str(tmp_path / "missing-cache.json"),
+        )
+
+        with (
+            patch("config.official_leagues.get_official_league", return_value=league),
+            patch("requests.get", side_effect=OSError("offline")),
+        ):
+            success, _message, _count = manager.change_config_source(
+                "official:Unavailable League"
+            )
+
+        assert success is False
+        assert manager.config_file == str(local_file)
+        assert manager.driver_colors == local_data
+        assert manager.get_driver_division({'UserID': '1'}) == 'Pro'
 
 
 class TestSetDriverDivision:

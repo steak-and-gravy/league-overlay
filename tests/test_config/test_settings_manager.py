@@ -54,6 +54,7 @@ class TestAppSettingsDefaults:
         assert settings.local_website_port == 8765
         assert settings.local_website_scale == "Large"
         assert settings.auto_assign_unknown_driver_class is None
+        assert settings.persist_auto_assigned_unknown_drivers is False
 
     def test_default_config_files(self):
         """Test default config file paths."""
@@ -158,6 +159,7 @@ class TestLoadSettings:
         assert settings.refresh_rate == 1.0  # Default from AppSettings
         assert settings.hide_headers is False
         assert settings.auto_assign_unknown_driver_class is None
+        assert settings.persist_auto_assigned_unknown_drivers is False
 
     def test_load_unknown_driver_class(self, tmp_path):
         settings_file = tmp_path / "settings.config"
@@ -253,6 +255,7 @@ class TestSaveSettings:
             assert data['local_website_port'] == 8766
             assert data['local_website_scale'] == "Large"
             assert 'auto_assign_unknown_driver_class' not in data
+            assert 'persist_auto_assigned_unknown_drivers' not in data
 
     def test_save_all_fields(self, tmp_path):
         """Test saving all settings fields."""
@@ -281,6 +284,7 @@ class TestSaveSettings:
             division_colors={'Pro': '#FF0000'},
             league_color_overrides={'official:League': {'Pro': '#00FF00'}},
             auto_assign_unknown_driver_class='Rookie',
+            persist_auto_assigned_unknown_drivers=True,
         )
 
         manager.save(settings)
@@ -300,6 +304,7 @@ class TestSaveSettings:
             assert data['division_colors'] == {'Pro': '#FF0000'}
             assert data['league_color_overrides'] == {'official:League': {'Pro': '#00FF00'}}
             assert data['auto_assign_unknown_driver_class'] == 'Rookie'
+            assert data['persist_auto_assigned_unknown_drivers'] is True
 
     def test_load_legacy_center_drivers_config_uses_pit_stop_indicator_default(self, tmp_path):
         """Legacy configs should ignore removed center_drivers and default Pit Stop Indicator on."""

@@ -28,10 +28,18 @@ class DummyOverlay(QWidget):
             driver_colors={'drivers': []},
             config_file="official:BWRL GT3 Sprint",
             unknown_driver_class=None,
+            persist_unknown_driver_assignments=False,
         )
-        self.division_manager.set_unknown_driver_class = lambda division: setattr(
-            self.division_manager, "unknown_driver_class", division
-        )
+        def configure_unknown_driver_assignment(division, persist):
+            self.division_manager.unknown_driver_class = division
+            self.division_manager.persist_unknown_driver_assignments = persist
+
+        self.division_manager.configure_unknown_driver_assignment = configure_unknown_driver_assignment
+        def change_config_source(source):
+            self.division_manager.config_file = source
+            return True, f"Loaded {source}", 0
+
+        self.division_manager.change_config_source = change_config_source
         self.color_config_file = "official:BWRL GT3 Sprint"
         self.settings_manager = Mock()
         self.signals = SimpleNamespace(refresh_colors=SimpleNamespace(emit=Mock()))
@@ -142,21 +150,41 @@ def test_fixed_columns_use_disabled_checkbox_behavior(qapp):
     overlay.deleteLater()
 
 
-def test_unknown_driver_class_control_defaults_off_and_applies_selected_class(qapp):
+def test_unknown_driver_class_control_defaults_to_default_and_applies_selected_class(qapp):
     overlay, dialog = _build_dialog()
 
     options = [
         dialog.unknown_driver_class_combo.itemText(index)
         for index in range(dialog.unknown_driver_class_combo.count())
     ]
-    assert options == ["Off", "Pro", "ProAm", "Am", "Rookie"]
+    assert options == ["Default", "Pro", "ProAm", "Am", "Rookie"]
     assert dialog.unknown_driver_class_combo.currentData() is None
+    assert dialog.persist_unknown_drivers_cb.isChecked() is False
+    assert dialog.persist_unknown_drivers_cb.isEnabled() is False
 
     dialog.unknown_driver_class_combo.setCurrentText("ProAm")
+    assert dialog.persist_unknown_drivers_cb.isEnabled() is True
+    dialog.persist_unknown_drivers_cb.setChecked(True)
     dialog.apply_settings()
 
     assert overlay.settings.auto_assign_unknown_driver_class == "ProAm"
+    assert overlay.settings.persist_auto_assigned_unknown_drivers is True
     assert overlay.division_manager.unknown_driver_class == "ProAm"
+    assert overlay.division_manager.persist_unknown_driver_assignments is True
+
+    dialog.deleteLater()
+    overlay.deleteLater()
+
+
+def test_selecting_default_unknown_driver_class_also_turns_persistence_off(qapp):
+    overlay, dialog = _build_dialog()
+    dialog.unknown_driver_class_combo.setCurrentText("Am")
+    dialog.persist_unknown_drivers_cb.setChecked(True)
+
+    dialog.unknown_driver_class_combo.setCurrentText("Default")
+
+    assert dialog.persist_unknown_drivers_cb.isChecked() is False
+    assert dialog.persist_unknown_drivers_cb.isEnabled() is False
 
     dialog.deleteLater()
     overlay.deleteLater()
@@ -292,7 +320,7 @@ def test_apply_settings_updates_always_use_driver_name_checkbox(qapp):
     """Applying the dialog should persist the team-name override toggle."""
     overlay, dialog = _build_dialog()
 
-    assert dialog.always_use_driver_name_cb.text() == "Always Use Driver Name"
+    assert dialog.always_use_driver_name_cb.text() == "Use Driver Name"
     assert dialog.always_use_driver_name_cb.isChecked() is False
     assert "Team events normally show team names" in dialog.always_use_driver_name_cb.toolTip()
     dialog.always_use_driver_name_cb.setChecked(True)

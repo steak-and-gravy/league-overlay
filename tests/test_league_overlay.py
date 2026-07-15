@@ -23,6 +23,7 @@ def test_reload_division_config_rebinds_runtime_consumers(mock_manager_class):
         division_colors={"Default": "#C5C5C5"},
         league_color_overrides={},
         auto_assign_unknown_driver_class="Am",
+        persist_auto_assigned_unknown_drivers=True,
     )
     app.division_filter = SimpleNamespace(division_manager=object())
     app.telemetry_processor = SimpleNamespace(division_manager=object())
@@ -40,6 +41,7 @@ def test_reload_division_config_rebinds_runtime_consumers(mock_manager_class):
         app_default_colors=app.settings.division_colors,
         league_color_overrides=app.settings.league_color_overrides,
         unknown_driver_class="Am",
+        persist_unknown_driver_assignments=True,
     )
 
 

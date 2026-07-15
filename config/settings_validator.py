@@ -90,6 +90,11 @@ class SettingsValidator:
             default=self.defaults['auto_assign_unknown_driver_class'],
             field_name='auto_assign_unknown_driver_class'
         )
+        validated['persist_auto_assigned_unknown_drivers'] = self.coerce_bool(
+            data.get('persist_auto_assigned_unknown_drivers'),
+            default=self.defaults['persist_auto_assigned_unknown_drivers'],
+            field_name='persist_auto_assigned_unknown_drivers'
+        )
 
         # Integer fields (window position and dimensions)
         validated['x'] = self.coerce_int(
