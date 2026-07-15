@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QPushButton, QWidget, QStyleOptionViewItem
+from PySide6.QtWidgets import QLabel, QPushButton, QWidget, QStyleOptionViewItem
 
 from config.constants import UI_DIMENSIONS
 from config.official_leagues import OfficialLeague
@@ -159,6 +159,14 @@ def test_unknown_driver_class_control_defaults_to_default_and_applies_selected_c
     ]
     assert options == ["Default", "Pro", "ProAm", "Am", "Rookie"]
     assert dialog.unknown_driver_class_combo.currentData() is None
+    assert any(
+        label.text() == "Unlisted driver class:"
+        for label in dialog.findChildren(QLabel)
+    )
+    assert dialog.persist_unknown_drivers_cb.text() == "Auto save unlisted drivers to league file"
+    assert "QCheckBox:disabled { color: #777777; }" in (
+        dialog.persist_unknown_drivers_cb.styleSheet()
+    )
     assert dialog.persist_unknown_drivers_cb.isChecked() is False
     assert dialog.persist_unknown_drivers_cb.isEnabled() is False
 

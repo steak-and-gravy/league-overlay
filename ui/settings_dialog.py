@@ -150,7 +150,7 @@ class SettingsDialog(QDialog):
         config_layout.addLayout(league_row)
 
         unknown_driver_row = QHBoxLayout()
-        unknown_driver_label = QLabel("Unknown drivers:")
+        unknown_driver_label = QLabel("Unlisted driver class:")
         unknown_driver_label.setStyleSheet("font-size: 9pt; color: white; border: none;")
         unknown_driver_row.addWidget(unknown_driver_label)
 
@@ -168,8 +168,11 @@ class SettingsDialog(QDialog):
         unknown_driver_row.addWidget(self.unknown_driver_class_combo, 1)
         config_layout.addLayout(unknown_driver_row)
 
-        self.persist_unknown_drivers_cb = QCheckBox("Save unknown drivers to league file")
-        self.persist_unknown_drivers_cb.setStyleSheet("border: none; color: white; font-size: 9pt;")
+        self.persist_unknown_drivers_cb = QCheckBox("Auto save unlisted drivers to league file")
+        self.persist_unknown_drivers_cb.setStyleSheet("""
+            QCheckBox { border: none; color: white; font-size: 9pt; }
+            QCheckBox:disabled { color: #777777; }
+        """)
         self.persist_unknown_drivers_cb.setChecked(
             self.parent_overlay.settings.persist_auto_assigned_unknown_drivers
         )
