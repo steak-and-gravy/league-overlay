@@ -588,6 +588,7 @@ class SettingsDialog(QDialog):
         self.local_website_port_spin.valueChanged.connect(self._update_local_website_link)
         self._update_local_website_link()
 
+        left_column.addWidget(local_web_group)
         left_column.addStretch()
 
         # RIGHT COLUMN
@@ -848,7 +849,6 @@ class SettingsDialog(QDialog):
         window_group.setMinimumHeight(window_group.sizeHint().height())
 
         right_column.addWidget(window_group)
-        right_column.addWidget(local_web_group)
 
         # Column Configuration section — reorderable list with visibility checkboxes
         column_group = QFrame()
@@ -979,7 +979,7 @@ class SettingsDialog(QDialog):
         apply_btn.clicked.connect(self.apply_settings)
         top_button_layout.addWidget(apply_btn)
         
-        layout.addLayout(top_button_layout)
+        right_column.addLayout(top_button_layout)
         
         # Reset button centered below
         reset_btn = QPushButton("Reset to Defaults")
@@ -996,13 +996,13 @@ class SettingsDialog(QDialog):
             }
         """)
         reset_btn.clicked.connect(self.reset_to_defaults)
-        layout.addWidget(reset_btn)
+        right_column.addWidget(reset_btn)
         
         # Status label (shows driver count when loading files, or version by default)
         self.status_label = QLabel(f"Version {VERSION}")
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setStyleSheet("color: #888888; font-size: 8pt;")
-        layout.addWidget(self.status_label)
+        right_column.addWidget(self.status_label)
 
         # Check for updates and show link if available
         if hasattr(self.parent_overlay, 'latest_version') and self.parent_overlay.latest_version:

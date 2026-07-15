@@ -5,7 +5,7 @@ from typing import Dict, Any, List, NamedTuple, Optional
 
 
 # Application version
-VERSION = "1.0.0.1"
+VERSION = "1.0.0.2"
 DOWNLOAD_PAGE_URL = "https://leagueoverlay.com/download.php"
 
 

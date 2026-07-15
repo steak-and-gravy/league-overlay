@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QWidget, QStyleOptionViewItem
+from PySide6.QtWidgets import QPushButton, QWidget, QStyleOptionViewItem
 
 from config.constants import UI_DIMENSIONS
 from config.official_leagues import OfficialLeague
@@ -197,6 +197,26 @@ def test_settings_sections_fit_fixed_dialog_without_layout_compression(qapp):
 
     assert dialog.minimumSizeHint().width() <= dialog.width()
     assert dialog.minimumSizeHint().height() <= dialog.height()
+    assert (
+        dialog.local_website_section_title.mapTo(
+            dialog,
+            dialog.local_website_section_title.rect().center(),
+        ).x()
+        < dialog.width() / 2
+    )
+
+    action_buttons = {
+        button.text(): button
+        for button in dialog.findChildren(QPushButton)
+        if button.text() in {"Cancel", "Apply Settings", "Reset to Defaults"}
+    }
+    assert set(action_buttons) == {"Cancel", "Apply Settings", "Reset to Defaults"}
+    for button in action_buttons.values():
+        assert button.mapTo(dialog, button.rect().center()).x() > dialog.width() / 2
+    assert dialog.status_label.mapTo(
+        dialog,
+        dialog.status_label.rect().center(),
+    ).x() > dialog.width() / 2
 
     dialog.deleteLater()
     overlay.deleteLater()
