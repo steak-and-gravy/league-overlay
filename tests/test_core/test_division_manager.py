@@ -16,6 +16,7 @@ import threading
 from unittest.mock import Mock, patch
 
 from config.official_leagues import OfficialLeague
+from config.remote_cache import get_cache_metadata_path
 from core.division_manager import DivisionManager
 
 
@@ -377,6 +378,164 @@ class TestGetDriverDivision:
         assert saved['drivers'] == [
             {'division': 'ProAm', 'id': '789', 'name': 'New Driver'}
         ]
+
+    def test_unchanged_official_league_preserves_locally_edited_cache(self, tmp_path):
+        cache_file = tmp_path / "cache_test_league.json"
+        league_url = "https://leagueoverlay.com/league_files/test/league.json"
+        league = OfficialLeague(
+            name="Test League",
+            path="test/league.json",
+            title="Test League",
+            description="Test",
+            logo=None,
+            cache_file=str(cache_file),
+        )
+        locally_edited_data = {
+            'drivers': [{'id': '123', 'name': 'Local Edit', 'division': 'Rookie'}]
+        }
+        cache_file.write_text(json.dumps(locally_edited_data))
+        metadata_file = get_cache_metadata_path(str(cache_file))
+        with open(metadata_file, 'w', encoding='utf-8') as file_obj:
+            json.dump({
+                'url': league_url,
+                'etag': '"remote-v1"',
+                'last_modified': 'Sun, 12 Jul 2026 01:00:00 GMT',
+            }, file_obj)
+        response = Mock(status_code=304)
+
+        with (
+            patch("config.official_leagues.get_official_league", return_value=league),
+            patch("config.official_leagues.get_full_league_url", return_value=league_url),
+            patch("requests.get", return_value=response) as requests_get,
+        ):
+            manager = DivisionManager(
+                config_file="official:Test League",
+                settings_file=str(tmp_path / "settings.json"),
+            )
+
+        requests_get.assert_called_once_with(
+            league_url,
+            headers={
+                'If-None-Match': '"remote-v1"',
+                'If-Modified-Since': 'Sun, 12 Jul 2026 01:00:00 GMT',
+            },
+            timeout=10,
+        )
+        response.json.assert_not_called()
+        assert manager.driver_colors == locally_edited_data
+        assert json.loads(cache_file.read_text()) == locally_edited_data
+
+    def test_changed_official_league_replaces_newer_local_cache(self, tmp_path):
+        cache_file = tmp_path / "cache_test_league.json"
+        league_url = "https://leagueoverlay.com/league_files/test/league.json"
+        league = OfficialLeague(
+            name="Test League",
+            path="test/league.json",
+            title="Test League",
+            description="Test",
+            logo=None,
+            cache_file=str(cache_file),
+        )
+        locally_edited_data = {
+            'drivers': [{'id': '123', 'name': 'Local Edit', 'division': 'Rookie'}]
+        }
+        remote_data = {
+            'drivers': [{'id': '123', 'name': 'Remote Update', 'division': 'Pro'}]
+        }
+        cache_file.write_text(json.dumps(locally_edited_data))
+        newer_local_timestamp = 2_000_000_000
+        os.utime(cache_file, (newer_local_timestamp, newer_local_timestamp))
+        metadata_file = get_cache_metadata_path(str(cache_file))
+        with open(metadata_file, 'w', encoding='utf-8') as file_obj:
+            json.dump({'url': league_url, 'etag': '"remote-v1"'}, file_obj)
+
+        response = Mock(status_code=200)
+        response.headers = {
+            'ETag': '"remote-v2"',
+            'Last-Modified': 'Mon, 13 Jul 2026 01:00:00 GMT',
+        }
+        response.json.return_value = remote_data
+
+        with (
+            patch("config.official_leagues.get_official_league", return_value=league),
+            patch("config.official_leagues.get_full_league_url", return_value=league_url),
+            patch("requests.get", return_value=response) as requests_get,
+        ):
+            manager = DivisionManager(
+                config_file="official:Test League",
+                settings_file=str(tmp_path / "settings.json"),
+            )
+
+        requests_get.assert_called_once_with(
+            league_url,
+            headers={'If-None-Match': '"remote-v1"'},
+            timeout=10,
+        )
+        assert manager.driver_colors == remote_data
+        assert json.loads(cache_file.read_text()) == remote_data
+        with open(metadata_file, 'r', encoding='utf-8') as file_obj:
+            saved_metadata = json.load(file_obj)
+        assert saved_metadata == {
+            'url': league_url,
+            'etag': '"remote-v2"',
+            'last_modified': 'Mon, 13 Jul 2026 01:00:00 GMT',
+        }
+        assert cache_file.stat().st_mtime < newer_local_timestamp
+
+    @pytest.mark.parametrize(
+        "invalid_cache_contents",
+        [
+            "{invalid json",
+            json.dumps({}),
+            json.dumps({'drivers': ['not-a-driver']}),
+        ],
+    )
+    def test_304_with_invalid_cache_retries_without_validators(
+        self,
+        tmp_path,
+        invalid_cache_contents,
+    ):
+        cache_file = tmp_path / "cache_test_league.json"
+        league_url = "https://leagueoverlay.com/league_files/test/league.json"
+        league = OfficialLeague(
+            name="Test League",
+            path="test/league.json",
+            title="Test League",
+            description="Test",
+            logo=None,
+            cache_file=str(cache_file),
+        )
+        cache_file.write_text(invalid_cache_contents)
+        metadata_file = get_cache_metadata_path(str(cache_file))
+        with open(metadata_file, 'w', encoding='utf-8') as file_obj:
+            json.dump({'url': league_url, 'etag': '"remote-v1"'}, file_obj)
+
+        not_modified_response = Mock(status_code=304)
+        refreshed_response = Mock(status_code=200)
+        refreshed_response.headers = {'ETag': '"remote-v2"'}
+        refreshed_response.json.return_value = {
+            'drivers': [{'id': '123', 'name': 'Recovered', 'division': 'Am'}]
+        }
+
+        with (
+            patch("config.official_leagues.get_official_league", return_value=league),
+            patch("config.official_leagues.get_full_league_url", return_value=league_url),
+            patch(
+                "requests.get",
+                side_effect=[not_modified_response, refreshed_response],
+            ) as requests_get,
+        ):
+            manager = DivisionManager(
+                config_file="official:Test League",
+                settings_file=str(tmp_path / "settings.json"),
+            )
+
+        assert requests_get.call_args_list[0].kwargs['headers'] == {
+            'If-None-Match': '"remote-v1"'
+        }
+        assert 'headers' not in requests_get.call_args_list[1].kwargs
+        assert manager.get_driver_division({'UserID': '123'}) == 'Am'
+        assert json.loads(cache_file.read_text()) == refreshed_response.json.return_value
 
     def test_official_unknown_driver_updates_cache_until_next_refresh(self, tmp_path):
         cache_file = tmp_path / "cache_test_league.json"

@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 
 from config.constants import ASSIGNABLE_DIVISIONS, UI_CONFIG, FILE_CONFIG
 from config.logging_config import get_logger
+from config.remote_cache import load_conditional_headers, save_response_metadata
 
 logger = get_logger(__name__)
 
@@ -88,16 +89,42 @@ class DivisionManager:
             logger.error(f"Unknown official league: {league_name}")
             return False, f"Unknown official league: {league_name}", 0
 
-        # Try to fetch from remote
+        league_url = get_full_league_url(league)
+        cache_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '..', league.cache_file)
+        )
+
+        # Try to fetch from remote, using validators from the last successful download.
         try:
-            league_url = get_full_league_url(league)
-            response = requests.get(league_url, timeout=10)
+            conditional_headers = load_conditional_headers(cache_path, league_url)
+            response = requests.get(league_url, headers=conditional_headers, timeout=10)
+
+            if response.status_code == 304:
+                cache_error = None
+                with self._assignment_lock:
+                    try:
+                        with open(cache_path, 'r', encoding='utf-8') as cache_file:
+                            data = json.load(cache_file)
+                        if not self._is_valid_driver_config(data):
+                            raise ValueError("cache does not contain valid driver assignments")
+                    except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
+                        cache_error = error
+                    else:
+                        self._install_loaded_config_locked(config_file, data)
+                        driver_count = len(self.driver_colors['drivers'])
+                if cache_error is not None:
+                    logger.warning(
+                        f"Cached {league.name} data is unavailable after a 304 response; "
+                        f"retrying without validators: {cache_error}"
+                    )
+                    response = requests.get(league_url, timeout=10)
+                else:
+                    logger.info(f"{league.name} is up to date; loaded {driver_count} drivers from cache")
+                    return True, f"{league.name} is already up to date", driver_count
+
             response.raise_for_status()
             data = response.json()
 
-            cache_path = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), '..', league.cache_file)
-            )
             with self._assignment_lock:
                 cache_saved = self._atomic_write_json(cache_path, data)
                 self._install_loaded_config_locked(config_file, data)
@@ -105,17 +132,16 @@ class DivisionManager:
             logger.info(f"Loaded {driver_count} drivers from {league.name}")
             if not cache_saved:
                 return False, f"Loaded {league.name}, but failed to update its local cache", driver_count
+            if not save_response_metadata(cache_path, league_url, response.headers):
+                logger.warning(f"Failed to save HTTP cache metadata for {league.name}")
             return True, f"Successfully refreshed {league.name}", driver_count
 
         except Exception as e:
             # Fall back to cache
             logger.warning(f"Failed to fetch {league.name}, using cache: {e}")
-            cache_path = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), '..', league.cache_file)
-            )
             if os.path.exists(cache_path):
                 try:
-                    with open(cache_path, 'r') as f:
+                    with open(cache_path, 'r', encoding='utf-8') as f:
                         data = json.load(f)
                     with self._assignment_lock:
                         self._install_loaded_config_locked(config_file, data)
@@ -146,13 +172,30 @@ class DivisionManager:
     def _install_loaded_config_locked(self, config_file: str, data: Any) -> None:
         """Install a fully parsed source while holding the assignment lock."""
         self.config_file = config_file
-        if isinstance(data, dict) and isinstance(data.get('drivers'), list):
+        if self._is_valid_driver_config(data):
             self.driver_colors = data
         else:
             self.driver_colors = {'drivers': []}
         self._load_league_division_colors(data)
         self._build_lookup_cache()
         self._persistence_retry_after.clear()
+
+    @staticmethod
+    def _is_valid_driver_config(data: Any) -> bool:
+        """Return whether data contains the expected driver assignment structure."""
+        if not isinstance(data, dict) or not isinstance(data.get('drivers'), list):
+            return False
+        for driver in data['drivers']:
+            if not isinstance(driver, dict):
+                return False
+            for lookup_field in ('id', 'name'):
+                lookup_value = driver.get(lookup_field)
+                if lookup_value:
+                    try:
+                        hash(lookup_value)
+                    except TypeError:
+                        return False
+        return True
 
     def load_division_config(self) -> None:
         """Load effective division colors from settings file."""
