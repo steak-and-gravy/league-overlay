@@ -54,6 +54,29 @@ class DriverListContentWidget(QWidget):
         painter.fillRect(self.rect(), background)
 
 
+class FooterBackgroundWidget(QWidget):
+    """Paint the footer background once, behind all child widgets."""
+
+    def __init__(
+        self,
+        get_opacity: Callable[[], float],
+        background_color: str,
+        parent: Optional[QWidget] = None,
+    ):
+        super().__init__(parent)
+        self._get_opacity = get_opacity
+        self._background_color = background_color
+        self.setStyleSheet("background-color: transparent;")
+
+    def paintEvent(self, event) -> None:
+        opacity = max(0.0, min(1.0, float(self._get_opacity())))
+        background = QColor(self._background_color)
+        background.setAlphaF(opacity)
+
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), background)
+
+
 class CustomSizeGrip(QSizeGrip):
     """Custom size grip widget with transparent background and conditional visibility.
     Shows diagonal arrow pattern when parent window has focus or mouse is hovering over the app.

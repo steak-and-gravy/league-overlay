@@ -57,9 +57,7 @@ def test_update_all_backgrounds_refreshes_footer_opacity():
 
     LeagueOverlay.update_all_backgrounds(app)
 
-    app.footer_frame.setStyleSheet.assert_called_once_with(
-        "background-color: rgba(51, 51, 51, 0.35);"
-    )
+    app.footer_frame.update.assert_called_once_with()
 
 
 def test_update_all_backgrounds_keeps_shared_containers_transparent():

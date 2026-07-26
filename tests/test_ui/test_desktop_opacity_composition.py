@@ -5,7 +5,7 @@ from types import MethodType, SimpleNamespace
 import pytest
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
-from PySide6.QtWidgets import QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget
 
 from config.constants import UI_CONFIG
 from config.settings import AppSettings
@@ -13,7 +13,7 @@ from core.driver_state import DriverState
 from league_overlay import LeagueOverlay
 from ui.broadcast_header import BroadcastHeaderWidget
 from ui.driver_row_renderer import DriverRowRenderer
-from ui.widgets import DriverListContentWidget
+from ui.widgets import DriverListContentWidget, FooterBackgroundWidget
 
 
 def _rendered_color(root: QWidget, widget: QWidget, local_point: QPoint) -> QColor:
@@ -50,6 +50,57 @@ def test_empty_driver_list_fills_the_viewport_at_configured_opacity(
     assert color.alphaF() == pytest.approx(expected_alpha, abs=1 / 255)
 
     content.deleteLater()
+
+
+@pytest.mark.parametrize(
+    ("opacity", "expected_alpha"),
+    [
+        (0.0, 0.01),
+        (0.5, 0.5),
+        (1.0, 1.0),
+    ],
+)
+def test_footer_labels_and_spacing_share_one_background_layer(
+    qapp,
+    opacity,
+    expected_alpha,
+):
+    footer = FooterBackgroundWidget(
+        get_opacity=lambda: max(0.01, opacity),
+        background_color="#333333",
+    )
+
+    layout = QHBoxLayout(footer)
+    layout.setContentsMargins(5, 5, 5, 5)
+    layout.setSpacing(10)
+    labels = []
+    for text in ("SoF: ----", "--x", "--°F / --°C"):
+        label = QLabel(text)
+        label.setStyleSheet("color: white; background-color: transparent;")
+        layout.addWidget(label)
+        labels.append(label)
+
+    footer.resize(400, 40)
+    footer.show()
+    qapp.processEvents()
+
+    label_color = _rendered_color(
+        footer,
+        labels[0],
+        QPoint(max(labels[0].width() - 3, 0), labels[0].height() // 2),
+    )
+    gap_x = (labels[0].geometry().right() + labels[1].geometry().left()) // 2
+    gap_color = _rendered_color(
+        footer,
+        footer,
+        QPoint(gap_x, footer.height() // 2),
+    )
+
+    alpha_tolerance = 1 / 255
+    assert label_color.alphaF() == pytest.approx(expected_alpha, abs=alpha_tolerance)
+    assert gap_color.alphaF() == pytest.approx(expected_alpha, abs=alpha_tolerance)
+
+    footer.deleteLater()
 
 
 @pytest.mark.parametrize(

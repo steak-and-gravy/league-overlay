@@ -39,7 +39,12 @@ from core.manufacturer import extract_manufacturer
 from core.driver_info import get_pace_car_indices, is_pace_car
 from core.telemetry_processor import TelemetryProcessor
 from core.update_checker import UpdateChecker
-from ui.widgets import DataUpdateSignal, CustomSizeGrip, DriverListContentWidget
+from ui.widgets import (
+    CustomSizeGrip,
+    DataUpdateSignal,
+    DriverListContentWidget,
+    FooterBackgroundWidget,
+)
 from ui.driver_row_renderer import DriverRowRenderer
 from ui.settings_dialog import SettingsDialog
 from ui.auto_center_controller import AutoCenterController
@@ -253,6 +258,10 @@ class LeagueOverlay(QMainWindow):
             return f"rgba({r}, {g}, {b}, {opacity})"
         return base_color
 
+    def update_footer_background(self):
+        """Repaint the footer's single parent-owned background layer."""
+        self.footer_frame.update()
+
     def get_font_size(self, element_type):
         """Get the appropriate font size or spacing for a UI element.
         Purpose: Centralizes font sizing to make the entire UI scale together
@@ -303,7 +312,7 @@ class LeagueOverlay(QMainWindow):
             # Update header text when column visibility changes
             self._update_header_labels()
         if hasattr(self, 'footer_frame'):
-            self.footer_frame.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.HEADER_DARK_GRAY)};")
+            self.update_footer_background()
         if hasattr(self, 'scroll_area'):
             self._update_broadcast_roll_mode()
             self.update_scroll_area_style()
@@ -472,27 +481,42 @@ class LeagueOverlay(QMainWindow):
         self.main_layout.addWidget(self.scroll_area)
 
         # Footer (optional)
-        self.footer_frame = QWidget()
-        self.footer_frame.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.HEADER_DARK_GRAY)};")
+        self.footer_frame = FooterBackgroundWidget(
+            get_opacity=lambda: max(
+                MIN_QT_INTERACTIVE_OPACITY,
+                self.settings.opacity,
+            ),
+            background_color=UI_COLORS.HEADER_DARK_GRAY,
+        )
+        self.update_footer_background()
         self.footer_layout = QHBoxLayout(self.footer_frame)
         self.footer_layout.setContentsMargins(5, 5, 5, 5)
         self.footer_layout.setSpacing(10)
 
         # Left: Strength of Field
         self.sof_label = QLabel("SoF: ----")
-        self.sof_label.setStyleSheet(f"color: white; font-size: {self.get_font_size('status')}pt; font-weight: bold;")
+        self.sof_label.setStyleSheet(
+            f"color: white; background-color: transparent; "
+            f"font-size: {self.get_font_size('status')}pt; font-weight: bold;"
+        )
         self.sof_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.footer_layout.addWidget(self.sof_label)
 
         # Center: Incidents
         self.incidents_label = QLabel("--x")
-        self.incidents_label.setStyleSheet(f"color: white; font-size: {self.get_font_size('status')}pt; font-weight: bold;")
+        self.incidents_label.setStyleSheet(
+            f"color: white; background-color: transparent; "
+            f"font-size: {self.get_font_size('status')}pt; font-weight: bold;"
+        )
         self.incidents_label.setAlignment(Qt.AlignCenter)
         self.footer_layout.addWidget(self.incidents_label)
 
         # Right: Track temperature
         self.track_temp_label = QLabel("🛣️ --°F / --°C")
-        self.track_temp_label.setStyleSheet(f"color: white; font-size: {self.get_font_size('status')}pt; font-weight: bold;")
+        self.track_temp_label.setStyleSheet(
+            f"color: white; background-color: transparent; "
+            f"font-size: {self.get_font_size('status')}pt; font-weight: bold;"
+        )
         self.track_temp_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.footer_layout.addWidget(self.track_temp_label)
 
