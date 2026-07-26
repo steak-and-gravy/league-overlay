@@ -121,10 +121,9 @@ class DarkColorStyle(ColorStyleStrategy):
 
         if driver.is_player or driver.is_spectated:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
-            label_bg = parent.blend_color_with_black(driver.division_color, parent.settings.highlight)
         else:
             bg_style = f"background-color: {parent.get_bg_color('#000000')};"
-            label_bg = parent.get_bg_color('#000000')
+        label_bg = "transparent"
 
         border_style = "border: 2px solid yellow;" if _highlight_player_border_enabled(driver, parent) else ""
 
@@ -141,7 +140,7 @@ class DarkColorStyle(ColorStyleStrategy):
             'delta_slower_color': delta_slower_color,
             'label_bg': label_bg,
             'label_border': '',
-            'layout_margins': (0, 2, 0, 2),
+            'layout_margins': (5, 2, 5, 2),
             'layout_spacing': 2
         }
 
@@ -157,12 +156,14 @@ class AlternateColorStyle(ColorStyleStrategy):
         gap_color = "#000000"
         delta_faster_color = parent.settings.faster_color
         delta_slower_color = parent.settings.slower_color
-        label_bg = parent.get_bg_color(base_bg)
+        label_bg = "transparent"
 
         if driver.is_player or driver.is_spectated:
             container_widget = QWidget()
             border_color = "yellow" if _highlight_player_border_enabled(driver, parent) else "white"
-            container_widget.setStyleSheet(f"background-color: {border_color}; padding: 2px;")
+            container_widget.setStyleSheet(
+                f"background-color: transparent; border: 2px solid {border_color};"
+            )
             container_layout = QVBoxLayout(container_widget)
             container_layout.setContentsMargins(0, 0, 0, 0)
             container_layout.setSpacing(0)
@@ -182,7 +183,7 @@ class AlternateColorStyle(ColorStyleStrategy):
                 'delta_slower_color': delta_slower_color,
                 'label_bg': label_bg,
                 'label_border': '',
-                'layout_margins': (0, 2, 0, 2),
+                'layout_margins': (5, 2, 5, 2),
                 'layout_spacing': 2
             }
         else:
@@ -198,7 +199,7 @@ class AlternateColorStyle(ColorStyleStrategy):
                 'delta_slower_color': delta_slower_color,
                 'label_bg': label_bg,
                 'label_border': '',
-                'layout_margins': (0, 2, 0, 2),
+                'layout_margins': (5, 2, 5, 2),
                 'layout_spacing': 2
             }
 
@@ -239,7 +240,7 @@ class OutlineColorStyle(ColorStyleStrategy):
             'delta_slower_color': delta_slower_color,
             'label_bg': label_bg,
             'label_border': label_border,
-            'layout_margins': (0, 2, 0, 2),
+            'layout_margins': (5, 2, 5, 2),
             'layout_spacing': 2
         }
 
@@ -253,7 +254,7 @@ class DefaultColorStyle(ColorStyleStrategy):
         gap_color = "white"
         delta_faster_color = parent.settings.faster_color
         delta_slower_color = parent.settings.slower_color
-        label_bg = parent.get_bg_color('#000000')
+        label_bg = "transparent"
         label_border = ''
         position_bg = get_half_effect_bg_color(
             '#FFFFFF',
@@ -266,7 +267,7 @@ class DefaultColorStyle(ColorStyleStrategy):
         )
         division_position_color = "white"
         division_position_border = f"border: 2px solid {driver.division_color};"
-        car_number_bg = parent.get_bg_color('#000000')
+        car_number_bg = "transparent"
         pit_stop_indicator_enabled = getattr(parent.settings, 'pit_stop_indicator', True)
         car_number_border = (
             ""
@@ -277,10 +278,8 @@ class DefaultColorStyle(ColorStyleStrategy):
 
         if driver.is_player:
             bg_style = f"background: {parent.create_gradient_background(driver.division_color)};"
-            label_bg = parent.blend_color_with_black(driver.division_color, parent.settings.highlight)
         else:
             row_bg = get_default_row_background("#000000", row_index)
-            label_bg = parent.get_bg_color(row_bg)
             bg_style = f"background-color: {parent.get_bg_color(row_bg)};"
 
         show_yellow_border = (
@@ -300,9 +299,9 @@ class DefaultColorStyle(ColorStyleStrategy):
             'gap_color': gap_color,
             'delta_faster_color': delta_faster_color,
             'delta_slower_color': delta_slower_color,
-            'label_bg': label_bg,  # Default background (driver name, gap)
+            'label_bg': label_bg,  # Ordinary cells inherit the single row background
             'label_border': label_border,
-            'layout_margins': (0, 2, 0, 2),
+            'layout_margins': (5, 2, 5, 2),
             'layout_spacing': 2,
             # Special styling for specific labels
             'position_bg': position_bg,  # Red background for position
@@ -310,7 +309,7 @@ class DefaultColorStyle(ColorStyleStrategy):
             'division_position_bg': division_position_bg,
             'division_position_color': division_position_color,
             'division_position_border': division_position_border,
-            'car_number_bg': car_number_bg,  # Black background for car number
+            'car_number_bg': car_number_bg,  # Row background remains visible behind car number
             'car_number_border': car_number_border,  # Division color outline for car number
             'car_number_color': car_number_color
         }

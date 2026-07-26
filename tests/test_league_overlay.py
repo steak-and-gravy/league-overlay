@@ -62,6 +62,23 @@ def test_update_all_backgrounds_refreshes_footer_opacity():
     )
 
 
+def test_update_all_backgrounds_keeps_shared_containers_transparent():
+    app = LeagueOverlay.__new__(LeagueOverlay)
+    app.settings = SimpleNamespace(
+        opacity=0.5,
+        font_size="Medium",
+        show_broadcast_header=False,
+    )
+    app.main_widget = Mock()
+    app.scroll_content = Mock()
+    app.sync_local_web_overlay = Mock(return_value=None)
+
+    LeagueOverlay.update_all_backgrounds(app)
+
+    app.main_widget.setStyleSheet.assert_called_once_with("background-color: transparent;")
+    app.scroll_content.setStyleSheet.assert_called_once_with("background-color: transparent;")
+
+
 def test_get_bg_color_keeps_zero_opacity_interactive():
     app = LeagueOverlay.__new__(LeagueOverlay)
     app.settings = SimpleNamespace(opacity=0.0)

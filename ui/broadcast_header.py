@@ -117,6 +117,7 @@ class BroadcastHeaderWidget(QWidget):
     def _update_background(self):
         bg = self.get_bg_color("#141414")
         self.setStyleSheet(f"BroadcastHeaderWidget {{ background-color: {bg}; }}")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setAutoFillBackground(False)
 
     def _style_title_label(self):

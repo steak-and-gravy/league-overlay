@@ -13,6 +13,7 @@ from config.logging_config import get_logger
 from core.driver_state import DriverState
 from .display_names import driver_display_name
 from .styles import DefaultColorStyle, AlternateColorStyle, OutlineColorStyle, DarkColorStyle
+from .widgets import DriverListContentWidget
 
 logger = get_logger(__name__)
 
@@ -282,7 +283,12 @@ class DriverRowRenderer:
                 lambda pos, d=driver: self.parent.show_context_menu(d)
             )
 
-        return container_widget if container_widget else row_widget
+        display_widget = container_widget if container_widget else row_widget
+        display_widget.setProperty(
+            DriverListContentWidget.BACKGROUND_OWNER_PROPERTY,
+            True,
+        )
+        return display_widget
 
     def _create_position_label(self, layout: QGridLayout, driver: DriverState, text_color: str,
                                label_bg: str, label_border: str, font_weight: str, styling: Dict = None, column: int = 0) -> None:

@@ -1,6 +1,7 @@
 """Tests for the broadcast header widget."""
 
 import pytest
+from PySide6.QtCore import Qt
 from unittest.mock import Mock, patch
 import requests
 
@@ -36,6 +37,7 @@ class TestBroadcastHeaderWidget:
     def test_widget_creates_without_error(self, qapp, default_settings):
         widget = BroadcastHeaderWidget(default_settings, _get_bg_color, _get_font_size)
         assert widget is not None
+        assert widget.testAttribute(Qt.WA_StyledBackground)
         widget.deleteLater()
 
     def test_title_displayed_uppercase(self, qapp, default_settings):

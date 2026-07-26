@@ -39,7 +39,7 @@ from core.manufacturer import extract_manufacturer
 from core.driver_info import get_pace_car_indices, is_pace_car
 from core.telemetry_processor import TelemetryProcessor
 from core.update_checker import UpdateChecker
-from ui.widgets import DataUpdateSignal, CustomSizeGrip
+from ui.widgets import DataUpdateSignal, CustomSizeGrip, DriverListContentWidget
 from ui.driver_row_renderer import DriverRowRenderer
 from ui.settings_dialog import SettingsDialog
 from ui.auto_center_controller import AutoCenterController
@@ -282,7 +282,12 @@ class LeagueOverlay(QMainWindow):
     def create_gradient_background(self, color_hex):
         """Create a horizontal gradient that creates a subtle "glow" effect for player row."""
         tinted = self.blend_color_with_black(color_hex, self.settings.highlight)
-        return f"qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {tinted}, stop:0.5 #1a1a1a, stop:1 {tinted})"
+        tinted_bg = self.get_bg_color(tinted)
+        center_bg = self.get_bg_color("#1a1a1a")
+        return (
+            "qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+            f"stop:0 {tinted_bg}, stop:0.5 {center_bg}, stop:1 {tinted_bg})"
+        )
     
     def update_all_backgrounds(self):
         """Refresh all UI backgrounds, fonts, and styling after settings change.
@@ -290,7 +295,7 @@ class LeagueOverlay(QMainWindow):
         Note: Settings are accessed via self.settings object.
         """
         if hasattr(self, 'main_widget'):
-            self.main_widget.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.BACKGROUND_BLACK)};")
+            self.main_widget.setStyleSheet("background-color: transparent;")
         if hasattr(self, 'title_bar'):
             self.title_bar.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.HEADER_DARK_GRAY)};")
         if hasattr(self, 'header_frame'):
@@ -303,7 +308,8 @@ class LeagueOverlay(QMainWindow):
             self._update_broadcast_roll_mode()
             self.update_scroll_area_style()
         if hasattr(self, 'scroll_content'):
-            self.scroll_content.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.BACKGROUND_BLACK)};")
+            self.scroll_content.setStyleSheet("background-color: transparent;")
+            self.scroll_content.update()
         if hasattr(self, 'size_grip'):
             # Don't set background in stylesheet - let paintEvent handle it
             self.size_grip.setStyleSheet("""
@@ -378,9 +384,9 @@ class LeagueOverlay(QMainWindow):
             self.broadcast_header.settings = self.settings
             self.broadcast_header.refresh_styles()
             self.broadcast_header.setVisible(self.settings.show_broadcast_header)
-        # Update scroll layout spacing
+        # Driver rows are full-bleed; their internal margins preserve column alignment.
         if hasattr(self, 'scroll_layout'):
-            self.scroll_layout.setSpacing(self.get_font_size('spacing'))
+            self.scroll_layout.setSpacing(0)
         # Refresh displayed data to update driver rows
         if hasattr(self, 'displayed_data') and self.displayed_data:
             self.display_race_data(self.displayed_data.copy())
@@ -401,7 +407,7 @@ class LeagueOverlay(QMainWindow):
         
         # Main widget and layout
         main_widget = QWidget()
-        main_widget.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.BACKGROUND_BLACK)};")
+        main_widget.setStyleSheet("background-color: transparent;")
         self.setCentralWidget(main_widget)
         self.main_widget = main_widget
         
@@ -450,13 +456,15 @@ class LeagueOverlay(QMainWindow):
         self.update_scroll_area_style()
 
         # Scrollable content
-        self.scroll_content = QWidget()
-        self.scroll_content.setStyleSheet(f"background-color: {self.get_bg_color(UI_COLORS.BACKGROUND_BLACK)};")
+        self.scroll_content = DriverListContentWidget(
+            get_opacity=lambda: max(MIN_QT_INTERACTIVE_OPACITY, self.settings.opacity),
+            background_color=UI_COLORS.BACKGROUND_BLACK,
+        )
         self.scroll_layout = QVBoxLayout(self.scroll_content)
-        # Use 5px margins - scrollbar will reduce viewport by 6px, giving same content width as header
-        # Header: W - 16px (5+11 margins), Scroll: (W - 6px scrollbar) - 10px (5+5 margins) = W - 16px ✓
-        self.scroll_layout.setContentsMargins(5, 5, 5, 5)
-        self.scroll_layout.setSpacing(self.get_font_size('spacing'))
+        # Rows own the full list width so no transparent gutters or inter-row slits remain.
+        # Each row applies its own 5px horizontal inset to preserve header alignment.
+        self.scroll_layout.setContentsMargins(0, 0, 0, 0)
+        self.scroll_layout.setSpacing(0)
         self.scroll_layout.addStretch()
         
         self.scroll_area.setWidget(self.scroll_content)
@@ -515,7 +523,7 @@ class LeagueOverlay(QMainWindow):
         self.scroll_area.setStyleSheet(f"""
             QScrollArea {{
                 border: none;
-                background-color: {self.get_bg_color(UI_COLORS.BACKGROUND_BLACK)};
+                background-color: transparent;
             }}
             QScrollBar:vertical {{
                 background: {self.get_bg_color(UI_COLORS.SCROLLBAR_GRAY)};
@@ -748,7 +756,7 @@ class LeagueOverlay(QMainWindow):
             label.setStyleSheet(f"""
                 QLabel {{
                     color: white;
-                    background-color: {self.get_bg_color(UI_COLORS.HEADER_DARK_GRAY)};
+                    background-color: transparent;
                     font-weight: bold;
                     font-size: {self.get_font_size('header')};
                 }}
@@ -1724,6 +1732,8 @@ class LeagueOverlay(QMainWindow):
                 self.scroll_layout.count() - 1,
                 self._create_empty_row_placeholder()
             )
+        if hasattr(self, 'scroll_content'):
+            self.scroll_content.update()
 
         # Auto-center on player or spectated car
         if (not self._is_broadcast_roll_active()
@@ -1954,6 +1964,10 @@ class LeagueOverlay(QMainWindow):
         separator.setFixedHeight(1)
         separator.setStyleSheet(
             f"background-color: {self.get_bg_color('#DDDDDD')}; border: none;"
+        )
+        separator.setProperty(
+            DriverListContentWidget.BACKGROUND_OWNER_PROPERTY,
+            True,
         )
         return separator
 

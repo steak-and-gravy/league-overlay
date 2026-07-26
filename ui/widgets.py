@@ -1,9 +1,9 @@
 """Custom Qt widgets for the overlay application."""
 
-from typing import Optional
+from typing import Callable, Optional
 from PySide6.QtWidgets import QSizeGrip, QMainWindow, QWidget
 from PySide6.QtCore import QObject, Signal, Qt
-from PySide6.QtGui import QPainter, QColor
+from PySide6.QtGui import QPainter, QColor, QRegion
 
 
 class DataUpdateSignal(QObject):
@@ -14,6 +14,44 @@ class DataUpdateSignal(QObject):
     refresh_colors = Signal()
     update_footer = Signal(dict)  # footer_data: track_temp, incidents, incident_limit, sof
     update_session_metadata = Signal(dict)  # session_data: session_status, track_display_name
+
+
+class DriverListContentWidget(QWidget):
+    """Paint the list background only where no row owns the visible pixels."""
+
+    BACKGROUND_OWNER_PROPERTY = "ownsListBackground"
+
+    def __init__(
+        self,
+        get_opacity: Callable[[], float],
+        background_color: str = "#000000",
+        parent: Optional[QWidget] = None,
+    ):
+        super().__init__(parent)
+        self._get_opacity = get_opacity
+        self._background_color = background_color
+        self.setStyleSheet("background-color: transparent;")
+
+    def paintEvent(self, event) -> None:
+        exposed_region = QRegion(self.rect())
+        for child in self.children():
+            if (
+                isinstance(child, QWidget)
+                and child.isVisible()
+                and child.property(self.BACKGROUND_OWNER_PROPERTY)
+            ):
+                exposed_region = exposed_region.subtracted(QRegion(child.geometry()))
+
+        if exposed_region.isEmpty():
+            return
+
+        opacity = max(0.0, min(1.0, float(self._get_opacity())))
+        background = QColor(self._background_color)
+        background.setAlphaF(opacity)
+
+        painter = QPainter(self)
+        painter.setClipRegion(exposed_region)
+        painter.fillRect(self.rect(), background)
 
 
 class CustomSizeGrip(QSizeGrip):
