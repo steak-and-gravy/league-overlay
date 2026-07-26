@@ -4181,6 +4181,197 @@ class TestFinishingGapCalculation:
 
         assert snapshot.position == 36
 
+    def test_live_protected_disconnected_handoff_keeps_positions_unique(self, processor, mock_ir):
+        """Two protected DC rows cannot overwrite each other during live gap filling."""
+        class_id = 4091
+        connected_info = {
+            'UserID': 101,
+            'UserName': 'Connected Driver',
+            'CarIdx': 1,
+            'CarNumber': '1',
+            'CarClassID': class_id,
+        }
+        car_46_info = {
+            'UserID': 146,
+            'UserName': 'Car 46 Driver',
+            'CarIdx': 5,
+            'CarNumber': '46',
+            'CarClassID': class_id,
+        }
+        car_44_info = {
+            'UserID': 144,
+            'UserName': 'Car 44 Driver',
+            'CarIdx': 24,
+            'CarNumber': '44',
+            'CarClassID': class_id,
+        }
+        drivers = {
+            1: connected_info,
+            5: car_46_info,
+            24: car_44_info,
+        }
+        connected_driver = {
+            'car_idx': 1,
+            'driver_info': connected_info,
+            'position': 1,
+            'current_lap': 30,
+            'lap_pct': 0.5,
+            'total_track_position': 30.5,
+        }
+
+        # Car #44 previously held P2 and car #46 P3. Their restored track order
+        # now puts #46 ahead, but neither protected row may improve individually.
+        for car_idx, driver_info, position, track_position in (
+            (5, car_46_info, 3, 20.2),
+            (24, car_44_info, 2, 20.1),
+        ):
+            snapshot = DriverState(
+                car_idx=car_idx,
+                driver_info=driver_info,
+                position=position,
+                current_lap=int(track_position),
+                lap_pct=track_position - int(track_position),
+                is_disconnected=True,
+                pit_lap="PIT",
+                preserve_disconnected_position=True,
+            )
+            processor.race_state_tracker.update_snapshot(car_idx, snapshot)
+
+        session_data = {
+            'session_id': 123,
+            'subsession_id': 456,
+            'session_type': 'Race',
+            'current_session': {'SessionType': 'Race'},
+            'results_lookup': {},
+            'fastest_lap_time': 90.0,
+        }
+        telemetry = {
+            'SessionState': 4,
+            'RaceLaps': 0,
+            'DriverInfo': {'Drivers': list(drivers.values())},
+            'CarIdxLap': [0] * 25,
+            'CarIdxClassPosition': [0] * 25,
+            'CarIdxLapDistPct': [0.0] * 25,
+            'CarIdxEstTime': [0.0] * 25,
+            'CarIdxLastLapTime': [0.0] * 25,
+            'CarIdxBestLapTime': [0.0] * 25,
+        }
+        mock_ir.__getitem__.side_effect = lambda key: telemetry[key]
+
+        processor._get_session_info = Mock(return_value=(drivers, session_data, True))
+        processor._detect_session_change = Mock(return_value=False)
+        processor._populate_lap_time_cache_from_results = Mock()
+        processor._update_pit_tracking = Mock()
+        processor._update_tow_tracking = Mock()
+        processor._update_recent_lap_flashes = Mock()
+        processor._calculate_division_positions = Mock(
+            side_effect=lambda active, _color_fn: (
+                {driver['car_idx']: driver['position'] for driver in active},
+                [],
+            )
+        )
+        processor._calculate_interval = Mock(return_value="")
+        processor._calculate_gap_to_leader = Mock(return_value="")
+        processor._calculate_delta = Mock(return_value="--")
+        processor._build_race_data_entry = Mock(
+            side_effect=lambda driver, *_args, **_kwargs: DriverState(
+                car_idx=driver['car_idx'],
+                driver_info=driver['driver_info'],
+                position=driver['position'],
+                current_lap=driver.get('current_lap', 0),
+                lap_pct=driver.get('lap_pct', 0.0),
+            )
+        )
+        processor.position_calculator.identify_player = Mock()
+        processor.position_calculator.update_spectated_car = Mock()
+        processor.position_calculator.player_car_class_id = class_id
+        processor.position_calculator.calculate_real_time_positions = Mock(
+            return_value=[connected_driver]
+        )
+        processor.race_state_tracker.update_finish_status = Mock()
+
+        result = processor.process_telemetry(
+            get_driver_color_fn=lambda _driver_info: '#FFFFFF'
+        )
+
+        positions_by_car = {driver.car_idx: driver.position for driver in result}
+        assert positions_by_car == {1: 1, 24: 2, 5: 3}
+        assert len(set(positions_by_car.values())) == len(positions_by_car)
+
+    def test_unique_racing_positions_never_promote_an_infeasible_protected_floor(self, processor):
+        """A shrinking field may leave a hole, but a protected row cannot improve."""
+        car_idx = 5
+        driver_info = {
+            'UserID': 146,
+            'UserName': 'Car 46 Driver',
+            'CarIdx': car_idx,
+            'CarNumber': '46',
+            'CarClassID': 4091,
+        }
+        snapshot = DriverState(
+            car_idx=car_idx,
+            driver_info=driver_info,
+            position=3,
+            is_disconnected=True,
+            pit_lap="PIT",
+            preserve_disconnected_position=True,
+        )
+        processor.race_state_tracker.update_snapshot(car_idx, snapshot)
+        protected_driver = {
+            'car_idx': car_idx,
+            'driver_info': driver_info,
+            'position': 3,
+            'disconnected': True,
+        }
+        racing_drivers = [protected_driver]
+
+        processor._assign_unique_racing_positions(
+            racing_drivers,
+            available_positions=[1],
+            total_drivers=1,
+            occupied_positions=set(),
+        )
+
+        assert protected_driver['position'] == 3
+        assert snapshot.position == 3
+
+    def test_unique_racing_positions_skip_finished_overflow_position(self, processor):
+        """An overflow assignment cannot reuse an out-of-range finished position."""
+        car_idx = 5
+        driver_info = {
+            'UserID': 146,
+            'UserName': 'Car 46 Driver',
+            'CarIdx': car_idx,
+            'CarNumber': '46',
+            'CarClassID': 4091,
+        }
+        snapshot = DriverState(
+            car_idx=car_idx,
+            driver_info=driver_info,
+            position=3,
+            is_disconnected=True,
+            pit_lap="PIT",
+            preserve_disconnected_position=True,
+        )
+        processor.race_state_tracker.update_snapshot(car_idx, snapshot)
+        protected_driver = {
+            'car_idx': car_idx,
+            'driver_info': driver_info,
+            'position': 3,
+            'disconnected': True,
+        }
+        racing_drivers = [protected_driver]
+
+        processor._assign_unique_racing_positions(
+            racing_drivers,
+            available_positions=[1, 2],
+            total_drivers=2,
+            occupied_positions={3},
+        )
+
+        assert protected_driver['position'] == 4
+        assert snapshot.position == 4
+
     def test_disconnected_tow_finish_mark_does_not_promote_position(self, processor):
         """Lap-increment finish detection also cannot move a disconnected TOW row upward."""
         car_idx = 2
@@ -4258,6 +4449,80 @@ class TestFinishingGapCalculation:
         )
         assert division_positions == {3: 1, 1: 2, 2: 3}
 
+    def test_cooldown_reconciles_unique_but_stale_protected_positions(self, processor, mock_ir):
+        """Cooldown applies official order even when protected rows are already unique."""
+        mock_ir.__getitem__.side_effect = lambda key: {
+            'SessionState': 6,
+        }[key]
+        class_id = 4091
+        car_46_info = {
+            'UserID': 146,
+            'UserName': 'Car 46 Driver',
+            'CarIdx': 5,
+            'CarNumber': '46',
+            'CarClassID': class_id,
+        }
+        car_44_info = {
+            'UserID': 144,
+            'UserName': 'Car 44 Driver',
+            'CarIdx': 24,
+            'CarNumber': '44',
+            'CarClassID': class_id,
+        }
+        active_drivers = [
+            {
+                'car_idx': 24,
+                'driver_info': car_44_info,
+                'position': 2,
+                'final_position': 2,
+                'disconnected': True,
+            },
+            {
+                'car_idx': 5,
+                'driver_info': car_46_info,
+                'position': 3,
+                'final_position': 3,
+                'disconnected': True,
+            },
+        ]
+        for car_idx, driver_info, position in (
+            (24, car_44_info, 2),
+            (5, car_46_info, 3),
+        ):
+            processor.race_state_tracker.update_snapshot(
+                car_idx,
+                DriverState(
+                    car_idx=car_idx,
+                    driver_info=driver_info,
+                    position=position,
+                    is_disconnected=True,
+                    pit_lap="PIT",
+                    preserve_disconnected_position=True,
+                )
+            )
+
+        processor._dedupe_cooldown_final_positions(
+            active_drivers,
+            {
+                'results_lookup': {
+                    5: {'CarIdx': 5, 'ClassPosition': 1},
+                    24: {'CarIdx': 24, 'ClassPosition': 2},
+                }
+            },
+        )
+
+        assert {driver['car_idx']: driver['position'] for driver in active_drivers} == {
+            5: 2,
+            24: 3,
+        }
+        assert {driver['car_idx']: driver['final_position'] for driver in active_drivers} == {
+            5: 2,
+            24: 3,
+        }
+        assert processor.race_state_tracker.get_snapshot(5).position == 2
+        assert processor.race_state_tracker.get_snapshot(24).position == 3
+        assert processor.cooldown_final_position_dedup_complete is True
+
     def test_cooldown_dedupe_does_not_run_during_checkered(self, processor, mock_ir):
         """Checkered transitional standings keep protected disconnected rows from jumping."""
         mock_ir.__getitem__.side_effect = lambda key: {
@@ -4291,7 +4556,15 @@ class TestFinishingGapCalculation:
             {'car_idx': 2, 'driver_info': {'UserName': 'Driver B'}, 'position': 2, 'final_position': 2},
         ]
 
-        processor._dedupe_cooldown_final_positions(active_drivers, {'results_lookup': {}})
+        processor._dedupe_cooldown_final_positions(
+            active_drivers,
+            {
+                'results_lookup': {
+                    1: {'CarIdx': 1, 'ClassPosition': 0},
+                    2: {'CarIdx': 2, 'ClassPosition': 1},
+                }
+            }
+        )
         assert processor.cooldown_final_position_dedup_complete is True
 
         active_drivers[1]['position'] = 1

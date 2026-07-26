@@ -1538,6 +1538,99 @@ class TelemetryProcessor:
                 and snapshot.position > 0):
             driver['position'] = snapshot.position
 
+    def _get_disconnected_tow_position_floor(self, driver: Dict) -> int:
+        """Return the best position a protected disconnected row may display."""
+        if not driver.get('disconnected', False):
+            return 0
+
+        car_idx = driver.get('car_idx')
+        if car_idx is None:
+            return 0
+
+        snapshot = self.race_state_tracker.get_snapshot(car_idx)
+        if (snapshot is None
+                or not self.race_state_tracker.is_disconnected_tow_state(snapshot)
+                or snapshot.position <= 0):
+            return 0
+
+        return snapshot.position
+
+    def _assign_unique_racing_positions(
+        self,
+        racing_drivers: List[Dict],
+        available_positions: List[int],
+        total_drivers: int,
+        occupied_positions: Set[int]
+    ) -> None:
+        """Assign unique live positions while honoring disconnected no-promotion floors.
+
+        The input order is the natural live track order. A protected disconnected
+        row cannot use a position numerically lower than its remembered snapshot.
+        When that row is not yet eligible for the current slot, the first later
+        eligible row fills the slot instead. This resolves rank handoffs as one
+        collection operation instead of letting independent snapshot restores
+        overwrite an already-assigned position.
+        """
+        if not racing_drivers:
+            return
+
+        candidate_positions = list(available_positions)
+        pending_drivers = list(racing_drivers)
+        assigned_drivers: List[Dict] = []
+        candidate_index = 0
+        overflow_position = total_drivers + 1
+        skipped_positions: List[int] = []
+
+        while pending_drivers:
+            if candidate_index < len(candidate_positions):
+                position = candidate_positions[candidate_index]
+                candidate_index += 1
+            else:
+                while overflow_position in occupied_positions:
+                    overflow_position += 1
+                position = overflow_position
+                overflow_position += 1
+
+            eligible_index = next(
+                (
+                    index
+                    for index, pending_driver in enumerate(pending_drivers)
+                    if self._get_disconnected_tow_position_floor(pending_driver) <= position
+                ),
+                None
+            )
+
+            if eligible_index is None:
+                # A previously corrupted or shrinking field can put every
+                # remaining protected floor behind the current field size.
+                # Leave an unavoidable hole instead of falsely promoting a row.
+                skipped_positions.append(position)
+                next_floor = min(
+                    self._get_disconnected_tow_position_floor(pending_driver)
+                    for pending_driver in pending_drivers
+                )
+                while (candidate_index < len(candidate_positions)
+                       and candidate_positions[candidate_index] < next_floor):
+                    skipped_positions.append(candidate_positions[candidate_index])
+                    candidate_index += 1
+                if candidate_index >= len(candidate_positions):
+                    overflow_position = max(overflow_position, next_floor)
+                continue
+
+            driver = pending_drivers.pop(eligible_index)
+            driver['position'] = position
+            self._remember_disconnected_tow_display_position(driver)
+            assigned_drivers.append(driver)
+
+        if skipped_positions:
+            logger.warning(
+                "LIVE_POSITION_GUARD - Skipped positions to preserve disconnected "
+                f"no-promotion floors count={len(skipped_positions)} "
+                f"first={skipped_positions[0]} last={skipped_positions[-1]}"
+            )
+
+        racing_drivers[:] = assigned_drivers
+
     def _get_session_state(self) -> int:
         """Return the current iRacing session state with a racing fallback."""
         try:
@@ -1656,17 +1749,40 @@ class TelemetryProcessor:
         except TypeError:
             return
 
+        all_official_positions_available = True
+        reconciled_car_indices: List[int] = []
+        for driver in active_drivers:
+            car_idx = driver.get('car_idx')
+            if car_idx is None:
+                all_official_positions_available = False
+                continue
+
+            result_position = self.get_position_from_results(session_data, car_idx)
+            if result_position <= 0:
+                all_official_positions_available = False
+                continue
+
+            if self._set_driver_final_position(driver, result_position):
+                reconciled_car_indices.append(car_idx)
+
+        if reconciled_car_indices:
+            logger.info(
+                "COOLDOWN_DEDUP - Reconciled displayed positions from ResultsPositions "
+                f"cars={reconciled_car_indices}"
+            )
+
         max_passes = max(len(active_drivers), 1)
         for pass_number in range(max_passes):
             duplicates_by_class = self._get_duplicate_final_positions_by_class(active_drivers)
             if not duplicates_by_class:
-                if self._all_final_positions_positive(active_drivers):
+                if (self._all_final_positions_positive(active_drivers)
+                        and all_official_positions_available):
                     self.cooldown_final_position_dedup_complete = True
                     logger.info("COOLDOWN_DEDUP - Final displayed standings are unique; dedupe complete")
                 else:
                     logger.info(
                         "COOLDOWN_DEDUP - No duplicate final positions, "
-                        "but waiting for all active rows to have positive positions"
+                        "but waiting for positive official positions for all active rows"
                     )
                 return
 
@@ -2677,17 +2793,14 @@ class TelemetryProcessor:
                         if p not in taken_positions
                     ]
 
-                    # Step 3: Assign available positions to racing drivers in track position order
-                    for i, driver in enumerate(racing_drivers):
-                        if i < len(available_positions):
-                            driver['position'] = available_positions[i]
-                        else:
-                            # Fallback: if we run out of available positions (shouldn't happen)
-                            # assign next number after highest
-                            driver['position'] = total_drivers + (i - len(available_positions)) + 1
-
-                        self._remember_disconnected_tow_display_position(driver)
-                        self._restore_disconnected_tow_protected_position(driver)
+                    # Step 3: Assign live positions as a collection so protected
+                    # disconnected rows cannot overwrite another driver's slot.
+                    self._assign_unique_racing_positions(
+                        racing_drivers,
+                        available_positions,
+                        total_drivers,
+                        taken_positions
+                    )
 
                     # Merge them back: finished drivers first (in order), then racing drivers
                     active_drivers = finished_drivers + racing_drivers
