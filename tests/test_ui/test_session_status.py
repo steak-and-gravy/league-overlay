@@ -336,6 +336,63 @@ class TestSessionStatusFormatting:
 
         assert result == "Connected - Live Data"
 
+    def test_get_session_status_text_prefers_time_when_laps_are_also_set(self, mock_app):
+        """A finite session time takes precedence over a finite lap count."""
+        def mock_getitem(key):
+            if key == "SessionInfo":
+                return {
+                    "Sessions": [{
+                        "SessionType": "Race",
+                        "SessionTime": "1800 sec",
+                        "SessionLaps": "20",
+                    }]
+                }
+            if key == "SessionNum":
+                return 0
+            if key == "SessionState":
+                return 4
+            if key == "SessionFlags":
+                return 0
+            if key == "SessionTimeRemain":
+                return 600
+            raise KeyError(key)
+
+        mock_app.ir.__getitem__ = Mock(side_effect=mock_getitem)
+        mock_app.class_leader_lap = None
+        mock_app._get_session_status_text = LeagueOverlay._get_session_status_text.__get__(mock_app)
+
+        result = mock_app._get_session_status_text()
+
+        assert result == "Race - 10:00"
+
+    def test_get_session_status_text_falls_back_to_laps_without_time(self, mock_app):
+        """A finite lap count is used when the session time is unlimited."""
+        def mock_getitem(key):
+            if key == "SessionInfo":
+                return {
+                    "Sessions": [{
+                        "SessionType": "Race",
+                        "SessionTime": "unlimited",
+                        "SessionLaps": "20",
+                    }]
+                }
+            if key == "SessionNum":
+                return 0
+            if key == "SessionState":
+                return 4
+            if key == "SessionFlags":
+                return 0
+            if key == "RaceLaps":
+                return 5
+            raise KeyError(key)
+
+        mock_app.ir.__getitem__ = Mock(side_effect=mock_getitem)
+        mock_app._get_session_status_text = LeagueOverlay._get_session_status_text.__get__(mock_app)
+
+        result = mock_app._get_session_status_text()
+
+        assert result == "Race - Lap 5/20"
+
     def test_update_gui_caution_yellow_without_broadcast_mode(self, mock_app):
         """CAUTION styling should remain yellow when broadcast mode is disabled."""
         import time

@@ -1679,17 +1679,26 @@ class LeagueOverlay(QMainWindow):
             # Map session state to display name
             state_name = self._get_session_state_name(session_type, session_state)
 
+            # Prefer a configured time limit when both time and laps are set.
+            # iRacing reports an unset time limit as "unlimited" (or zero).
+            session_time_total = current_session.get('SessionTime', 'unlimited')
+            try:
+                session_time_value = float(str(session_time_total).replace(' sec', '').strip())
+                has_session_time = session_time_value > 0
+            except (ValueError, TypeError, AttributeError):
+                has_session_time = False
+
             # Check if session is lap-based or time-based
             session_laps_total = current_session.get('SessionLaps', 'unlimited')
             is_lap_based = (session_laps_total != 'unlimited' and
                            session_laps_total not in [0, '0'])
 
-            if is_lap_based:
+            if has_session_time or not is_lap_based:
+                return self._format_time_based_status(state_name, session_state, current_session)
+            else:
                 return self._format_lap_based_status(
                     state_name, session_state, session_laps_total, session_type, current_session
                 )
-            else:
-                return self._format_time_based_status(state_name, session_state, current_session)
 
         except (KeyError, TypeError, IndexError, AttributeError) as e:
             logger.debug(f"Status display error: {e}")
